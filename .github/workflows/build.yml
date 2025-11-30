@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore WpfVisualTreeMcp.sln
+
+    - name: Build
+      run: dotnet build WpfVisualTreeMcp.sln --no-restore --configuration Release
+
+    - name: Test
+      run: dotnet test WpfVisualTreeMcp.sln --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: '**/TestResults/*.trx'
+
+    - name: Publish MCP Server
+      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wpf-visual-tree-mcp
+        path: ./publish
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj
+
+    - name: Check formatting
+      run: dotnet format src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --verify-no-changes --verbosity diagnostic
+      continue-on-error: true
+
+  # Build verification for .NET Framework projects (Windows only)
+  build-netfx:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Restore NuGet packages
+      run: dotnet restore WpfVisualTreeMcp.sln
+
+    - name: Build .NET Framework projects
+      run: |
+        dotnet build src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release
+        dotnet build src/WpfVisualTreeMcp.Injector/WpfVisualTreeMcp.Injector.csproj --configuration Release
+        dotnet build samples/SampleWpfApp/SampleWpfApp.csproj --configuration Release
