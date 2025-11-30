@@ -17,6 +17,7 @@ public class InspectorService : IDisposable
     private readonly BindingAnalyzer _bindingAnalyzer;
     private readonly ElementHighlighter _highlighter;
     private readonly PropertyWatcher _propertyWatcher;
+    private readonly ResourceInspector _resourceInspector;
     private bool _isRunning;
     private bool _disposed;
 
@@ -37,6 +38,7 @@ public class InspectorService : IDisposable
         _bindingAnalyzer = new BindingAnalyzer();
         _highlighter = new ElementHighlighter();
         _propertyWatcher = new PropertyWatcher();
+        _resourceInspector = new ResourceInspector();
         _ipcServer = new IpcServer(processId, HandleRequestAsync);
 
         // Wire up property change notifications
@@ -202,15 +204,42 @@ public class InspectorService : IDisposable
     private IpcResponse HandleGetResources(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<GetResourcesRequest>(data);
-        // TODO: Implement resource enumeration
-        return new GetResourcesResponse { ResourcesJson = "[]" };
+        var scope = request?.Scope ?? "all";
+
+        FrameworkElement? element = null;
+        if (!string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            element = _treeWalker.ResolveHandle(request.ElementHandle) as FrameworkElement;
+        }
+
+        var resourcesJson = _resourceInspector.GetResources(scope, element);
+        return new GetResourcesResponse
+        {
+            RequestId = request?.RequestId ?? "",
+            ResourcesJson = resourcesJson
+        };
     }
 
     private IpcResponse HandleGetStyles(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<GetStylesRequest>(data);
-        // TODO: Implement style inspection
-        return new GetStylesResponse { StylesJson = "{}" };
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new GetStylesResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle) as FrameworkElement;
+        if (element == null)
+        {
+            return new GetStylesResponse { Success = false, Error = "Element not found or not FrameworkElement" };
+        }
+
+        var stylesJson = _resourceInspector.GetStyle(element);
+        return new GetStylesResponse
+        {
+            RequestId = request.RequestId,
+            StylesJson = stylesJson
+        };
     }
 
     private IpcResponse HandleHighlightElement(JsonElement data)

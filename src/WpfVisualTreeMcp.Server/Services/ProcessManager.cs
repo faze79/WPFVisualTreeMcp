@@ -123,10 +123,43 @@ public class ProcessManager : IProcessManager
         _logger.LogInformation("Attached to process {ProcessId} ({ProcessName})",
             targetProcess.Id, targetProcess.ProcessName);
 
-        // TODO: Inject the inspector DLL into the target process
-        // This will be implemented in Phase 2
+        // Check if Inspector is already loaded (self-hosted mode)
+        var inspectorLoaded = IsInspectorLoaded(targetProcess);
+        if (inspectorLoaded)
+        {
+            _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");
+            session.InspectorStatus = "Loaded (self-hosted)";
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Inspector DLL not loaded in target process. " +
+                "For external inspection, the target application must reference the Inspector DLL. " +
+                "See documentation for self-hosted mode setup.");
+            session.InspectorStatus = "Not loaded - use self-hosted mode";
+        }
 
         return session;
+    }
+
+    private bool IsInspectorLoaded(Process process)
+    {
+        try
+        {
+            foreach (ProcessModule module in process.Modules)
+            {
+                if (module.ModuleName.Equals("WpfVisualTreeMcp.Inspector.dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not check loaded modules for process {ProcessId}", process.Id);
+        }
+
+        return false;
     }
 
     public Task DetachAsync(string sessionId)
