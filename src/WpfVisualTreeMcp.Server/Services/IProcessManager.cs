@@ -15,12 +15,13 @@ public record WpfProcessInfo
 /// <summary>
 /// Information about an active inspection session.
 /// </summary>
-public record InspectionSession
+public class InspectionSession
 {
-    public string SessionId { get; init; } = string.Empty;
-    public int ProcessId { get; init; }
-    public string MainWindowHandle { get; init; } = string.Empty;
-    public DateTime AttachedAt { get; init; }
+    public string SessionId { get; set; } = string.Empty;
+    public int ProcessId { get; set; }
+    public string MainWindowHandle { get; set; } = string.Empty;
+    public DateTime AttachedAt { get; set; }
+    public string InspectorStatus { get; set; } = "Unknown";
 }
 
 /// <summary>

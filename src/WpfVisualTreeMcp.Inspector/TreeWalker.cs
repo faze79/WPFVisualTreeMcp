@@ -225,6 +225,140 @@ public class TreeWalker
         return null;
     }
 
+    /// <summary>
+    /// Finds elements matching the specified criteria.
+    /// </summary>
+    /// <param name="root">The root element to search from.</param>
+    /// <param name="typeName">Optional type name to match.</param>
+    /// <param name="elementName">Optional element name to match.</param>
+    /// <returns>JSON array of matching elements.</returns>
+    public string FindElements(DependencyObject root, string? typeName, string? elementName)
+    {
+        var results = new List<string>();
+        FindElementsRecursive(root, typeName, elementName, results);
+
+        var sb = new StringBuilder();
+        sb.Append("[");
+        for (int i = 0; i < results.Count; i++)
+        {
+            if (i > 0) sb.Append(",");
+            sb.Append(results[i]);
+        }
+        sb.Append("]");
+        return sb.ToString();
+    }
+
+    private void FindElementsRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results)
+    {
+        var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
+        var shortTypeName = element.GetType().Name;
+        var name = GetElementName(element);
+
+        bool matches = true;
+
+        if (!string.IsNullOrEmpty(typeName))
+        {
+            matches = fullTypeName.Contains(typeName, StringComparison.OrdinalIgnoreCase) ||
+                      shortTypeName.Equals(typeName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (matches && !string.IsNullOrEmpty(elementName))
+        {
+            matches = name != null && name.Contains(elementName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (matches)
+        {
+            var handle = GetOrCreateHandle(element);
+            var path = GetElementPath(element);
+
+            var sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append($"\"handle\":\"{handle}\"");
+            sb.Append($",\"typeName\":\"{EscapeJson(fullTypeName)}\"");
+            if (!string.IsNullOrEmpty(name))
+            {
+                sb.Append($",\"name\":\"{EscapeJson(name)}\"");
+            }
+            sb.Append($",\"path\":\"{EscapeJson(path)}\"");
+            sb.Append("}");
+            results.Add(sb.ToString());
+        }
+
+        var childCount = VisualTreeHelper.GetChildrenCount(element);
+        for (var i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(element, i);
+            if (child != null)
+            {
+                FindElementsRecursive(child, typeName, elementName, results);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Exports the visual tree to XAML-like format.
+    /// </summary>
+    /// <param name="root">The root element to export from.</param>
+    /// <returns>XAML representation of the visual tree.</returns>
+    public string ExportToXaml(DependencyObject root)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<? xml version=\"1.0\" encoding=\"utf-8\" ?>");
+        sb.AppendLine("<!-- Visual Tree Export -->");
+        ExportToXamlRecursive(root, sb, 0);
+        return sb.ToString();
+    }
+
+    private void ExportToXamlRecursive(DependencyObject element, StringBuilder sb, int indent)
+    {
+        var indentStr = new string(' ', indent * 2);
+        var typeName = element.GetType().Name;
+        var name = GetElementName(element);
+
+        var childCount = VisualTreeHelper.GetChildrenCount(element);
+
+        if (childCount == 0)
+        {
+            sb.Append($"{indentStr}<{typeName}");
+            if (!string.IsNullOrEmpty(name))
+            {
+                sb.Append($" x:Name=\"{EscapeXml(name)}\"");
+            }
+            sb.AppendLine(" />");
+        }
+        else
+        {
+            sb.Append($"{indentStr}<{typeName}");
+            if (!string.IsNullOrEmpty(name))
+            {
+                sb.Append($" x:Name=\"{EscapeXml(name)}\"");
+            }
+            sb.AppendLine(">");
+
+            for (var i = 0; i < childCount; i++)
+            {
+                var child = VisualTreeHelper.GetChild(element, i);
+                if (child != null)
+                {
+                    ExportToXamlRecursive(child, sb, indent + 1);
+                }
+            }
+
+            sb.AppendLine($"{indentStr}</{typeName}>");
+        }
+    }
+
+    private static string EscapeXml(string text)
+    {
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&apos;");
+    }
+
     private static string EscapeJson(string text)
     {
         return text
