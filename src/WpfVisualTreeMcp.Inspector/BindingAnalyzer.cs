@@ -240,27 +240,128 @@ public class BindingAnalyzer
     private class BindingErrorTraceListener : TraceListener
     {
         private readonly List<BindingErrorInfo> _errors;
+        private readonly StringBuilder _buffer = new();
 
         public BindingErrorTraceListener(List<BindingErrorInfo> errors)
         {
             _errors = errors;
         }
 
-        public override void Write(string? message) { }
+        public override void Write(string? message)
+        {
+            if (!string.IsNullOrEmpty(message))
+            {
+                _buffer.Append(message);
+            }
+        }
 
         public override void WriteLine(string? message)
         {
-            if (string.IsNullOrEmpty(message)) return;
+            if (!string.IsNullOrEmpty(message))
+            {
+                _buffer.Append(message);
+            }
 
-            // Parse binding error message
+            if (_buffer.Length == 0) return;
+
+            var fullMessage = _buffer.ToString();
+            _buffer.Clear();
+
+            // Parse the binding error message to extract useful information
+            var error = ParseBindingError(fullMessage);
+            if (error != null)
+            {
+                _errors.Add(error);
+            }
+        }
+
+        private BindingErrorInfo? ParseBindingError(string message)
+        {
+            // Skip informational messages, only capture warnings/errors
+            if (message.Contains("Information:")) return null;
+
             var error = new BindingErrorInfo
             {
-                Message = message,
-                ErrorType = message.Contains("path error") ? "PathError" :
-                           message.Contains("source") ? "SourceError" : "Unknown"
+                Message = TruncateMessage(message, 500)
             };
 
-            _errors.Add(error);
+            // Determine error type
+            if (message.Contains("Cannot find source"))
+            {
+                error.ErrorType = "SourceNotFound";
+            }
+            else if (message.Contains("path error") || message.Contains("BindingExpression path error"))
+            {
+                error.ErrorType = "PathError";
+            }
+            else if (message.Contains("Cannot convert"))
+            {
+                error.ErrorType = "ConversionError";
+            }
+            else if (message.Contains("ValidationError"))
+            {
+                error.ErrorType = "ValidationError";
+            }
+            else if (message.Contains("UpdateSourceExceptionFilter"))
+            {
+                error.ErrorType = "UpdateSourceError";
+            }
+            else
+            {
+                error.ErrorType = "Unknown";
+            }
+
+            // Try to extract binding path
+            // Pattern: Path=PropertyName or Path='PropertyName.SubProperty'
+            var pathMatch = System.Text.RegularExpressions.Regex.Match(
+                message, @"Path[=:]'?([^';]+)'?");
+            if (pathMatch.Success)
+            {
+                error.BindingPath = pathMatch.Groups[1].Value.Trim();
+            }
+
+            // Try to extract target element type
+            // Pattern: target element is 'TypeName' (Name='elementName')
+            var targetMatch = System.Text.RegularExpressions.Regex.Match(
+                message, @"target element is '([^']+)'");
+            if (targetMatch.Success)
+            {
+                error.ElementType = targetMatch.Groups[1].Value;
+            }
+
+            // Try to extract element name
+            var nameMatch = System.Text.RegularExpressions.Regex.Match(
+                message, @"\(Name='([^']+)'\)");
+            if (nameMatch.Success)
+            {
+                error.ElementName = nameMatch.Groups[1].Value;
+            }
+
+            // Try to extract property name
+            // Pattern: TargetProperty: PropertyName or target property is 'PropertyName'
+            var propMatch = System.Text.RegularExpressions.Regex.Match(
+                message, @"target property is '([^']+)'");
+            if (propMatch.Success)
+            {
+                error.Property = propMatch.Groups[1].Value;
+            }
+            else
+            {
+                var propMatch2 = System.Text.RegularExpressions.Regex.Match(
+                    message, @"TargetProperty[=:]'?([^';(]+)'?");
+                if (propMatch2.Success)
+                {
+                    error.Property = propMatch2.Groups[1].Value.Trim();
+                }
+            }
+
+            return error;
+        }
+
+        private static string TruncateMessage(string message, int maxLength)
+        {
+            if (message.Length <= maxLength) return message;
+            return message.Substring(0, maxLength) + "...";
         }
     }
 }

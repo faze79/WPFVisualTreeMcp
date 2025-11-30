@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using WpfVisualTreeMcp.Shared.Ipc;
 
 namespace WpfVisualTreeMcp.Inspector;
 
@@ -13,25 +15,21 @@ namespace WpfVisualTreeMcp.Inspector;
 public class IpcServer : IDisposable
 {
     private readonly string _pipeName;
-    private readonly Func<string, string?, Task<string>> _requestHandler;
+    private readonly Func<string, JsonElement, Task<IpcResponse>> _requestHandler;
     private CancellationTokenSource? _cts;
     private Task? _serverTask;
     private bool _disposed;
 
-    /// <summary>
-    /// Creates a new IPC server for the specified process.
-    /// </summary>
-    /// <param name="processId">The process ID to use in the pipe name.</param>
-    /// <param name="requestHandler">Handler for incoming requests.</param>
-    public IpcServer(int processId, Func<string, string?, Task<string>> requestHandler)
+    public event Action<string>? NotificationReady;
+
+    public IpcServer(int processId, Func<string, JsonElement, Task<IpcResponse>> requestHandler)
     {
         _pipeName = $"wpf_inspector_{processId}";
         _requestHandler = requestHandler;
     }
 
-    /// <summary>
-    /// Starts the IPC server.
-    /// </summary>
+    public string PipeName => _pipeName;
+
     public void Start()
     {
         if (_serverTask != null) return;
@@ -40,9 +38,6 @@ public class IpcServer : IDisposable
         _serverTask = Task.Run(() => RunServerAsync(_cts.Token));
     }
 
-    /// <summary>
-    /// Stops the IPC server.
-    /// </summary>
     public void Stop()
     {
         _cts?.Cancel();
@@ -73,7 +68,6 @@ public class IpcServer : IDisposable
                     PipeOptions.Asynchronous);
 
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
-
                 await HandleClientAsync(pipeServer, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -90,8 +84,8 @@ public class IpcServer : IDisposable
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(pipeServer, Encoding.UTF8);
-        using var writer = new StreamWriter(pipeServer, Encoding.UTF8) { AutoFlush = true };
+        using var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true);
+        using var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 
         while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
         {
@@ -105,14 +99,18 @@ public class IpcServer : IDisposable
             }
             catch (IOException)
             {
-                break; // Client disconnected
+                break;
             }
             catch (Exception ex)
             {
-                var errorResponse = $"{{\"error\": \"{EscapeJson(ex.Message)}\"}}";
+                var errorResponse = new GetVisualTreeResponse
+                {
+                    Success = false,
+                    Error = ex.Message
+                };
                 try
                 {
-                    await writer.WriteLineAsync(errorResponse);
+                    await writer.WriteLineAsync(IpcSerializer.SerializeResponse(errorResponse));
                 }
                 catch
                 {
@@ -122,24 +120,26 @@ public class IpcServer : IDisposable
         }
     }
 
-    private async Task<string> ProcessRequestAsync(string request)
+    private async Task<string> ProcessRequestAsync(string requestJson)
     {
-        // Parse simple request format: TYPE|PARAMS
-        var parts = request.Split(new[] { '|' }, 2);
-        var requestType = parts[0];
-        var parameters = parts.Length > 1 ? parts[1] : null;
+        var parsed = IpcSerializer.DeserializeRequest(requestJson);
+        if (parsed == null)
+        {
+            return IpcSerializer.SerializeResponse(new GetVisualTreeResponse
+            {
+                Success = false,
+                Error = "Invalid request format"
+            });
+        }
 
-        return await _requestHandler(requestType, parameters);
+        var (type, data) = parsed.Value;
+        var response = await _requestHandler(type, data);
+        return IpcSerializer.SerializeResponse(response);
     }
 
-    private static string EscapeJson(string text)
+    public void SendNotification(string notificationJson)
     {
-        return text
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t");
+        NotificationReady?.Invoke(notificationJson);
     }
 
     public void Dispose()
