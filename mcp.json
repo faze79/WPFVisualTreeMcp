@@ -1,0 +1,246 @@
+{
+  "name": "wpf-visual-tree",
+  "version": "0.1.0",
+  "description": "MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time",
+  "author": "faze79",
+  "license": "MIT",
+  "repository": "https://github.com/faze79/WpfVisualTreeMcp",
+  "homepage": "https://github.com/faze79/WpfVisualTreeMcp#readme",
+  "keywords": [
+    "mcp",
+    "wpf",
+    "visual-tree",
+    "debugging",
+    "dotnet",
+    "ai-agents",
+    "model-context-protocol",
+    "ui-inspection"
+  ],
+  "engines": {
+    "dotnet": ">=8.0.0"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "tools": [
+    {
+      "name": "wpf_list_processes",
+      "description": "List all running WPF applications available for inspection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_attach",
+      "description": "Attach to a WPF application by process ID or name",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "process_id": {
+            "type": "integer",
+            "description": "Process ID to attach to"
+          },
+          "process_name": {
+            "type": "string",
+            "description": "Process name to attach to (e.g., 'MyApp' or 'MyApp.exe')"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_get_visual_tree",
+      "description": "Get the visual tree hierarchy starting from a root element",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root_handle": {
+            "type": "string",
+            "description": "Handle of root element (optional, defaults to main window)"
+          },
+          "max_depth": {
+            "type": "integer",
+            "description": "Maximum tree depth to traverse",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_get_element_properties",
+      "description": "Get all dependency properties of a UI element",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element to inspect"
+          }
+        },
+        "required": ["element_handle"]
+      }
+    },
+    {
+      "name": "wpf_find_elements",
+      "description": "Search for elements by type, name, or property value",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "type_name": {
+            "type": "string",
+            "description": "Element type name (e.g., 'Button', 'TextBox', 'System.Windows.Controls.Button')"
+          },
+          "element_name": {
+            "type": "string",
+            "description": "x:Name of the element to find"
+          },
+          "property_filter": {
+            "type": "object",
+            "description": "Property name/value pairs to filter by",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_get_bindings",
+      "description": "Get all data bindings for an element with their status",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element to inspect"
+          }
+        },
+        "required": ["element_handle"]
+      }
+    },
+    {
+      "name": "wpf_get_binding_errors",
+      "description": "List all binding errors in the attached application",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_get_resources",
+      "description": "Enumerate resource dictionaries and their contents",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "description": "Scope of resources to enumerate",
+            "enum": ["application", "window", "element"],
+            "default": "application"
+          },
+          "element_handle": {
+            "type": "string",
+            "description": "Required when scope is 'element'"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "wpf_get_styles",
+      "description": "Get applied styles and templates for an element",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element to inspect"
+          }
+        },
+        "required": ["element_handle"]
+      }
+    },
+    {
+      "name": "wpf_watch_property",
+      "description": "Monitor a property for changes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element"
+          },
+          "property_name": {
+            "type": "string",
+            "description": "Name of the property to watch"
+          }
+        },
+        "required": ["element_handle", "property_name"]
+      }
+    },
+    {
+      "name": "wpf_highlight_element",
+      "description": "Visually highlight an element in the running application",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element to highlight"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "Duration of highlight in milliseconds",
+            "default": 2000,
+            "minimum": 100,
+            "maximum": 10000
+          }
+        },
+        "required": ["element_handle"]
+      }
+    },
+    {
+      "name": "wpf_get_layout_info",
+      "description": "Get layout information (ActualWidth, ActualHeight, Margin, Padding, etc.)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of the element"
+          }
+        },
+        "required": ["element_handle"]
+      }
+    },
+    {
+      "name": "wpf_export_tree",
+      "description": "Export visual tree to XAML or JSON format",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element_handle": {
+            "type": "string",
+            "description": "Handle of root element (optional, defaults to main window)"
+          },
+          "format": {
+            "type": "string",
+            "description": "Export format",
+            "enum": ["json", "xaml"],
+            "default": "json"
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}
