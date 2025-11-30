@@ -8,4 +8,9 @@
     <RootNamespace>WpfVisualTreeMcp.Shared</RootNamespace>
   </PropertyGroup>
 
+  <!-- System.Text.Json is built-in for .NET 8, but needs NuGet package for .NET Framework -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
 </Project>
