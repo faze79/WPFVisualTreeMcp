@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using WpfVisualTreeMcp.Server;
 using WpfVisualTreeMcp.Server.Services;
+using WpfVisualTreeMcp.Shared.Models;
 using Xunit;
 
 namespace WpfVisualTreeMcp.Tests;
@@ -194,7 +195,48 @@ public class McpServerTests
         response.RootElement.TryGetProperty("result", out _).Should().BeTrue();
     }
 
-    private string CreateJsonRpcRequest(string method, int id, object? @params)
+    [Fact]
+    public async Task ToolCall_GetVisualTree_ReturnsTree()
+    {
+        // Arrange
+        var expectedTree = new VisualTreeResult
+        {
+            Root = new VisualTreeNode
+            {
+                Handle = "root",
+                TypeName = "Window",
+                Name = "MainWindow"
+            },
+            TotalElements = 1,
+            MaxDepthReached = false
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetVisualTreeAsync(null, 10))
+            .ReturnsAsync(expectedTree);
+
+        _processManagerMock
+            .SetupGet(x => x.CurrentSession)
+            .Returns(new InspectionSession { SessionId = "test", ProcessId = 1 });
+
+        var request = CreateJsonRpcRequest("tools/call", 1, new
+        {
+            name = "wpf_get_visual_tree",
+            arguments = new { }
+        });
+
+        // Act
+        var response = await SendRequestAsync(request);
+
+        // Assert
+        response.Should().NotBeNull();
+        var content = response.RootElement.GetProperty("result").GetProperty("content");
+        var text = content[0].GetProperty("text").GetString();
+        text.Should().Contain("root");
+        text.Should().Contain("MainWindow");
+    }
+
+    private static string CreateJsonRpcRequest(string method, int id, object? @params)
     {
         var request = new
         {
@@ -211,30 +253,13 @@ public class McpServerTests
     {
         var server = CreateServer();
 
-        // Create input with request followed by empty line to close stream
+        // Create input with request
         var inputBytes = Encoding.UTF8.GetBytes(request + "\n");
         using var inputStream = new MemoryStream(inputBytes);
         using var outputStream = new MemoryStream();
 
-        // Run server in background - it will exit when input stream ends
-        var serverTask = Task.Run(async () =>
-        {
-            try
-            {
-                await server.RunAsync(inputStream, outputStream);
-            }
-            catch (Exception)
-            {
-                // Server exits when stream closes
-            }
-        });
-
-        // Wait for server to complete (input stream will be exhausted)
-        var completed = await Task.WhenAny(serverTask, Task.Delay(5000));
-        if (completed != serverTask)
-        {
-            throw new TimeoutException("Server did not respond within 5 seconds");
-        }
+        // Run server - it will exit when input stream ends (returns null from ReadLineAsync)
+        await server.RunAsync(inputStream, outputStream);
 
         // Read response
         outputStream.Position = 0;
