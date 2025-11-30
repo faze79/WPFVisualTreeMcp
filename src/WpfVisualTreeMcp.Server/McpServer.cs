@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Server.Services;
-using WpfVisualTreeMcp.Server.Tools;
 
 namespace WpfVisualTreeMcp.Server;
 

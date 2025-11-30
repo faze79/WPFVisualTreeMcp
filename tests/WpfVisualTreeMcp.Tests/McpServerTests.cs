@@ -14,19 +14,18 @@ public class McpServerTests
     private readonly Mock<ILogger<McpServer>> _loggerMock;
     private readonly Mock<IProcessManager> _processManagerMock;
     private readonly Mock<IIpcBridge> _ipcBridgeMock;
-    private readonly McpServer _server;
 
     public McpServerTests()
     {
         _loggerMock = new Mock<ILogger<McpServer>>();
         _processManagerMock = new Mock<IProcessManager>();
         _ipcBridgeMock = new Mock<IIpcBridge>();
-
-        _server = new McpServer(
-            _loggerMock.Object,
-            _processManagerMock.Object,
-            _ipcBridgeMock.Object);
     }
+
+    private McpServer CreateServer() => new McpServer(
+        _loggerMock.Object,
+        _processManagerMock.Object,
+        _ipcBridgeMock.Object);
 
     [Fact]
     public async Task Initialize_ReturnsProtocolVersion()
@@ -181,6 +180,20 @@ public class McpServerTests
         error.GetProperty("message").GetString().Should().Contain("Method not found");
     }
 
+    [Fact]
+    public async Task Ping_ReturnsEmptyResult()
+    {
+        // Arrange
+        var request = CreateJsonRpcRequest("ping", 1, null);
+
+        // Act
+        var response = await SendRequestAsync(request);
+
+        // Assert
+        response.Should().NotBeNull();
+        response.RootElement.TryGetProperty("result", out _).Should().BeTrue();
+    }
+
     private string CreateJsonRpcRequest(string method, int id, object? @params)
     {
         var request = new
@@ -196,23 +209,34 @@ public class McpServerTests
 
     private async Task<JsonDocument> SendRequestAsync(string request)
     {
-        using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(request + "\n"));
+        var server = CreateServer();
+
+        // Create input with request followed by empty line to close stream
+        var inputBytes = Encoding.UTF8.GetBytes(request + "\n");
+        using var inputStream = new MemoryStream(inputBytes);
         using var outputStream = new MemoryStream();
 
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
+        // Run server in background - it will exit when input stream ends
         var serverTask = Task.Run(async () =>
         {
-            await _server.RunAsync(inputStream, outputStream);
+            try
+            {
+                await server.RunAsync(inputStream, outputStream);
+            }
+            catch (Exception)
+            {
+                // Server exits when stream closes
+            }
         });
 
-        // Wait for the server to process the request
-        await Task.Delay(100);
+        // Wait for server to complete (input stream will be exhausted)
+        var completed = await Task.WhenAny(serverTask, Task.Delay(5000));
+        if (completed != serverTask)
+        {
+            throw new TimeoutException("Server did not respond within 5 seconds");
+        }
 
-        // The input stream is exhausted, so the server should stop
-        inputStream.Position = 0;
-        await Task.Delay(100);
-
+        // Read response
         outputStream.Position = 0;
         using var reader = new StreamReader(outputStream);
         var responseText = await reader.ReadToEndAsync();
@@ -222,8 +246,13 @@ public class McpServerTests
             throw new InvalidOperationException("No response received from server");
         }
 
-        // Get the first line (response)
+        // Get the first non-empty line (response)
         var firstLine = responseText.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-        return JsonDocument.Parse(firstLine!);
+        if (firstLine == null)
+        {
+            throw new InvalidOperationException("No valid response line found");
+        }
+
+        return JsonDocument.Parse(firstLine);
     }
 }
