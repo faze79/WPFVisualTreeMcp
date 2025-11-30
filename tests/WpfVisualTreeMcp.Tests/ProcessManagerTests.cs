@@ -18,14 +18,13 @@ public class ProcessManagerTests
     }
 
     [Fact]
-    public async Task GetWpfProcessesAsync_ReturnsProcessList()
+    public async Task GetWpfProcessesAsync_ReturnsNonNullList()
     {
         // Act
         var processes = await _processManager.GetWpfProcessesAsync();
 
-        // Assert
+        // Assert - just verify it doesn't throw and returns a list
         processes.Should().NotBeNull();
-        // Note: The actual number of processes depends on the system
     }
 
     [Fact]
@@ -36,34 +35,42 @@ public class ProcessManagerTests
     }
 
     [Fact]
-    public async Task AttachToProcessAsync_WithInvalidProcessId_ThrowsException()
-    {
-        // Arrange
-        var invalidProcessId = 999999;
-
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _processManager.AttachToProcessAsync(invalidProcessId, null));
-    }
-
-    [Fact]
     public async Task AttachToProcessAsync_WithNeitherIdNorName_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _processManager.AttachToProcessAsync(null, null));
+        var act = () => _processManager.AttachToProcessAsync(null, null);
+        await act.Should().ThrowAsync<ArgumentException>();
     }
 
     [Fact]
-    public async Task DetachAsync_ClearsCurrentSession()
+    public async Task AttachToProcessAsync_WithNonExistentProcessId_ThrowsInvalidOperationException()
     {
-        // Arrange - first we need to attach to create a session
-        // This test would need a real process to attach to
-        // For now, we'll just verify the detach behavior
+        // Use a very high process ID that's unlikely to exist
+        var invalidProcessId = int.MaxValue - 1;
 
+        // Act & Assert
+        var act = () => _processManager.AttachToProcessAsync(invalidProcessId, null);
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task AttachToProcessAsync_WithNonExistentProcessName_ThrowsInvalidOperationException()
+    {
+        // Use a process name that definitely doesn't exist
+        var invalidProcessName = "ThisProcessDefinitelyDoesNotExist_12345";
+
+        // Act & Assert
+        var act = () => _processManager.AttachToProcessAsync(null, invalidProcessName);
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not found*");
+    }
+
+    [Fact]
+    public async Task DetachAsync_WithNonMatchingSession_DoesNotThrow()
+    {
+        // Act & Assert - should not throw
         await _processManager.DetachAsync("non-existent-session");
-
-        // Assert
         _processManager.CurrentSession.Should().BeNull();
     }
 }
@@ -73,7 +80,7 @@ public class WpfProcessInfoTests
     [Fact]
     public void WpfProcessInfo_HasCorrectProperties()
     {
-        // Arrange
+        // Arrange & Act
         var processInfo = new WpfProcessInfo
         {
             ProcessId = 1234,
@@ -90,6 +97,20 @@ public class WpfProcessInfoTests
         processInfo.IsAttached.Should().BeTrue();
         processInfo.DotNetVersion.Should().Be("4.8.0");
     }
+
+    [Fact]
+    public void WpfProcessInfo_DefaultValues()
+    {
+        // Arrange & Act
+        var processInfo = new WpfProcessInfo();
+
+        // Assert
+        processInfo.ProcessId.Should().Be(0);
+        processInfo.ProcessName.Should().BeEmpty();
+        processInfo.MainWindowTitle.Should().BeNull();
+        processInfo.IsAttached.Should().BeFalse();
+        processInfo.DotNetVersion.Should().BeNull();
+    }
 }
 
 public class InspectionSessionTests
@@ -99,6 +120,8 @@ public class InspectionSessionTests
     {
         // Arrange
         var now = DateTime.UtcNow;
+
+        // Act
         var session = new InspectionSession
         {
             SessionId = "abc123",
@@ -112,5 +135,18 @@ public class InspectionSessionTests
         session.ProcessId.Should().Be(1234);
         session.MainWindowHandle.Should().Be("window_0x12345");
         session.AttachedAt.Should().Be(now);
+    }
+
+    [Fact]
+    public void InspectionSession_DefaultValues()
+    {
+        // Arrange & Act
+        var session = new InspectionSession();
+
+        // Assert
+        session.SessionId.Should().BeEmpty();
+        session.ProcessId.Should().Be(0);
+        session.MainWindowHandle.Should().BeEmpty();
+        session.AttachedAt.Should().Be(default);
     }
 }

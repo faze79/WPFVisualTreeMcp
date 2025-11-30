@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using WpfVisualTreeMcp.Server;
 using WpfVisualTreeMcp.Server.Services;
+using WpfVisualTreeMcp.Shared.Models;
 using Xunit;
 
 namespace WpfVisualTreeMcp.Tests;
@@ -14,19 +15,18 @@ public class McpServerTests
     private readonly Mock<ILogger<McpServer>> _loggerMock;
     private readonly Mock<IProcessManager> _processManagerMock;
     private readonly Mock<IIpcBridge> _ipcBridgeMock;
-    private readonly McpServer _server;
 
     public McpServerTests()
     {
         _loggerMock = new Mock<ILogger<McpServer>>();
         _processManagerMock = new Mock<IProcessManager>();
         _ipcBridgeMock = new Mock<IIpcBridge>();
-
-        _server = new McpServer(
-            _loggerMock.Object,
-            _processManagerMock.Object,
-            _ipcBridgeMock.Object);
     }
+
+    private McpServer CreateServer() => new McpServer(
+        _loggerMock.Object,
+        _processManagerMock.Object,
+        _ipcBridgeMock.Object);
 
     [Fact]
     public async Task Initialize_ReturnsProtocolVersion()
@@ -181,7 +181,62 @@ public class McpServerTests
         error.GetProperty("message").GetString().Should().Contain("Method not found");
     }
 
-    private string CreateJsonRpcRequest(string method, int id, object? @params)
+    [Fact]
+    public async Task Ping_ReturnsEmptyResult()
+    {
+        // Arrange
+        var request = CreateJsonRpcRequest("ping", 1, null);
+
+        // Act
+        var response = await SendRequestAsync(request);
+
+        // Assert
+        response.Should().NotBeNull();
+        response.RootElement.TryGetProperty("result", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ToolCall_GetVisualTree_ReturnsTree()
+    {
+        // Arrange
+        var expectedTree = new VisualTreeResult
+        {
+            Root = new VisualTreeNode
+            {
+                Handle = "root",
+                TypeName = "Window",
+                Name = "MainWindow"
+            },
+            TotalElements = 1,
+            MaxDepthReached = false
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetVisualTreeAsync(null, 10))
+            .ReturnsAsync(expectedTree);
+
+        _processManagerMock
+            .SetupGet(x => x.CurrentSession)
+            .Returns(new InspectionSession { SessionId = "test", ProcessId = 1 });
+
+        var request = CreateJsonRpcRequest("tools/call", 1, new
+        {
+            name = "wpf_get_visual_tree",
+            arguments = new { }
+        });
+
+        // Act
+        var response = await SendRequestAsync(request);
+
+        // Assert
+        response.Should().NotBeNull();
+        var content = response.RootElement.GetProperty("result").GetProperty("content");
+        var text = content[0].GetProperty("text").GetString();
+        text.Should().Contain("root");
+        text.Should().Contain("MainWindow");
+    }
+
+    private static string CreateJsonRpcRequest(string method, int id, object? @params)
     {
         var request = new
         {
@@ -196,23 +251,17 @@ public class McpServerTests
 
     private async Task<JsonDocument> SendRequestAsync(string request)
     {
-        using var inputStream = new MemoryStream(Encoding.UTF8.GetBytes(request + "\n"));
+        var server = CreateServer();
+
+        // Create input with request
+        var inputBytes = Encoding.UTF8.GetBytes(request + "\n");
+        using var inputStream = new MemoryStream(inputBytes);
         using var outputStream = new MemoryStream();
 
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        // Run server - it will exit when input stream ends (returns null from ReadLineAsync)
+        await server.RunAsync(inputStream, outputStream);
 
-        var serverTask = Task.Run(async () =>
-        {
-            await _server.RunAsync(inputStream, outputStream);
-        });
-
-        // Wait for the server to process the request
-        await Task.Delay(100);
-
-        // The input stream is exhausted, so the server should stop
-        inputStream.Position = 0;
-        await Task.Delay(100);
-
+        // Read response
         outputStream.Position = 0;
         using var reader = new StreamReader(outputStream);
         var responseText = await reader.ReadToEndAsync();
@@ -222,8 +271,13 @@ public class McpServerTests
             throw new InvalidOperationException("No response received from server");
         }
 
-        // Get the first line (response)
+        // Get the first non-empty line (response)
         var firstLine = responseText.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-        return JsonDocument.Parse(firstLine!);
+        if (firstLine == null)
+        {
+            throw new InvalidOperationException("No valid response line found");
+        }
+
+        return JsonDocument.Parse(firstLine);
     }
 }

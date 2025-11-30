@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Server.Services;
-using WpfVisualTreeMcp.Server.Tools;
 
 namespace WpfVisualTreeMcp.Server;
 
@@ -63,8 +62,8 @@ public class McpServer
     /// </summary>
     public async Task RunAsync(Stream input, Stream output)
     {
-        using var reader = new StreamReader(input, Encoding.UTF8);
-        await using var writer = new StreamWriter(output, Encoding.UTF8) { AutoFlush = true };
+        using var reader = new StreamReader(input, Encoding.UTF8, leaveOpen: true);
+        await using var writer = new StreamWriter(output, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 
         _logger.LogInformation("MCP Server running, waiting for messages...");
 
