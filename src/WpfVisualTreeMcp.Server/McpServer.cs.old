@@ -18,7 +18,7 @@ public class McpServer
     private readonly Dictionary<string, Func<JsonElement?, Task<object>>> _tools;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    private const string ProtocolVersion = "2024-11-05";
+    private const string ProtocolVersion = "2024-11-05";  // MCP protocol version - will negotiate with client
     private const string ServerName = "wpf-visual-tree";
     private const string ServerVersion = "0.1.0";
 
@@ -65,14 +65,15 @@ public class McpServer
         using var reader = new StreamReader(input, Encoding.UTF8, leaveOpen: true);
         await using var writer = new StreamWriter(output, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 
-        _logger.LogInformation("MCP Server running, waiting for messages...");
+        // Logging disabled for MCP protocol - must keep stdout/stderr clean
+        // _logger.LogInformation("MCP Server running, waiting for messages...");
 
         while (true)
         {
             var line = await reader.ReadLineAsync();
             if (line == null)
             {
-                _logger.LogInformation("Input stream closed, shutting down");
+                // _logger.LogInformation("Input stream closed, shutting down");
                 break;
             }
 
@@ -81,22 +82,45 @@ public class McpServer
 
             try
             {
+                // DEBUG: Write to a debug file to trace what's happening
+                if (Environment.GetEnvironmentVariable("MCP_DEBUG_FILE") != null)
+                {
+                    await File.AppendAllTextAsync(Environment.GetEnvironmentVariable("MCP_DEBUG_FILE"),
+                        $"[{DateTime.Now:HH:mm:ss.fff}] Received: {line}\n");
+                }
+
                 var response = await HandleMessageAsync(line);
+
+                if (Environment.GetEnvironmentVariable("MCP_DEBUG_FILE") != null)
+                {
+                    await File.AppendAllTextAsync(Environment.GetEnvironmentVariable("MCP_DEBUG_FILE"),
+                        $"[{DateTime.Now:HH:mm:ss.fff}] Responding: {response}\n");
+                }
+
                 if (response != null)
                 {
                     await writer.WriteLineAsync(response);
+                    // Explicitly flush both StreamWriter and underlying stream
+                    await writer.FlushAsync();
+                    await output.FlushAsync();
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error handling message: {Message}", line);
+                if (Environment.GetEnvironmentVariable("MCP_DEBUG_FILE") != null)
+                {
+                    await File.AppendAllTextAsync(Environment.GetEnvironmentVariable("MCP_DEBUG_FILE"),
+                        $"[{DateTime.Now:HH:mm:ss.fff}] ERROR: {ex.Message}\n");
+                }
+                // _logger.LogError(ex, "Error handling message: {Message}", line);
+                // Silently ignore errors to avoid polluting stderr
             }
         }
     }
 
     private async Task<string?> HandleMessageAsync(string message)
     {
-        _logger.LogDebug("Received: {Message}", message);
+        // _logger.LogDebug("Received: {Message}", message);
 
         using var doc = JsonDocument.Parse(message);
         var root = doc.RootElement;
@@ -122,6 +146,7 @@ public class McpServer
             {
                 "initialize" => HandleInitialize(@params),
                 "initialized" => HandleInitialized(),
+                "notifications/initialized" => HandleInitialized(), // Support both forms
                 "tools/list" => HandleToolsList(),
                 "tools/call" => await HandleToolCallAsync(@params),
                 "ping" => HandlePing(),
@@ -136,25 +161,44 @@ public class McpServer
         }
         catch (McpException ex)
         {
+            // Notifications (no id) don't get error responses either
+            if (id == null)
+                return null;
+
             return CreateErrorResponse(id, ex.Code, ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling method {Method}", method);
+            // _logger.LogError(ex, "Error handling method {Method}", method);
+
+            // Notifications (no id) don't get error responses
+            if (id == null)
+                return null;
+
             return CreateErrorResponse(id, -32603, $"Internal error: {ex.Message}");
         }
     }
 
     private object HandleInitialize(JsonElement? @params)
     {
-        _logger.LogInformation("Initializing MCP connection");
+        // _logger.LogInformation("Initializing MCP connection");
+
+        // Extract client's protocol version for negotiation
+        string? clientProtocolVersion = null;
+        if (@params.HasValue && @params.Value.TryGetProperty("protocolVersion", out var versionElement))
+        {
+            clientProtocolVersion = versionElement.GetString();
+        }
+
+        // Use client's version if provided (accept any version for compatibility)
+        var negotiatedVersion = clientProtocolVersion ?? ProtocolVersion;
 
         return new
         {
-            protocolVersion = ProtocolVersion,
+            protocolVersion = negotiatedVersion,
             capabilities = new
             {
-                tools = new { }
+                tools = new { listChanged = true }  // Indicates server supports dynamic tool listing
             },
             serverInfo = new
             {
@@ -166,7 +210,7 @@ public class McpServer
 
     private object? HandleInitialized()
     {
-        _logger.LogInformation("MCP connection initialized");
+        // _logger.LogInformation("MCP connection initialized");
         return null;
     }
 
@@ -204,7 +248,7 @@ public class McpServer
             ? argsElement
             : (JsonElement?)null;
 
-        _logger.LogInformation("Calling tool: {ToolName}", toolName);
+        // _logger.LogInformation("Calling tool: {ToolName}", toolName);
 
         try
         {
@@ -223,7 +267,7 @@ public class McpServer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Tool {ToolName} failed", toolName);
+            // _logger.LogError(ex, "Tool {ToolName} failed", toolName);
             return new
             {
                 content = new[]
