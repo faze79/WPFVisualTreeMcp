@@ -71,21 +71,45 @@ dotnet tool install -g WpfVisualTreeMcp
 
 ### Configuration
 
+The server uses the **official Microsoft/Anthropic MCP SDK for .NET**, providing guaranteed compatibility with Claude Code and other MCP clients.
+
 #### Claude Code
 
-Add to your Claude Code MCP settings (`~/.config/claude-code/mcp.json` or project-level):
+**Option 1: Project-level Configuration (Recommended)**
+
+Create or edit `.claude.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "wpf-visual-tree": {
-      "command": "dotnet",
-      "args": ["run", "--project", "path/to/WpfVisualTreeMcp.Server"],
-      "env": {}
+      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "args": []
     }
   }
 }
 ```
+
+**Option 2: Global Configuration**
+
+Add to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "wpf-visual-tree": {
+      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "args": []
+    }
+  }
+}
+```
+
+**Important Notes:**
+- Use absolute paths to the built `.exe` file
+- Use forward slashes (`/`) in paths on Windows
+- Build in Release mode for production: `dotnet build -c Release`
+- Restart Claude Code after configuration changes
 
 #### Cursor
 
@@ -95,8 +119,8 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 {
   "mcpServers": {
     "wpf-visual-tree": {
-      "command": "dotnet",
-      "args": ["run", "--project", "path/to/WpfVisualTreeMcp.Server"]
+      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "args": []
     }
   }
 }
@@ -282,15 +306,27 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ```
 WpfVisualTreeMcp/
 ├── src/
-│   ├── WpfVisualTreeMcp.Server/      # MCP Server (.NET 8)
+│   ├── WpfVisualTreeMcp.Server/      # MCP Server (.NET 8) - Uses official MCP SDK
+│   │   ├── Program.cs                # Server initialization with MCP SDK
+│   │   ├── WpfTools.cs               # 13 WPF inspection tools
+│   │   └── Services/                 # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/   # Injected DLL (.NET Framework 4.8)
-│   └── WpfVisualTreeMcp.Injector/    # Native injector
+│   ├── WpfVisualTreeMcp.Injector/    # Native injector
+│   └── WpfVisualTreeMcp.Shared/      # Shared models
 ├── samples/
 │   └── SampleWpfApp/                 # Test application
 ├── tests/
 │   └── WpfVisualTreeMcp.Tests/       # Unit tests
 └── docs/                             # Documentation
 ```
+
+### Technical Details
+
+- **MCP SDK**: Built with the [official C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk) from Microsoft/Anthropic
+- **Protocol**: JSON-RPC 2.0 over stdio transport
+- **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 (Inspector)
+- **IPC**: Named Pipes for server-to-application communication
+- **Tools**: 13 inspection tools auto-discovered via `[McpServerTool]` attributes
 
 ## Acknowledgments
 

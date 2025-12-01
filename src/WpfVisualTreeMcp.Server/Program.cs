@@ -1,39 +1,25 @@
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using WpfVisualTreeMcp.Server;
+using ModelContextProtocol;
 using WpfVisualTreeMcp.Server.Services;
 
-// Build the host with dependency injection
+// Build the host with MCP server and dependency injection
 var builder = Host.CreateApplicationBuilder(args);
 
-// Configure logging to stderr so stdout is clean for MCP protocol
+// CRITICAL: Disable ALL logging - stdout must be completely clean for MCP stdio protocol
+// Any log output on stdout will corrupt the JSON-RPC communication
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options =>
-{
-    options.LogToStandardErrorThreshold = LogLevel.Trace;
-});
 
-// Register services
+// Register WPF-specific services needed by tools
 builder.Services.AddSingleton<IProcessManager, ProcessManager>();
 builder.Services.AddSingleton<IIpcBridge, NamedPipeBridge>();
-builder.Services.AddSingleton<McpServer>();
 
-var host = builder.Build();
+// Add MCP server with stdio transport and auto-discover tools from this assembly
+builder.Services
+    .AddMcpServer()
+    .WithStdioServerTransport()
+    .WithToolsFromAssembly();
 
-// Get the MCP server and run it
-var mcpServer = host.Services.GetRequiredService<McpServer>();
-var logger = host.Services.GetRequiredService<ILogger<Program>>();
-
-logger.LogInformation("WpfVisualTreeMcp Server starting...");
-
-try
-{
-    await mcpServer.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput());
-}
-catch (Exception ex)
-{
-    logger.LogError(ex, "Fatal error in MCP server");
-    Environment.Exit(1);
-}
+// Build and run
+await builder.Build().RunAsync();
