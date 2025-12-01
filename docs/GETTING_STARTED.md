@@ -107,16 +107,65 @@ dotnet tool install -g WpfVisualTreeMcp
    }
    ```
 
+## Setting Up Your WPF Application (Self-Hosted Mode)
+
+For the MCP server to inspect your WPF application, you need to add the Inspector DLL to your project. This is called "self-hosted mode" and is the recommended approach.
+
+### Step 1: Add Project Reference
+
+Add a reference to `WpfVisualTreeMcp.Inspector` in your WPF project:
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="path/to/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj" />
+</ItemGroup>
+```
+
+### Step 2: Initialize the Inspector
+
+In your `App.xaml.cs`, initialize the inspector on startup:
+
+```csharp
+using System.Diagnostics;
+using System.Windows;
+using WpfVisualTreeMcp.Inspector;
+
+public partial class App : Application
+{
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        // Initialize the WPF Visual Tree Inspector
+        // This creates a named pipe server for the MCP server to connect to
+        InspectorService.Initialize(Process.GetCurrentProcess().Id);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Clean up the inspector service
+        InspectorService.Instance?.Dispose();
+        base.OnExit(e);
+    }
+}
+```
+
+### Step 3: Build and Run
+
+Build your application. The inspector will start automatically and listen for MCP server connections.
+
 ## Quick Start Tutorial
 
 ### Step 1: Start a WPF Application
 
-Either start your own WPF application or use the included sample:
+Either start your own WPF application (with the Inspector set up as above) or use the included sample:
 
 ```bash
 cd WpfVisualTreeMcp
 dotnet run --project samples/SampleWpfApp
 ```
+
+The sample app already has the Inspector configured.
 
 ### Step 2: List Available Processes
 
@@ -194,19 +243,25 @@ What styles are defined in this application?
 
 - Ensure the target application is running
 - Check that it's a .NET Framework WPF application
-- Try running with administrator privileges
+- The application must have a main window visible
 
-### "Failed to attach to process"
+### "Failed to attach to process" or "Inspector not loaded"
 
-- The application may be running as a different user
-- Try running the MCP server with administrator privileges
-- Check if antivirus is blocking the injection
+- Ensure the target application has the Inspector DLL set up (self-hosted mode)
+- The application must call `InspectorService.Initialize()` on startup
+- Check that the Inspector project reference is correctly added
+
+### "Connection timeout" or "Communication error"
+
+- The Inspector's named pipe server may not be running
+- Verify the application started successfully and called `InspectorService.Initialize()`
+- Check the pipe name: `wpf_inspector_{processId}`
 
 ### "Element not found"
 
 - The element may have been removed from the visual tree
 - Try refreshing by getting the visual tree again
-- The element handle may have expired
+- The element handle may have expired (handles are session-based)
 
 ### "Binding path error"
 

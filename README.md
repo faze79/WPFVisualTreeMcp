@@ -102,6 +102,39 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 }
 ```
 
+### Self-Hosted Mode (Recommended)
+
+For your WPF application to be inspectable, add a reference to the Inspector DLL and initialize it on startup:
+
+1. Add a project reference to `WpfVisualTreeMcp.Inspector`
+
+2. In your `App.xaml.cs`:
+
+```csharp
+using System.Diagnostics;
+using System.Windows;
+using WpfVisualTreeMcp.Inspector;
+
+public partial class App : Application
+{
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        // Initialize the WPF Visual Tree Inspector
+        InspectorService.Initialize(Process.GetCurrentProcess().Id);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        InspectorService.Instance?.Dispose();
+        base.OnExit(e);
+    }
+}
+```
+
+This enables the MCP server to connect to your application via named pipes for real-time inspection.
+
 ## Usage Examples
 
 ### List Running WPF Applications
@@ -189,27 +222,29 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 
 ## Roadmap
 
-### Phase 1: Core Inspection (Current)
+### Phase 1: Core Inspection ✅
 - [x] Project structure and architecture
-- [ ] Process discovery and enumeration
-- [ ] Basic process attachment
-- [ ] Visual tree navigation
-- [ ] Property inspection
-- [ ] Element search
+- [x] Process discovery and enumeration
+- [x] Basic process attachment
+- [x] Visual tree navigation
+- [x] Property inspection
+- [x] Element search
 
-### Phase 2: Advanced Features
-- [ ] Binding analysis and error detection
-- [ ] Resource dictionary enumeration
-- [ ] Style and template inspection
-- [ ] Property change monitoring
+### Phase 2: Advanced Features ✅
+- [x] IPC communication via named pipes
+- [x] Binding analysis and error detection
+- [x] Resource dictionary enumeration
+- [x] Style and template inspection
+- [x] Property change monitoring (with notifications)
 
-### Phase 3: Interaction & Diagnostics
-- [ ] Element highlighting
-- [ ] Visual tree diff
-- [ ] XAML/JSON export
+### Phase 3: Interaction & Diagnostics (In Progress)
+- [x] Element highlighting overlay
+- [x] XAML/JSON export
+- [ ] Visual tree diff/comparison
 - [ ] Performance diagnostics
 
 ### Future Considerations
+- [ ] DLL injection for external processes (currently self-hosted mode)
 - [ ] Support for .NET MAUI applications
 - [ ] WinUI 3 support
 - [ ] Remote debugging over network
