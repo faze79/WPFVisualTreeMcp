@@ -1,7 +1,4 @@
-using System.Text;
-using System.Text.Json;
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
 using Moq;
 using WpfVisualTreeMcp.Server;
 using WpfVisualTreeMcp.Server.Services;
@@ -10,68 +7,26 @@ using Xunit;
 
 namespace WpfVisualTreeMcp.Tests;
 
-public class McpServerTests
+/// <summary>
+/// Tests for WpfTools - the MCP tool implementations.
+/// After migrating to the official MCP SDK, we test the tool class directly
+/// rather than the protocol layer (which is handled by the SDK).
+/// </summary>
+public class WpfToolsTests
 {
-    private readonly Mock<ILogger<McpServer>> _loggerMock;
     private readonly Mock<IProcessManager> _processManagerMock;
     private readonly Mock<IIpcBridge> _ipcBridgeMock;
+    private readonly WpfTools _tools;
 
-    public McpServerTests()
+    public WpfToolsTests()
     {
-        _loggerMock = new Mock<ILogger<McpServer>>();
         _processManagerMock = new Mock<IProcessManager>();
         _ipcBridgeMock = new Mock<IIpcBridge>();
-    }
-
-    private McpServer CreateServer() => new McpServer(
-        _loggerMock.Object,
-        _processManagerMock.Object,
-        _ipcBridgeMock.Object);
-
-    [Fact]
-    public async Task Initialize_ReturnsProtocolVersion()
-    {
-        // Arrange
-        var request = CreateJsonRpcRequest("initialize", 1, new { });
-
-        // Act
-        var response = await SendRequestAsync(request);
-
-        // Assert
-        response.Should().NotBeNull();
-        var result = response.RootElement.GetProperty("result");
-        result.GetProperty("protocolVersion").GetString().Should().Be("2024-11-05");
-        result.GetProperty("serverInfo").GetProperty("name").GetString().Should().Be("wpf-visual-tree");
+        _tools = new WpfTools(_processManagerMock.Object, _ipcBridgeMock.Object);
     }
 
     [Fact]
-    public async Task ToolsList_ReturnsAllTools()
-    {
-        // Arrange
-        var request = CreateJsonRpcRequest("tools/list", 1, null);
-
-        // Act
-        var response = await SendRequestAsync(request);
-
-        // Assert
-        response.Should().NotBeNull();
-        var tools = response.RootElement.GetProperty("result").GetProperty("tools");
-        tools.GetArrayLength().Should().BeGreaterOrEqualTo(5);
-
-        // Verify required tools are present
-        var toolNames = tools.EnumerateArray()
-            .Select(t => t.GetProperty("name").GetString())
-            .ToList();
-
-        toolNames.Should().Contain("wpf_list_processes");
-        toolNames.Should().Contain("wpf_attach");
-        toolNames.Should().Contain("wpf_get_visual_tree");
-        toolNames.Should().Contain("wpf_get_element_properties");
-        toolNames.Should().Contain("wpf_find_elements");
-    }
-
-    [Fact]
-    public async Task ToolCall_ListProcesses_ReturnsProcessList()
+    public async Task WpfListProcesses_ReturnsProcessList()
     {
         // Arrange
         var expectedProcesses = new List<WpfProcessInfo>
@@ -89,27 +44,18 @@ public class McpServerTests
             .Setup(x => x.GetWpfProcessesAsync())
             .ReturnsAsync(expectedProcesses);
 
-        var request = CreateJsonRpcRequest("tools/call", 1, new
-        {
-            name = "wpf_list_processes",
-            arguments = new { }
-        });
-
         // Act
-        var response = await SendRequestAsync(request);
+        var result = await _tools.WpfListProcesses();
 
         // Assert
-        response.Should().NotBeNull();
-        var content = response.RootElement.GetProperty("result").GetProperty("content");
-        content.GetArrayLength().Should().Be(1);
-
-        var text = content[0].GetProperty("text").GetString();
-        text.Should().Contain("1234");
-        text.Should().Contain("TestApp");
+        result.Should().NotBeNull();
+        var resultType = result.GetType();
+        var processesProperty = resultType.GetProperty("processes");
+        processesProperty.Should().NotBeNull();
     }
 
     [Fact]
-    public async Task ToolCall_Attach_AttachesToProcess()
+    public async Task WpfAttach_WithProcessId_AttachesToProcess()
     {
         // Arrange
         var expectedSession = new InspectionSession
@@ -124,79 +70,47 @@ public class McpServerTests
             .Setup(x => x.AttachToProcessAsync(1234, null))
             .ReturnsAsync(expectedSession);
 
-        var request = CreateJsonRpcRequest("tools/call", 1, new
+        // Act
+        var result = await _tools.WpfAttach(process_id: 1234);
+
+        // Assert
+        result.Should().NotBeNull();
+        _processManagerMock.Verify(x => x.AttachToProcessAsync(1234, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfAttach_WithProcessName_AttachesToProcess()
+    {
+        // Arrange
+        var expectedSession = new InspectionSession
         {
-            name = "wpf_attach",
-            arguments = new { process_id = 1234 }
-        });
+            SessionId = "test-session",
+            ProcessId = 5678,
+            MainWindowHandle = "window_0x56789",
+            AttachedAt = DateTime.UtcNow
+        };
+
+        _processManagerMock
+            .Setup(x => x.AttachToProcessAsync(null, "TestApp"))
+            .ReturnsAsync(expectedSession);
 
         // Act
-        var response = await SendRequestAsync(request);
+        var result = await _tools.WpfAttach(process_name: "TestApp");
 
         // Assert
-        response.Should().NotBeNull();
-        var content = response.RootElement.GetProperty("result").GetProperty("content");
-        var text = content[0].GetProperty("text").GetString();
-
-        text.Should().Contain("success");
-        text.Should().Contain("1234");
-        text.Should().Contain("test-session");
+        result.Should().NotBeNull();
+        _processManagerMock.Verify(x => x.AttachToProcessAsync(null, "TestApp"), Times.Once);
     }
 
     [Fact]
-    public async Task ToolCall_WithMissingRequiredParameter_ReturnsError()
+    public async Task WpfAttach_WithNoParameters_ThrowsArgumentException()
     {
-        // Arrange
-        var request = CreateJsonRpcRequest("tools/call", 1, new
-        {
-            name = "wpf_get_element_properties",
-            arguments = new { } // Missing required element_handle
-        });
-
-        // Act
-        var response = await SendRequestAsync(request);
-
-        // Assert
-        response.Should().NotBeNull();
-        var content = response.RootElement.GetProperty("result").GetProperty("content");
-        content[0].GetProperty("text").GetString().Should().Contain("Error");
-
-        var isError = response.RootElement.GetProperty("result").GetProperty("isError").GetBoolean();
-        isError.Should().BeTrue();
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfAttach());
     }
 
     [Fact]
-    public async Task UnknownMethod_ReturnsMethodNotFound()
-    {
-        // Arrange
-        var request = CreateJsonRpcRequest("unknown/method", 1, null);
-
-        // Act
-        var response = await SendRequestAsync(request);
-
-        // Assert
-        response.Should().NotBeNull();
-        var error = response.RootElement.GetProperty("error");
-        error.GetProperty("code").GetInt32().Should().Be(-32601);
-        error.GetProperty("message").GetString().Should().Contain("Method not found");
-    }
-
-    [Fact]
-    public async Task Ping_ReturnsEmptyResult()
-    {
-        // Arrange
-        var request = CreateJsonRpcRequest("ping", 1, null);
-
-        // Act
-        var response = await SendRequestAsync(request);
-
-        // Assert
-        response.Should().NotBeNull();
-        response.RootElement.TryGetProperty("result", out _).Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task ToolCall_GetVisualTree_ReturnsTree()
+    public async Task WpfGetVisualTree_ReturnsTree()
     {
         // Arrange
         var expectedTree = new VisualTreeResult
@@ -215,69 +129,333 @@ public class McpServerTests
             .Setup(x => x.GetVisualTreeAsync(null, 10))
             .ReturnsAsync(expectedTree);
 
-        _processManagerMock
-            .SetupGet(x => x.CurrentSession)
-            .Returns(new InspectionSession { SessionId = "test", ProcessId = 1 });
-
-        var request = CreateJsonRpcRequest("tools/call", 1, new
-        {
-            name = "wpf_get_visual_tree",
-            arguments = new { }
-        });
-
         // Act
-        var response = await SendRequestAsync(request);
+        var result = await _tools.WpfGetVisualTree();
 
         // Assert
-        response.Should().NotBeNull();
-        var content = response.RootElement.GetProperty("result").GetProperty("content");
-        var text = content[0].GetProperty("text").GetString();
-        text.Should().Contain("root");
-        text.Should().Contain("MainWindow");
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedTree);
     }
 
-    private static string CreateJsonRpcRequest(string method, int id, object? @params)
+    [Fact]
+    public async Task WpfGetVisualTree_WithCustomDepth_UsesSpecifiedDepth()
     {
-        var request = new
+        // Arrange
+        var expectedTree = new VisualTreeResult
         {
-            jsonrpc = "2.0",
-            id = id,
-            method = method,
-            @params = @params
+            Root = new VisualTreeNode { Handle = "root", TypeName = "Window" },
+            TotalElements = 1,
+            MaxDepthReached = false
         };
 
-        return JsonSerializer.Serialize(request);
+        _ipcBridgeMock
+            .Setup(x => x.GetVisualTreeAsync(null, 5))
+            .ReturnsAsync(expectedTree);
+
+        // Act
+        var result = await _tools.WpfGetVisualTree(max_depth: 5);
+
+        // Assert
+        _ipcBridgeMock.Verify(x => x.GetVisualTreeAsync(null, 5), Times.Once);
     }
 
-    private async Task<JsonDocument> SendRequestAsync(string request)
+    [Fact]
+    public async Task WpfGetElementProperties_WithValidHandle_ReturnsProperties()
     {
-        var server = CreateServer();
-
-        // Create input with request
-        var inputBytes = Encoding.UTF8.GetBytes(request + "\n");
-        using var inputStream = new MemoryStream(inputBytes);
-        using var outputStream = new MemoryStream();
-
-        // Run server - it will exit when input stream ends (returns null from ReadLineAsync)
-        await server.RunAsync(inputStream, outputStream);
-
-        // Read response
-        outputStream.Position = 0;
-        using var reader = new StreamReader(outputStream);
-        var responseText = await reader.ReadToEndAsync();
-
-        if (string.IsNullOrWhiteSpace(responseText))
+        // Arrange
+        var expectedResult = new ElementPropertiesResult
         {
-            throw new InvalidOperationException("No response received from server");
-        }
+            Element = new ElementInfo { Handle = "elem_1", TypeName = "Button" },
+            Properties = new List<PropertyInfo>
+            {
+                new PropertyInfo { Name = "Content", TypeName = "String", Value = "Click Me" }
+            }
+        };
 
-        // Get the first non-empty line (response)
-        var firstLine = responseText.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l));
-        if (firstLine == null)
+        _ipcBridgeMock
+            .Setup(x => x.GetElementPropertiesAsync("elem_1"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetElementProperties("elem_1");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfGetElementProperties_WithEmptyHandle_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfGetElementProperties(""));
+    }
+
+    [Fact]
+    public async Task WpfFindElements_ReturnsMatchingElements()
+    {
+        // Arrange
+        var expectedResult = new FindElementsResult
         {
-            throw new InvalidOperationException("No valid response line found");
-        }
+            Elements = new List<FoundElement>
+            {
+                new FoundElement { Handle = "btn_1", TypeName = "Button", Name = "SubmitButton" }
+            },
+            Count = 1
+        };
 
-        return JsonDocument.Parse(firstLine);
+        _ipcBridgeMock
+            .Setup(x => x.FindElementsAsync("Button", null, null))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfFindElements(type_name: "Button");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfGetBindings_WithValidHandle_ReturnsBindings()
+    {
+        // Arrange
+        var expectedResult = new BindingsResult
+        {
+            Element = new ElementInfo { Handle = "txt_1", TypeName = "TextBox" },
+            Bindings = new List<BindingInfo>
+            {
+                new BindingInfo { Property = "Text", Path = "UserName", Mode = "TwoWay" }
+            }
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetBindingsAsync("txt_1"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetBindings("txt_1");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfGetBindingErrors_ReturnsErrors()
+    {
+        // Arrange
+        var expectedResult = new BindingErrorsResult
+        {
+            Errors = new List<BindingError>
+            {
+                new BindingError { Property = "Text", Message = "Path not found" }
+            },
+            Count = 1
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetBindingErrorsAsync())
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetBindingErrors();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfGetResources_WithApplicationScope_ReturnsResources()
+    {
+        // Arrange
+        var expectedResult = new ResourcesResult
+        {
+            Resources = new List<ResourceInfo>
+            {
+                new ResourceInfo { Key = "PrimaryColor", TypeName = "SolidColorBrush" }
+            }
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetResourcesAsync("application", null))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetResources(scope: "application");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfGetResources_WithElementScopeButNoHandle_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _tools.WpfGetResources(scope: "element", element_handle: null));
+    }
+
+    [Fact]
+    public async Task WpfGetStyles_WithValidHandle_ReturnsStyles()
+    {
+        // Arrange
+        var expectedResult = new StylesResult
+        {
+            Element = new ElementInfo { Handle = "btn_1", TypeName = "Button" },
+            Style = new StyleInfo { TargetType = "Button" }
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetStylesAsync("btn_1"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetStyles("btn_1");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfHighlightElement_WithValidHandle_HighlightsElement()
+    {
+        // Arrange
+        _ipcBridgeMock
+            .Setup(x => x.HighlightElementAsync("elem_1", 2000))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _tools.WpfHighlightElement("elem_1");
+
+        // Assert
+        result.Should().NotBeNull();
+        _ipcBridgeMock.Verify(x => x.HighlightElementAsync("elem_1", 2000), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfHighlightElement_WithCustomDuration_UsesSpecifiedDuration()
+    {
+        // Arrange
+        _ipcBridgeMock
+            .Setup(x => x.HighlightElementAsync("elem_1", 5000))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _tools.WpfHighlightElement("elem_1", duration_ms: 5000);
+
+        // Assert
+        _ipcBridgeMock.Verify(x => x.HighlightElementAsync("elem_1", 5000), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfGetLayoutInfo_WithValidHandle_ReturnsLayoutInfo()
+    {
+        // Arrange
+        var expectedResult = new LayoutInfoResult
+        {
+            Element = new ElementInfo { Handle = "grid_1", TypeName = "Grid" },
+            Layout = new LayoutInfo { ActualWidth = 800, ActualHeight = 600 }
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.GetLayoutInfoAsync("grid_1"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfGetLayoutInfo("grid_1");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfExportTree_WithJsonFormat_ReturnsJsonExport()
+    {
+        // Arrange
+        var expectedResult = new ExportResult
+        {
+            Format = "json",
+            Content = "{\"root\": {}}",
+            ElementCount = 1
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.ExportTreeAsync(null, "json"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfExportTree(format: "json");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfExportTree_WithXamlFormat_ReturnsXamlExport()
+    {
+        // Arrange
+        var expectedResult = new ExportResult
+        {
+            Format = "xaml",
+            Content = "<Window />",
+            ElementCount = 1
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.ExportTreeAsync(null, "xaml"))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfExportTree(format: "xaml");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfExportTree_WithInvalidFormat_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _tools.WpfExportTree(format: "invalid"));
+    }
+
+    [Fact]
+    public async Task WpfWatchProperty_WithValidParameters_ReturnsWatchId()
+    {
+        // Arrange
+        _ipcBridgeMock
+            .Setup(x => x.WatchPropertyAsync("elem_1", "Width"))
+            .ReturnsAsync("watch_123");
+
+        // Act
+        var result = await _tools.WpfWatchProperty("elem_1", "Width");
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().Be("watch_123");
+    }
+
+    [Fact]
+    public async Task WpfWatchProperty_WithEmptyHandle_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _tools.WpfWatchProperty("", "Width"));
+    }
+
+    [Fact]
+    public async Task WpfWatchProperty_WithEmptyPropertyName_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _tools.WpfWatchProperty("elem_1", ""));
     }
 }
