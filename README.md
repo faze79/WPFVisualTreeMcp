@@ -245,9 +245,6 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 
 ### Future Considerations
 - [ ] DLL injection for external processes (currently self-hosted mode)
-- [ ] Support for .NET MAUI applications
-- [ ] WinUI 3 support
-- [ ] Remote debugging over network
 - [ ] Visual tree modification capabilities
 
 ## Contributing
