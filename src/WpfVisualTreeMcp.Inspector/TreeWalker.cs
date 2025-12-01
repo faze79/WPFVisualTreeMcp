@@ -258,13 +258,14 @@ public class TreeWalker
 
         if (!string.IsNullOrEmpty(typeName))
         {
-            matches = fullTypeName.Contains(typeName, StringComparison.OrdinalIgnoreCase) ||
+            // Use IndexOf for .NET Framework 4.8 compatibility (no Contains with StringComparison)
+            matches = fullTypeName.IndexOf(typeName, StringComparison.OrdinalIgnoreCase) >= 0 ||
                       shortTypeName.Equals(typeName, StringComparison.OrdinalIgnoreCase);
         }
 
         if (matches && !string.IsNullOrEmpty(elementName))
         {
-            matches = name != null && name.Contains(elementName, StringComparison.OrdinalIgnoreCase);
+            matches = name != null && name.IndexOf(elementName, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         if (matches)
