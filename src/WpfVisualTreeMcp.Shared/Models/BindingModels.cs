@@ -35,6 +35,7 @@ public class BindingError
     public string BindingPath { get; set; } = string.Empty;
     public string ErrorType { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>

@@ -84,8 +84,9 @@ public class IpcServer : IDisposable
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(pipeServer, Encoding.UTF8, leaveOpen: true);
-        using var writer = new StreamWriter(pipeServer, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+        // .NET Framework 4.8 requires full constructor overload for leaveOpen
+        using var reader = new StreamReader(pipeServer, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(pipeServer, Encoding.UTF8, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
 
         while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
         {
