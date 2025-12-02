@@ -41,39 +41,52 @@ dotnet tool install -g WpfVisualTreeMcp
 
 ### Claude Code
 
-1. Open your Claude Code settings or create a project-level MCP configuration.
+There are multiple ways to configure the MCP server in Claude Code:
 
-2. Add the WpfVisualTreeMcp server:
+#### Option 1: Command Line (Recommended)
 
-   **Using `dotnet run`:**
-   ```json
-   {
-     "mcpServers": {
-       "wpf-visual-tree": {
-         "command": "dotnet",
-         "args": [
-           "run",
-           "--project",
-           "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server"
-         ]
-       }
-     }
-   }
-   ```
+Use the `claude mcp add` command for quick setup:
 
-   **Using the built executable:**
-   ```json
-   {
-     "mcpServers": {
-       "wpf-visual-tree": {
-         "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Debug/net8.0/WpfVisualTreeMcp.Server.exe",
-         "args": []
-       }
-     }
-   }
-   ```
+```bash
+# Build the server first
+cd WpfVisualTreeMcp
+dotnet build -c Release
 
-3. Restart Claude Code or reload the window.
+# Add to current project only
+claude mcp add wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+
+# Or add globally (available in all projects)
+claude mcp add --scope user wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+```
+
+Verify the server was added:
+```bash
+claude mcp list
+```
+
+Remove the server if needed:
+```bash
+claude mcp remove wpf-visual-tree
+```
+
+#### Option 2: JSON Configuration
+
+Create or edit `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "wpf-visual-tree": {
+      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "args": []
+    }
+  }
+}
+```
+
+For global configuration, add to `~/.claude/settings.json`.
+
+Restart Claude Code or reload the window after making changes.
 
 ### Cursor
 

@@ -75,9 +75,26 @@ The server uses the **official Microsoft/Anthropic MCP SDK for .NET**, providing
 
 #### Claude Code
 
-**Option 1: Project-level Configuration (Recommended)**
+**Option 1: Command Line (Recommended)**
 
-Create or edit `.claude.json` in your project root:
+Use the `claude mcp add` command to add the server directly:
+
+```bash
+# Add to current project only
+claude mcp add wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+
+# Add globally (available in all projects)
+claude mcp add --scope user wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+```
+
+You can verify the server was added:
+```bash
+claude mcp list
+```
+
+**Option 2: Project-level JSON Configuration**
+
+Create or edit `.mcp.json` in your project root:
 
 ```json
 {
@@ -90,9 +107,9 @@ Create or edit `.claude.json` in your project root:
 }
 ```
 
-**Option 2: Global Configuration**
+**Option 3: Global JSON Configuration**
 
-Add to `~/.claude.json`:
+Add to `~/.claude/settings.json`:
 
 ```json
 {
