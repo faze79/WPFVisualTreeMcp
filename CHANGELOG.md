@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `claude mcp add` command line instructions for easier Claude Code configuration
+- Updated documentation with multiple configuration options (CLI vs JSON)
+
 ### Changed
 
 #### Migration to Official MCP SDK
