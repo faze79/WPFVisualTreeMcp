@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Restore dependencies
+      run: dotnet restore WpfVisualTreeMcp.sln
+
+    - name: Build Release
+      run: dotnet build WpfVisualTreeMcp.sln --no-restore --configuration Release
+
+    - name: Test
+      run: dotnet test WpfVisualTreeMcp.sln --no-build --configuration Release --verbosity normal
+
+    - name: Publish MCP Server
+      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish/server
+
+    - name: Publish Inspector DLL
+      run: dotnet publish src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --output ./publish/inspector
+
+    - name: Create release archive
+      run: |
+        Compress-Archive -Path ./publish/* -DestinationPath ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
+
+    - name: Extract version notes
+      id: notes
+      shell: pwsh
+      run: |
+        $changelog = Get-Content CHANGELOG.md -Raw
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        $pattern = "(?s)## \[$version\].*?(?=## \[|$)"
+        $match = [regex]::Match($changelog, $pattern)
+        if ($match.Success) {
+          $notes = $match.Value.Trim()
+          $notes | Out-File -FilePath release-notes.md -Encoding utf8
+        } else {
+          "Release ${{ github.ref_name }}" | Out-File -FilePath release-notes.md -Encoding utf8
+        }
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: release-notes.md
+        files: |
+          ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
+        draft: false
+        prerelease: ${{ contains(github.ref_name, '-') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

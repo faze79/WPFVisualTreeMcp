@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2025-12-02
 
 ### Added
 - Added `claude mcp add` command line instructions for easier Claude Code configuration
@@ -72,20 +72,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 3. Restart Claude Code
 4. Verify tools appear with `mcp__wpf-visual-tree__` prefix
 
-## [0.1.0] - 2024-11-XX
-
-### Added
-- Initial release with 13 WPF inspection tools
-- Process discovery and attachment
-- Visual tree navigation
-- Property inspection
-- Binding analysis and error detection
-- Resource dictionary enumeration
-- Style and template inspection
-- Element search and highlighting
-- Tree export (XAML/JSON)
-- Named pipe IPC communication
-- Sample WPF application for testing
-
-[Unreleased]: https://github.com/faze79/WpfVisualTreeMcp/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/faze79/WpfVisualTreeMcp/releases/tag/v0.1.0
+[1.0.0]: https://github.com/faze79/WpfVisualTreeMcp/releases/tag/v1.0.0
