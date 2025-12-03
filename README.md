@@ -1,6 +1,7 @@
 # WpfVisualTreeMcp
 
 [![Build](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml/badge.svg)](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/faze79/WpfVisualTreeMcp)](https://github.com/faze79/WpfVisualTreeMcp/releases)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
@@ -55,15 +56,23 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 
 ### Installation
 
-#### Option 1: Build from Source
+#### Option 1: Download Release (Recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/faze79/WpfVisualTreeMcp/releases):
+
+1. Download `WpfVisualTreeMcp-vX.X.X-win-x64.zip`
+2. Extract to a folder (e.g., `C:\Tools\WpfVisualTreeMcp`)
+3. The MCP server executable is at `server\WpfVisualTreeMcp.Server.exe`
+
+#### Option 2: Build from Source
 
 ```bash
 git clone https://github.com/faze79/WpfVisualTreeMcp.git
 cd WpfVisualTreeMcp
-dotnet build
+dotnet build -c Release
 ```
 
-#### Option 2: .NET Tool (Coming Soon)
+#### Option 3: .NET Tool (Coming Soon)
 
 ```bash
 dotnet tool install -g WpfVisualTreeMcp
