@@ -231,11 +231,12 @@ public class TreeWalker
     /// <param name="root">The root element to search from.</param>
     /// <param name="typeName">Optional type name to match.</param>
     /// <param name="elementName">Optional element name to match.</param>
+    /// <param name="maxResults">Maximum number of results to return (default: 50).</param>
     /// <returns>JSON array of matching elements.</returns>
-    public string FindElements(DependencyObject root, string? typeName, string? elementName)
+    public string FindElements(DependencyObject root, string? typeName, string? elementName, int maxResults = 50)
     {
         var results = new List<string>();
-        FindElementsRecursive(root, typeName, elementName, results);
+        FindElementsRecursive(root, typeName, elementName, results, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("[");
@@ -248,8 +249,14 @@ public class TreeWalker
         return sb.ToString();
     }
 
-    private void FindElementsRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results)
+    private void FindElementsRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results, int maxResults)
     {
+        // Stop if we've reached the maximum number of results
+        if (results.Count >= maxResults)
+        {
+            return;
+        }
+
         var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
         var shortTypeName = element.GetType().Name;
         var name = GetElementName(element);
@@ -284,6 +291,12 @@ public class TreeWalker
             sb.Append($",\"path\":\"{EscapeJson(path)}\"");
             sb.Append("}");
             results.Add(sb.ToString());
+
+            // Stop if we've reached the maximum after adding this result
+            if (results.Count >= maxResults)
+            {
+                return;
+            }
         }
 
         var childCount = VisualTreeHelper.GetChildrenCount(element);
@@ -292,7 +305,13 @@ public class TreeWalker
             var child = VisualTreeHelper.GetChild(element, i);
             if (child != null)
             {
-                FindElementsRecursive(child, typeName, elementName, results);
+                FindElementsRecursive(child, typeName, elementName, results, maxResults);
+
+                // Stop if we've reached the maximum during child traversal
+                if (results.Count >= maxResults)
+                {
+                    return;
+                }
             }
         }
     }

@@ -7,9 +7,14 @@ using WpfVisualTreeMcp.Server.Services;
 // Build the host with MCP server and dependency injection
 var builder = Host.CreateApplicationBuilder(args);
 
-// CRITICAL: Disable ALL logging - stdout must be completely clean for MCP stdio protocol
-// Any log output on stdout will corrupt the JSON-RPC communication
+// CRITICAL: stdout must be completely clean for MCP stdio protocol
+// Enable logging to STDERR only for debugging
 builder.Logging.ClearProviders();
+builder.Logging.AddConsole(options =>
+{
+    options.LogToStandardErrorThreshold = LogLevel.Trace; // Everything goes to stderr
+});
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
 // Register WPF-specific services needed by tools
 builder.Services.AddSingleton<IProcessManager, ProcessManager>();
