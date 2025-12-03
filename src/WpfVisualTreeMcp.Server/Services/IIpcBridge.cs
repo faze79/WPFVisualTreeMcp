@@ -20,7 +20,7 @@ public interface IIpcBridge
     /// <summary>
     /// Finds elements matching the specified criteria.
     /// </summary>
-    Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter);
+    Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50);
 
     /// <summary>
     /// Gets bindings for an element.

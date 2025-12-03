@@ -70,7 +70,7 @@ public class NamedPipeBridge : IIpcBridge
         return ParseElementPropertiesResponse(response, elementHandle);
     }
 
-    public async Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter)
+    public async Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50)
     {
         var session = EnsureConnected();
 
@@ -78,7 +78,8 @@ public class NamedPipeBridge : IIpcBridge
         {
             TypeName = typeName,
             ElementName = elementName,
-            PropertyFilter = propertyFilter
+            PropertyFilter = propertyFilter,
+            MaxResults = maxResults
         };
 
         var response = await SendRequestAsync<FindElementsRequest, FindElementsResponse>(

@@ -79,11 +79,12 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Search for elements by type, name, or property value")]
+    [Description("Search for elements by type, name, or property value. Returns up to max_results elements (default: 50).")]
     public async Task<object> WpfFindElements(
         string? type_name = null,
         string? element_name = null,
-        JsonElement? property_filter = null)
+        JsonElement? property_filter = null,
+        int max_results = 50)
     {
         Dictionary<string, string>? filterDict = null;
         if (property_filter.HasValue && property_filter.Value.ValueKind == JsonValueKind.Object)
@@ -95,7 +96,7 @@ public class WpfTools
             }
         }
 
-        var result = await _ipcBridge.FindElementsAsync(type_name, element_name, filterDict);
+        var result = await _ipcBridge.FindElementsAsync(type_name, element_name, filterDict, max_results);
         return result;
     }
 

@@ -53,6 +53,7 @@ public class FindElementsRequest : IpcRequest
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
     public Dictionary<string, string>? PropertyFilter { get; set; }
+    public int MaxResults { get; set; } = 50;
 }
 
 public class FindElementsResponse : IpcResponse

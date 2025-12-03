@@ -212,7 +212,8 @@ public class InspectorService : IDisposable
             return new FindElementsResponse { Success = false, Error = "No main window" };
         }
 
-        var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName);
+        var maxResults = request?.MaxResults ?? 50;
+        var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
         return new FindElementsResponse
         {
             RequestId = request?.RequestId ?? "",
