@@ -84,40 +84,127 @@ public class IpcServer : IDisposable
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
-        // .NET Framework 4.8 requires full constructor overload for leaveOpen
-        using var reader = new StreamReader(pipeServer, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
-        using var writer = new StreamWriter(pipeServer, Encoding.UTF8, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
-
-        while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
+        try
         {
-            try
-            {
-                var line = await reader.ReadLineAsync();
-                if (line == null) break;
+            DebugLog("HandleClientAsync: Client connected");
 
-                var response = await ProcessRequestAsync(line);
-                await writer.WriteLineAsync(response);
-            }
-            catch (IOException)
+            // Fix for .NET Framework 4.8: StreamReader/StreamWriter cause deadlocks on NamedPipeServerStream
+            // Use direct byte I/O instead
+            var buffer = new byte[4096];
+            var stringBuilder = new StringBuilder();
+
+            DebugLog("HandleClientAsync: Entering read loop with direct byte I/O");
+
+            while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
             {
-                break;
-            }
-            catch (Exception ex)
-            {
-                var errorResponse = new GetVisualTreeResponse
-                {
-                    Success = false,
-                    Error = ex.Message
-                };
                 try
                 {
-                    await writer.WriteLineAsync(IpcSerializer.SerializeResponse(errorResponse));
+                    stringBuilder.Clear();
+                    DebugLog("HandleClientAsync: Reading from pipe...");
+
+                    // Read until we get a newline
+                    while (true)
+                    {
+                        var bytesRead = await pipeServer.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                        DebugLog($"HandleClientAsync: Read {bytesRead} bytes");
+
+                        if (bytesRead == 0)
+                        {
+                            DebugLog("HandleClientAsync: Client disconnected (0 bytes read)");
+                            return;
+                        }
+
+                        var text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        stringBuilder.Append(text);
+
+                        // Check if we have a complete line
+                        var currentText = stringBuilder.ToString();
+                        var newlineIndex = currentText.IndexOf('\n');
+                        if (newlineIndex >= 0)
+                        {
+                            var line = currentText.Substring(0, newlineIndex).TrimEnd('\r');
+
+                            // Remove UTF-8 BOM if present (0xEF 0xBB 0xBF = U+FEFF)
+                            if (line.Length > 0 && line[0] == '\uFEFF')
+                            {
+                                line = line.Substring(1);
+                                DebugLog("HandleClientAsync: Removed UTF-8 BOM from line");
+                            }
+
+                            DebugLog($"HandleClientAsync: Received line (length={line.Length})");
+
+                            // Process the request
+                            DebugLog("HandleClientAsync: Processing request...");
+                            var response = await ProcessRequestAsync(line);
+                            DebugLog($"HandleClientAsync: Response ready (length={response.Length})");
+
+                            // Send response
+                            var responseBytes = Encoding.UTF8.GetBytes(response + "\n");
+                            DebugLog($"HandleClientAsync: Writing {responseBytes.Length} bytes...");
+                            await pipeServer.WriteAsync(responseBytes, 0, responseBytes.Length, cancellationToken);
+                            await pipeServer.FlushAsync(cancellationToken);
+                            DebugLog("HandleClientAsync: Response sent");
+
+                            // Keep any remaining data for next line
+                            if (newlineIndex + 1 < currentText.Length)
+                            {
+                                stringBuilder.Clear();
+                                stringBuilder.Append(currentText.Substring(newlineIndex + 1));
+                            }
+                            else
+                            {
+                                stringBuilder.Clear();
+                            }
+
+                            break; // Exit inner loop to read next request
+                        }
+                    }
                 }
-                catch
+                catch (IOException ex)
                 {
+                    DebugLog($"HandleClientAsync: IOException - {ex.Message}");
                     break;
                 }
+                catch (Exception ex)
+                {
+                    DebugLog($"HandleClientAsync: Exception - {ex.Message}\nStack: {ex.StackTrace}");
+                    try
+                    {
+                        var errorResponse = new GetVisualTreeResponse
+                        {
+                            Success = false,
+                            Error = ex.Message
+                        };
+                        var errorJson = IpcSerializer.SerializeResponse(errorResponse) + "\n";
+                        var errorBytes = Encoding.UTF8.GetBytes(errorJson);
+                        await pipeServer.WriteAsync(errorBytes, 0, errorBytes.Length, cancellationToken);
+                        await pipeServer.FlushAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        break;
+                    }
+                }
             }
+
+            DebugLog("HandleClientAsync: Connection closed");
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"HandleClientAsync: FATAL ERROR - {ex.Message}\nStack: {ex.StackTrace}");
+        }
+    }
+
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            var logPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "WpfInspector_Debug.log");
+            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\n");
+        }
+        catch
+        {
+            // Ignore logging errors
         }
     }
 

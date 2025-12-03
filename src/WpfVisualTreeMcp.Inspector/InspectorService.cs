@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -27,8 +28,19 @@ public class InspectorService : IDisposable
     {
         if (Instance != null) return;
 
-        Instance = new InspectorService(processId);
-        Instance.Start();
+        try
+        {
+            DebugLog($"Inspector.Initialize called for PID={processId}");
+            Instance = new InspectorService(processId);
+            DebugLog("Inspector instance created, calling Start()");
+            Instance.Start();
+            DebugLog("Inspector started successfully");
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ERROR in Initialize: {ex.Message}\n{ex.StackTrace}");
+            throw;
+        }
     }
 
     private InspectorService(int processId)
@@ -74,12 +86,52 @@ public class InspectorService : IDisposable
     {
         try
         {
-            return await Application.Current.Dispatcher.InvokeAsync(() =>
-                HandleRequest(requestType, data));
+            DebugLog($"HandleRequestAsync: requestType={requestType}");
+
+            if (Application.Current == null)
+            {
+                DebugLog("ERROR: Application.Current is NULL!");
+                return new GetVisualTreeResponse { Success = false, Error = "Application.Current is null" };
+            }
+
+            // Use Task.Run to avoid blocking the named pipe thread
+            var result = await Task.Run(() =>
+            {
+                DebugLog($"Task.Run thread {System.Threading.Thread.CurrentThread.ManagedThreadId}, calling Dispatcher.Invoke()");
+
+                // Use synchronous Invoke instead of InvokeAsync to avoid potential deadlocks
+                return Application.Current.Dispatcher.Invoke(() =>
+                {
+                    DebugLog($"Inside Dispatcher callback, UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
+                    return HandleRequest(requestType, data);
+                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(10));
+            });
+
+            DebugLog($"HandleRequest completed successfully");
+            return result;
+        }
+        catch (TimeoutException ex)
+        {
+            DebugLog($"TIMEOUT in HandleRequestAsync: Dispatcher is busy or blocked");
+            return new GetVisualTreeResponse { Success = false, Error = "Request timeout: UI thread is busy" };
         }
         catch (Exception ex)
         {
+            DebugLog($"ERROR in HandleRequestAsync: {ex.Message}\n{ex.StackTrace}");
             return new GetVisualTreeResponse { Success = false, Error = ex.Message };
+        }
+    }
+
+    private static void DebugLog(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), "WpfInspector_Debug.log");
+            File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}\n");
+        }
+        catch
+        {
+            // Ignore logging errors
         }
     }
 
