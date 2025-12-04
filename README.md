@@ -7,6 +7,8 @@
 
 > MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time
 
+> **📢 Latest Updates:** See [RELEASE_NOTES.md](RELEASE_NOTES.md) for recent improvements including IPC deadlock fixes, UTF-8 BOM handling, and the new `max_results` parameter.
+
 ## Overview
 
 **WpfVisualTreeMcp** is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that allows AI coding agents (Claude Code, Cursor, GitHub Copilot) to inspect and interact with running WPF applications. Think of it as giving your AI assistant the same capabilities as tools like [Snoop WPF](https://github.com/snoopwpf/snoopwpf) or Visual Studio's Live Visual Tree.
