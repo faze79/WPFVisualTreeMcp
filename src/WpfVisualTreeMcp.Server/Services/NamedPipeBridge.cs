@@ -263,6 +263,25 @@ public class NamedPipeBridge : IIpcBridge
     {
         var pipeName = $"wpf_inspector_{processId}";
 
+        // Check if the target process still exists
+        try
+        {
+            var process = System.Diagnostics.Process.GetProcessById(processId);
+            if (process.HasExited)
+            {
+                var errorMsg = $"Process {processId} has exited. Use wpf_list_processes() to see available WPF applications, then wpf_attach(process_id=<new_pid>) to connect.";
+                _logger.LogWarning(errorMsg);
+                return new TResponse { Success = false, Error = errorMsg };
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Process doesn't exist
+            var errorMsg = $"Process {processId} no longer exists. The application may have been closed or restarted. Use wpf_list_processes() to see available WPF applications, then wpf_attach(process_id=<new_pid>) to connect to the current instance.";
+            _logger.LogWarning(errorMsg);
+            return new TResponse { Success = false, Error = errorMsg };
+        }
+
         _logger.LogDebug("Sending {RequestType} request to pipe {PipeName}",
             request.RequestType, pipeName);
 
@@ -293,13 +312,15 @@ public class NamedPipeBridge : IIpcBridge
         }
         catch (TimeoutException)
         {
-            _logger.LogWarning("Connection to inspector timed out");
-            return new TResponse { Success = false, Error = "Connection to inspector timed out" };
+            var errorMsg = $"Connection to process {processId} timed out. The Inspector may not be loaded. Try restarting the application or use wpf_list_processes() and wpf_attach() to reconnect.";
+            _logger.LogWarning(errorMsg);
+            return new TResponse { Success = false, Error = errorMsg };
         }
         catch (IOException ex)
         {
-            _logger.LogWarning(ex, "IO error communicating with inspector");
-            return new TResponse { Success = false, Error = $"Communication error: {ex.Message}" };
+            var errorMsg = $"Cannot connect to process {processId}: {ex.Message}. The named pipe may not exist. Use wpf_list_processes() to see available WPF applications, then wpf_attach(process_id=<new_pid>) to connect.";
+            _logger.LogWarning(ex, errorMsg);
+            return new TResponse { Success = false, Error = errorMsg };
         }
         catch (Exception ex)
         {
