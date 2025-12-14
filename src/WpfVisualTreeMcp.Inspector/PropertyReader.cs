@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Windows;
+using System.Windows.Data;
 
 namespace WpfVisualTreeMcp.Inspector;
 
@@ -39,6 +40,19 @@ public class PropertyReader
             sb.Append($",\"value\":{FormatValue(value)}");
             sb.Append($",\"source\":\"{GetSourceName(source.BaseValueSource)}\"");
             sb.Append($",\"isBinding\":{(source.IsExpression ? "true" : "false")}");
+
+            // Include binding details if this is a binding
+            if (source.IsExpression)
+            {
+                var bindingExpr = BindingOperations.GetBindingExpression(element, dp);
+                if (bindingExpr?.ParentBinding != null)
+                {
+                    sb.Append(",\"bindingDetails\":{");
+                    AppendBindingDetails(sb, bindingExpr);
+                    sb.Append("}");
+                }
+            }
+
             sb.Append("}");
         }
 
@@ -210,6 +224,97 @@ public class PropertyReader
             BaseValueSource.ParentTemplate => "ParentTemplate",
             BaseValueSource.ParentTemplateTrigger => "ParentTemplateTrigger",
             BaseValueSource.Local => "Local",
+            _ => "Unknown"
+        };
+    }
+
+    private void AppendBindingDetails(StringBuilder sb, BindingExpression bindingExpr)
+    {
+        var binding = bindingExpr.ParentBinding;
+
+        // Path
+        sb.Append($"\"path\":\"{EscapeJson(binding.Path?.Path ?? "(none)")}\"");
+
+        // Source
+        if (binding.Source != null)
+        {
+            sb.Append($",\"sourceType\":\"{EscapeJson(binding.Source.GetType().Name)}\"");
+        }
+        else if (binding.RelativeSource != null)
+        {
+            sb.Append($",\"sourceType\":\"RelativeSource\"");
+            sb.Append($",\"relativeSourceMode\":\"{binding.RelativeSource.Mode}\"");
+            if (binding.RelativeSource.AncestorType != null)
+            {
+                sb.Append($",\"ancestorType\":\"{EscapeJson(binding.RelativeSource.AncestorType.Name)}\"");
+            }
+            if (binding.RelativeSource.AncestorLevel > 1)
+            {
+                sb.Append($",\"ancestorLevel\":{binding.RelativeSource.AncestorLevel}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(binding.ElementName))
+        {
+            sb.Append($",\"sourceType\":\"ElementName\"");
+            sb.Append($",\"elementName\":\"{EscapeJson(binding.ElementName)}\"");
+        }
+        else
+        {
+            sb.Append(",\"sourceType\":\"DataContext\"");
+        }
+
+        // Mode
+        sb.Append($",\"mode\":\"{binding.Mode}\"");
+
+        // UpdateSourceTrigger
+        if (binding.UpdateSourceTrigger != UpdateSourceTrigger.Default)
+        {
+            sb.Append($",\"updateSourceTrigger\":\"{binding.UpdateSourceTrigger}\"");
+        }
+
+        // Converter
+        if (binding.Converter != null)
+        {
+            sb.Append($",\"converter\":\"{EscapeJson(binding.Converter.GetType().Name)}\"");
+        }
+
+        // Status
+        var status = GetBindingStatus(bindingExpr);
+        sb.Append($",\"status\":\"{status}\"");
+
+        // Validation errors
+        if (bindingExpr.HasError)
+        {
+            sb.Append(",\"hasError\":true");
+            if (bindingExpr.ValidationError != null)
+            {
+                var errorContent = bindingExpr.ValidationError.ErrorContent?.ToString() ?? "Unknown error";
+                sb.Append($",\"errorMessage\":\"{EscapeJson(errorContent)}\"");
+            }
+        }
+        else
+        {
+            sb.Append(",\"hasError\":false");
+        }
+    }
+
+    private string GetBindingStatus(BindingExpression expression)
+    {
+        if (expression.HasError)
+        {
+            return "Error";
+        }
+
+        return expression.Status switch
+        {
+            BindingStatus.Active => "Active",
+            BindingStatus.Inactive => "Inactive",
+            BindingStatus.Detached => "Detached",
+            BindingStatus.PathError => "PathError",
+            BindingStatus.UpdateTargetError => "UpdateTargetError",
+            BindingStatus.UpdateSourceError => "UpdateSourceError",
+            BindingStatus.AsyncRequestPending => "AsyncPending",
+            BindingStatus.Unattached => "Unattached",
             _ => "Unknown"
         };
     }
