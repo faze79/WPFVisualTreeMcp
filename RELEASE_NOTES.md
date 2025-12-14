@@ -45,6 +45,38 @@ if (line.Length > 0 && line[0] == '\uFEFF')
 **Files Changed:**
 - `src/WpfVisualTreeMcp.Inspector/InspectorService.cs`
 
+#### 4. Helpful Error Messages for Stale PID Connections
+**Problem:** When AI agents attempted to use MCP tools with an obsolete PID (from a restarted application), they received generic errors like "An error occurred invoking 'wpf_find_elements'" without explanation or guidance.
+
+**Root Cause:** The MCP server didn't check if the target process still existed before attempting connection, resulting in uninformative error messages.
+
+**Solution:** Enhanced error detection and messaging in `NamedPipeBridge`:
+- Validates target process exists before connection attempt
+- Provides specific error messages for different scenarios
+- Includes actionable guidance in every error message
+
+**Error Message Examples:**
+```
+Process 25076 no longer exists. The application may have been closed
+or restarted. Use wpf_list_processes() to see available WPF applications,
+then wpf_attach(process_id=<new_pid>) to connect to the current instance.
+```
+
+```
+Connection to process 38668 timed out. The Inspector may not be loaded.
+Try restarting the application or use wpf_list_processes() and
+wpf_attach() to reconnect.
+```
+
+**Benefits:**
+- AI agents receive actionable guidance instead of generic errors
+- Clear explanation of what went wrong
+- Specific instructions on how to fix the issue
+- Reduces debugging time and user confusion
+
+**Files Changed:**
+- `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs`
+
 ### New Features
 
 #### 1. `max_results` Parameter for `wpf_find_elements`
