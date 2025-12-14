@@ -109,6 +109,54 @@ wpf_find_elements(type_name: "TextBox", max_results: 100)
 - `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs`
 - `src/WpfVisualTreeMcp.Server/WpfTools.cs`
 
+#### 2. Automatic Binding Details in `wpf_get_element_properties`
+**Problem:** When AI agents called `wpf_get_element_properties`, they could see `isBinding=true` but had no details about the binding (path, source, mode, status). They needed to make a separate call to `wpf_get_bindings` to get this information, requiring extra round trips.
+
+**Solution:** Enhanced `wpf_get_element_properties` to automatically include complete binding details when `isBinding=true`.
+
+**New JSON Structure:**
+```json
+{
+  "name": "Text",
+  "typeName": "System.String",
+  "value": "Hello World",
+  "source": "Local",
+  "isBinding": true,
+  "bindingDetails": {
+    "path": "UserName",
+    "sourceType": "DataContext",
+    "mode": "TwoWay",
+    "updateSourceTrigger": "PropertyChanged",
+    "converter": "StringToUpperConverter",
+    "status": "Active",
+    "hasError": false
+  }
+}
+```
+
+**Binding Details Include:**
+- `path` - Binding path expression
+- `sourceType` - DataContext, ElementName, RelativeSource, or explicit type
+- `elementName` - For ElementName bindings
+- `relativeSourceMode` - For RelativeSource bindings (Self, FindAncestor, etc.)
+- `ancestorType`/`ancestorLevel` - For FindAncestor mode
+- `mode` - OneWay, TwoWay, OneWayToSource, OneTime
+- `updateSourceTrigger` - PropertyChanged, LostFocus, Explicit
+- `converter` - Converter type name if present
+- `status` - Active, Error, PathError, Inactive, etc.
+- `hasError` - Boolean flag for validation errors
+- `errorMessage` - Validation error message if present
+
+**Benefits:**
+- ✅ Single call returns complete property AND binding information
+- ✅ Reduces round trips for AI agents
+- ✅ Easier to understand property values in context of their bindings
+- ✅ `wpf_get_bindings` still available for binding-only queries
+- ✅ No breaking changes - just additional data
+
+**Files Changed:**
+- `src/WpfVisualTreeMcp.Inspector/PropertyReader.cs`
+
 ### Development Tools
 
 #### 1. `sync-to-values.ps1` Utility Script
