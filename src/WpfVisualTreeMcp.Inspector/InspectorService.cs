@@ -110,7 +110,7 @@ public class InspectorService : IDisposable
             DebugLog($"HandleRequest completed successfully");
             return result;
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException)
         {
             DebugLog($"TIMEOUT in HandleRequestAsync: Dispatcher is busy or blocked");
             return new GetVisualTreeResponse { Success = false, Error = "Request timeout: UI thread is busy" };
@@ -190,7 +190,7 @@ public class InspectorService : IDisposable
             return new GetElementPropertiesResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetElementPropertiesResponse { Success = false, Error = "Element not found" };
@@ -263,7 +263,7 @@ public class InspectorService : IDisposable
             return new GetBindingsResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetBindingsResponse { Success = false, Error = "Element not found" };
@@ -354,7 +354,7 @@ public class InspectorService : IDisposable
             return new GetLayoutInfoResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetLayoutInfoResponse { Success = false, Error = "Element not found" };
@@ -380,7 +380,7 @@ public class InspectorService : IDisposable
             return new WatchPropertyResponse { Success = false, Error = "PropertyName required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new WatchPropertyResponse { Success = false, Error = "Element not found" };

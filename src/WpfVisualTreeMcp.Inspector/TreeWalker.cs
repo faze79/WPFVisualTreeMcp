@@ -446,8 +446,9 @@ public class TreeWalker
         }
     }
 
-    private static string EscapeXml(string text)
+    private static string EscapeXml(string? text)
     {
+        if (text == null) return string.Empty;
         return text
             .Replace("&", "&amp;")
             .Replace("<", "&lt;")
@@ -456,8 +457,9 @@ public class TreeWalker
             .Replace("'", "&apos;");
     }
 
-    private static string EscapeJson(string text)
+    private static string EscapeJson(string? text)
     {
+        if (text == null) return string.Empty;
         return text
             .Replace("\\", "\\\\")
             .Replace("\"", "\\\"")
