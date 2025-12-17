@@ -110,7 +110,7 @@ public class InspectorService : IDisposable
             DebugLog($"HandleRequest completed successfully");
             return result;
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException)
         {
             DebugLog($"TIMEOUT in HandleRequestAsync: Dispatcher is busy or blocked");
             return new GetVisualTreeResponse { Success = false, Error = "Request timeout: UI thread is busy" };
@@ -142,6 +142,7 @@ public class InspectorService : IDisposable
             "GetVisualTree" => HandleGetVisualTree(data),
             "GetElementProperties" => HandleGetElementProperties(data),
             "FindElements" => HandleFindElements(data),
+            "FindElementsDeep" => HandleFindElementsDeep(data),
             "GetBindings" => HandleGetBindings(data),
             "GetBindingErrors" => HandleGetBindingErrors(),
             "GetResources" => HandleGetResources(data),
@@ -189,7 +190,7 @@ public class InspectorService : IDisposable
             return new GetElementPropertiesResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetElementPropertiesResponse { Success = false, Error = "Element not found" };
@@ -206,10 +207,17 @@ public class InspectorService : IDisposable
     private IpcResponse HandleFindElements(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
-        var root = Application.Current.MainWindow;
+
+        DependencyObject? root = null;
+        if (!string.IsNullOrEmpty(request?.RootHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.RootHandle);
+        }
+        root ??= Application.Current.MainWindow;
+
         if (root == null)
         {
-            return new FindElementsResponse { Success = false, Error = "No main window" };
+            return new FindElementsResponse { Success = false, Error = "No root element found" };
         }
 
         var maxResults = request?.MaxResults ?? 50;
@@ -218,7 +226,32 @@ public class InspectorService : IDisposable
         {
             RequestId = request?.RequestId ?? "",
             ElementsJson = elementsJson,
-            Count = CountJsonArrayItems(elementsJson)
+            Count = ParseJsonCount(elementsJson)
+        };
+    }
+
+    private IpcResponse HandleFindElementsDeep(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
+
+        DependencyObject? root = null;
+        if (!string.IsNullOrEmpty(request?.RootHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.RootHandle);
+        }
+        root ??= Application.Current.MainWindow;
+
+        if (root == null)
+        {
+            return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
+        }
+
+        var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+        return new FindElementsDeepResponse
+        {
+            RequestId = request?.RequestId ?? "",
+            ElementsJson = elementsJson,
+            Count = ParseJsonCount(elementsJson)
         };
     }
 
@@ -230,7 +263,7 @@ public class InspectorService : IDisposable
             return new GetBindingsResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetBindingsResponse { Success = false, Error = "Element not found" };
@@ -321,7 +354,7 @@ public class InspectorService : IDisposable
             return new GetLayoutInfoResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new GetLayoutInfoResponse { Success = false, Error = "Element not found" };
@@ -347,7 +380,7 @@ public class InspectorService : IDisposable
             return new WatchPropertyResponse { Success = false, Error = "PropertyName required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle);
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
             return new WatchPropertyResponse { Success = false, Error = "Element not found" };
@@ -432,6 +465,25 @@ public class InspectorService : IDisposable
             }
         }
         return count;
+    }
+
+    private static int ParseJsonCount(string json)
+    {
+        // Parse count from {"elements":[...], "count":N} format
+        if (string.IsNullOrEmpty(json)) return 0;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("count", out var countProp))
+            {
+                return countProp.GetInt32();
+            }
+        }
+        catch
+        {
+            // Fall back to array counting if parse fails
+        }
+        return CountJsonArrayItems(json);
     }
 
     public void Dispose()

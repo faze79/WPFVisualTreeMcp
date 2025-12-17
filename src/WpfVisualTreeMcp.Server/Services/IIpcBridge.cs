@@ -20,7 +20,13 @@ public interface IIpcBridge
     /// <summary>
     /// Finds elements matching the specified criteria.
     /// </summary>
-    Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50);
+    Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50);
+
+    /// <summary>
+    /// Finds ALL elements matching the specified criteria without limit (deep search).
+    /// WARNING: This can return a large number of results. Use with caution.
+    /// </summary>
+    Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName);
 
     /// <summary>
     /// Gets bindings for an element.

@@ -79,8 +79,9 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Search for elements by type, name, or property value. Returns up to max_results elements (default: 50).")]
+    [Description("Search for elements by type, name, or property value. Returns up to max_results elements (default: 50, max: 10000). Use root_handle to search from a specific element instead of the main window.")]
     public async Task<object> WpfFindElements(
+        string? root_handle = null,
         string? type_name = null,
         string? element_name = null,
         JsonElement? property_filter = null,
@@ -96,7 +97,18 @@ public class WpfTools
             }
         }
 
-        var result = await _ipcBridge.FindElementsAsync(type_name, element_name, filterDict, max_results);
+        var result = await _ipcBridge.FindElementsAsync(root_handle, type_name, element_name, filterDict, max_results);
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("Search for ALL elements matching criteria without limit (deep search). WARNING: Can return many results. Use root_handle to search from a specific element.")]
+    public async Task<object> WpfFindElementsDeep(
+        string? root_handle = null,
+        string? type_name = null,
+        string? element_name = null)
+    {
+        var result = await _ipcBridge.FindElementsDeepAsync(root_handle, type_name, element_name);
         return result;
     }
 
