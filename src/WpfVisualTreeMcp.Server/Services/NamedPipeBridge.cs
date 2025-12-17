@@ -70,12 +70,13 @@ public class NamedPipeBridge : IIpcBridge
         return ParseElementPropertiesResponse(response, elementHandle);
     }
 
-    public async Task<FindElementsResult> FindElementsAsync(string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50)
+    public async Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50)
     {
         var session = EnsureConnected();
 
         var request = new FindElementsRequest
         {
+            RootHandle = rootHandle,
             TypeName = typeName,
             ElementName = elementName,
             PropertyFilter = propertyFilter,
@@ -91,6 +92,28 @@ public class NamedPipeBridge : IIpcBridge
         }
 
         return ParseFindElementsResponse(response);
+    }
+
+    public async Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName)
+    {
+        var session = EnsureConnected();
+
+        var request = new FindElementsDeepRequest
+        {
+            RootHandle = rootHandle,
+            TypeName = typeName,
+            ElementName = elementName
+        };
+
+        var response = await SendRequestAsync<FindElementsDeepRequest, FindElementsDeepResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to find elements (deep search)");
+        }
+
+        return ParseFindElementsDeepResponse(response);
     }
 
     public async Task<BindingsResult> GetBindingsAsync(string elementHandle)
@@ -462,20 +485,81 @@ public class NamedPipeBridge : IIpcBridge
         try
         {
             using var doc = JsonDocument.Parse(response.ElementsJson);
-            foreach (var elem in doc.RootElement.EnumerateArray())
+            var root = doc.RootElement;
+
+            // New format: {"elements":[...], "count":N}
+            if (root.TryGetProperty("elements", out var elementsArray))
             {
-                result.Elements.Add(new FoundElement
+                foreach (var elem in elementsArray.EnumerateArray())
                 {
-                    Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
-                    TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
-                    Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
-                    Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
-                });
+                    result.Elements.Add(new FoundElement
+                    {
+                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
+                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
+                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
+                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
+                    });
+                }
+            }
+            else
+            {
+                // Old format: plain array (backward compatibility)
+                foreach (var elem in root.EnumerateArray())
+                {
+                    result.Elements.Add(new FoundElement
+                    {
+                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
+                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
+                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
+                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
+                    });
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to parse elements JSON");
+        }
+
+        return result;
+    }
+
+    private FindElementsResult ParseFindElementsDeepResponse(FindElementsDeepResponse response)
+    {
+        var result = new FindElementsResult
+        {
+            Elements = new List<FoundElement>(),
+            Count = response.Count
+        };
+
+        if (string.IsNullOrEmpty(response.ElementsJson))
+        {
+            return result;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(response.ElementsJson);
+            var root = doc.RootElement;
+
+            // Format: {"elements":[...], "count":N}
+            if (root.TryGetProperty("elements", out var elementsArray))
+            {
+                foreach (var elem in elementsArray.EnumerateArray())
+                {
+                    result.Elements.Add(new FoundElement
+                    {
+                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
+                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
+                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
+                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse elements deep search JSON");
         }
 
         return result;

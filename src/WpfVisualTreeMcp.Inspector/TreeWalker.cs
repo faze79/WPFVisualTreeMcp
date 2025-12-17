@@ -231,22 +231,99 @@ public class TreeWalker
     /// <param name="root">The root element to search from.</param>
     /// <param name="typeName">Optional type name to match.</param>
     /// <param name="elementName">Optional element name to match.</param>
-    /// <param name="maxResults">Maximum number of results to return (default: 50).</param>
+    /// <param name="maxResults">Maximum number of results to return (default: 50, max: 10000).</param>
     /// <returns>JSON array of matching elements.</returns>
     public string FindElements(DependencyObject root, string? typeName, string? elementName, int maxResults = 50)
     {
+        // Clamp maxResults to reasonable limit to prevent memory issues
+        if (maxResults > 10000) maxResults = 10000;
+        if (maxResults < 1) maxResults = 1;
+
         var results = new List<string>();
         FindElementsRecursive(root, typeName, elementName, results, maxResults);
 
         var sb = new StringBuilder();
-        sb.Append("[");
+        sb.Append("{\"elements\":[");
         for (int i = 0; i < results.Count; i++)
         {
             if (i > 0) sb.Append(",");
             sb.Append(results[i]);
         }
-        sb.Append("]");
+        sb.Append($"],\"count\":{results.Count}}}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds ALL elements matching the specified criteria without limit (deep search).
+    /// WARNING: This can return a large number of results. Use with caution.
+    /// </summary>
+    /// <param name="root">The root element to search from.</param>
+    /// <param name="typeName">Optional type name to match.</param>
+    /// <param name="elementName">Optional element name to match.</param>
+    /// <returns>JSON array of matching elements.</returns>
+    public string FindElementsDeep(DependencyObject root, string? typeName, string? elementName)
+    {
+        var results = new List<string>();
+        FindElementsDeepRecursive(root, typeName, elementName, results);
+
+        var sb = new StringBuilder();
+        sb.Append("{\"elements\":[");
+        for (int i = 0; i < results.Count; i++)
+        {
+            if (i > 0) sb.Append(",");
+            sb.Append(results[i]);
+        }
+        sb.Append($"],\"count\":{results.Count}}}");
+        return sb.ToString();
+    }
+
+    private void FindElementsDeepRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results)
+    {
+        var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
+        var shortTypeName = element.GetType().Name;
+        var name = GetElementName(element);
+
+        bool matches = true;
+
+        if (!string.IsNullOrEmpty(typeName))
+        {
+            matches = fullTypeName.IndexOf(typeName, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      shortTypeName.Equals(typeName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (matches && !string.IsNullOrEmpty(elementName))
+        {
+            matches = name != null && name.IndexOf(elementName, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        if (matches)
+        {
+            var handle = GetOrCreateHandle(element);
+            var path = GetElementPath(element);
+
+            var sb = new StringBuilder();
+            sb.Append("{");
+            sb.Append($"\"handle\":\"{handle}\"");
+            sb.Append($",\"typeName\":\"{EscapeJson(fullTypeName)}\"");
+            if (!string.IsNullOrEmpty(name))
+            {
+                sb.Append($",\"name\":\"{EscapeJson(name)}\"");
+            }
+            sb.Append($",\"path\":\"{EscapeJson(path)}\"");
+            sb.Append("}");
+            results.Add(sb.ToString());
+        }
+
+        // Continue traversing all children without limit
+        var childCount = VisualTreeHelper.GetChildrenCount(element);
+        for (var i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(element, i);
+            if (child != null)
+            {
+                FindElementsDeepRecursive(child, typeName, elementName, results);
+            }
+        }
     }
 
     private void FindElementsRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results, int maxResults)

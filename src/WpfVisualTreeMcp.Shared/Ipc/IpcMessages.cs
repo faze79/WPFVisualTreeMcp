@@ -50,6 +50,7 @@ public class GetElementPropertiesResponse : IpcResponse
 public class FindElementsRequest : IpcRequest
 {
     public override string RequestType => "FindElements";
+    public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
     public Dictionary<string, string>? PropertyFilter { get; set; }
@@ -57,6 +58,21 @@ public class FindElementsRequest : IpcRequest
 }
 
 public class FindElementsResponse : IpcResponse
+{
+    public string? ElementsJson { get; set; }
+    public int Count { get; set; }
+}
+
+// Find Elements Deep (unlimited search)
+public class FindElementsDeepRequest : IpcRequest
+{
+    public override string RequestType => "FindElementsDeep";
+    public string? RootHandle { get; set; }
+    public string? TypeName { get; set; }
+    public string? ElementName { get; set; }
+}
+
+public class FindElementsDeepResponse : IpcResponse
 {
     public string? ElementsJson { get; set; }
     public int Count { get; set; }

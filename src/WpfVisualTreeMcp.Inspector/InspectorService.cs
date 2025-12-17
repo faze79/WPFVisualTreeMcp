@@ -142,6 +142,7 @@ public class InspectorService : IDisposable
             "GetVisualTree" => HandleGetVisualTree(data),
             "GetElementProperties" => HandleGetElementProperties(data),
             "FindElements" => HandleFindElements(data),
+            "FindElementsDeep" => HandleFindElementsDeep(data),
             "GetBindings" => HandleGetBindings(data),
             "GetBindingErrors" => HandleGetBindingErrors(),
             "GetResources" => HandleGetResources(data),
@@ -206,10 +207,17 @@ public class InspectorService : IDisposable
     private IpcResponse HandleFindElements(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
-        var root = Application.Current.MainWindow;
+
+        DependencyObject? root = null;
+        if (!string.IsNullOrEmpty(request?.RootHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.RootHandle);
+        }
+        root ??= Application.Current.MainWindow;
+
         if (root == null)
         {
-            return new FindElementsResponse { Success = false, Error = "No main window" };
+            return new FindElementsResponse { Success = false, Error = "No root element found" };
         }
 
         var maxResults = request?.MaxResults ?? 50;
@@ -218,7 +226,32 @@ public class InspectorService : IDisposable
         {
             RequestId = request?.RequestId ?? "",
             ElementsJson = elementsJson,
-            Count = CountJsonArrayItems(elementsJson)
+            Count = ParseJsonCount(elementsJson)
+        };
+    }
+
+    private IpcResponse HandleFindElementsDeep(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
+
+        DependencyObject? root = null;
+        if (!string.IsNullOrEmpty(request?.RootHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.RootHandle);
+        }
+        root ??= Application.Current.MainWindow;
+
+        if (root == null)
+        {
+            return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
+        }
+
+        var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+        return new FindElementsDeepResponse
+        {
+            RequestId = request?.RequestId ?? "",
+            ElementsJson = elementsJson,
+            Count = ParseJsonCount(elementsJson)
         };
     }
 
@@ -432,6 +465,25 @@ public class InspectorService : IDisposable
             }
         }
         return count;
+    }
+
+    private static int ParseJsonCount(string json)
+    {
+        // Parse count from {"elements":[...], "count":N} format
+        if (string.IsNullOrEmpty(json)) return 0;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("count", out var countProp))
+            {
+                return countProp.GetInt32();
+            }
+        }
+        catch
+        {
+            // Fall back to array counting if parse fails
+        }
+        return CountJsonArrayItems(json);
     }
 
     public void Dispose()
