@@ -33,8 +33,29 @@ public class WpfTools
                 process_name = p.ProcessName,
                 main_window_title = p.MainWindowTitle,
                 is_attached = p.IsAttached,
+                is_injected = p.IsInjected,
+                inspector_ready = p.IsInjected,
                 dotnet_version = p.DotNetVersion
             })
+        };
+    }
+
+    [McpServerTool]
+    [Description("Inject the Inspector into a running WPF application. This enables inspection of applications that don't have the Inspector pre-loaded. Requires the native bootstrapper DLL to be available.")]
+    public async Task<object> WpfInject(int process_id)
+    {
+        if (process_id <= 0)
+        {
+            throw new ArgumentException("process_id must be a valid process ID");
+        }
+
+        var result = await _processManager.InjectIntoProcessAsync(process_id);
+        return new
+        {
+            success = result.Success,
+            process_id = result.ProcessId,
+            message = result.Message ?? result.Error,
+            already_injected = result.AlreadyInjected
         };
     }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using WpfVisualTreeMcp.Injector;
 
 namespace WpfVisualTreeMcp.Server.Services;
 
@@ -9,12 +10,14 @@ namespace WpfVisualTreeMcp.Server.Services;
 public class ProcessManager : IProcessManager
 {
     private readonly ILogger<ProcessManager> _logger;
+    private readonly ProcessInjector _injector;
     private InspectionSession? _currentSession;
     private readonly object _lock = new();
 
     public ProcessManager(ILogger<ProcessManager> logger)
     {
         _logger = logger;
+        _injector = new ProcessInjector();
     }
 
     public InspectionSession? CurrentSession
@@ -45,6 +48,7 @@ public class ProcessManager : IProcessManager
                     if (IsLikelyWpfProcess(process))
                     {
                         var isAttached = _currentSession?.ProcessId == process.Id;
+                        var isInjected = _injector.IsInspectorLoaded(process);
 
                         wpfProcesses.Add(new WpfProcessInfo
                         {
@@ -52,6 +56,7 @@ public class ProcessManager : IProcessManager
                             ProcessName = process.ProcessName,
                             MainWindowTitle = GetMainWindowTitle(process),
                             IsAttached = isAttached,
+                            IsInjected = isInjected,
                             DotNetVersion = GetDotNetVersion(process)
                         });
                     }
@@ -246,5 +251,68 @@ public class ProcessManager : IProcessManager
         }
 
         return null;
+    }
+
+    public Task<InjectionResult> InjectIntoProcessAsync(int processId)
+    {
+        _logger.LogInformation("Attempting to inject Inspector into process {ProcessId}", processId);
+
+        try
+        {
+            var result = _injector.InjectIntoProcess(processId);
+
+            if (result.Success)
+            {
+                if (result.AlreadyInjected)
+                {
+                    _logger.LogInformation("Inspector already loaded in process {ProcessId}", processId);
+                }
+                else
+                {
+                    _logger.LogInformation("Successfully injected Inspector into process {ProcessId}", processId);
+                }
+
+                return Task.FromResult(new InjectionResult
+                {
+                    Success = true,
+                    ProcessId = processId,
+                    Message = result.Message,
+                    AlreadyInjected = result.AlreadyInjected
+                });
+            }
+            else
+            {
+                _logger.LogError("Failed to inject into process {ProcessId}: {Error}", processId, result.Error);
+                return Task.FromResult(new InjectionResult
+                {
+                    Success = false,
+                    ProcessId = processId,
+                    Error = result.Error
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception during injection into process {ProcessId}", processId);
+            return Task.FromResult(new InjectionResult
+            {
+                Success = false,
+                ProcessId = processId,
+                Error = ex.Message
+            });
+        }
+    }
+
+    public Task<bool> IsInspectorLoadedAsync(int processId)
+    {
+        try
+        {
+            var process = Process.GetProcessById(processId);
+            return Task.FromResult(_injector.IsInspectorLoaded(process));
+        }
+        catch (ArgumentException)
+        {
+            return Task.FromResult(false);
+        }
     }
 }

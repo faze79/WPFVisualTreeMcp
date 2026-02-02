@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>WpfVisualTreeMcp.Injector</RootNamespace>
     <AssemblyName>WpfVisualTreeMcp.Injector</AssemblyName>
@@ -9,9 +9,5 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
-  </ItemGroup>
 
 </Project>

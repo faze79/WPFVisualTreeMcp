@@ -1,14 +1,82 @@
 # WpfVisualTreeMcp.Injector
 
-This project handles injection of the Inspector DLL into target WPF processes.
+This project handles injection of the Inspector DLL into target WPF processes, enabling inspection of any running WPF application without requiring them to reference the Inspector library.
 
-## Current Status
+## How It Works
 
-The injector is currently a **stub implementation**. Full DLL injection into external .NET processes requires advanced techniques that are beyond the scope of the initial implementation.
+The injection process uses Windows API calls to:
 
-## Injection Approaches
+1. **Open the target process** with appropriate permissions
+2. **Allocate memory** in the target process for the DLL path
+3. **Write the DLL path** to the allocated memory
+4. **Create a remote thread** that calls `LoadLibraryW` to load the bootstrapper DLL
+5. **Call the Initialize export** to start the Inspector
 
-### Option 1: Self-Hosted Mode (Recommended for Development)
+## Architecture Requirements
+
+- **Architecture must match**: 64-bit injector can only inject into 64-bit processes
+- Both x86 and x64 builds are supported
+- The target process must be a .NET application (CLR must be loaded)
+
+## Components
+
+### ProcessInjector.cs
+
+The main injection class with these key methods:
+
+- `InjectIntoProcess(int processId)` - Inject the Inspector into a process
+- `IsManagedProcess(Process process)` - Check if a process is .NET
+- `IsInspectorLoaded(Process process)` - Check if Inspector is already loaded
+- `IsArchitectureMatch(Process process)` - Verify architecture compatibility
+
+### WpfVisualTreeMcp.Bootstrapper
+
+A C++/CLI mixed-mode DLL that acts as a bridge between native code and managed code:
+
+1. Exposes native exports (`Initialize`, `IsLoaded`) that can be called via `CreateRemoteThread`
+2. Uses .NET reflection to load the Inspector assembly
+3. Calls `InspectorService.Initialize()` on the WPF dispatcher thread
+
+## Building the Bootstrapper
+
+The bootstrapper requires Visual Studio with C++/CLI support:
+
+1. Install Visual Studio 2022 with "Desktop development with C++" workload
+2. Include the "C++/CLI support for v143 build tools" component
+3. Build the `WpfVisualTreeMcp.Bootstrapper` project for both x86 and x64
+
+```bash
+msbuild WpfVisualTreeMcp.Bootstrapper.vcxproj /p:Configuration=Release /p:Platform=x64
+msbuild WpfVisualTreeMcp.Bootstrapper.vcxproj /p:Configuration=Release /p:Platform=x86
+```
+
+## Usage
+
+### Via MCP Tool
+
+```
+Use the wpf_inject tool to inject the Inspector into process ID 1234.
+```
+
+### Programmatic Usage
+
+```csharp
+using WpfVisualTreeMcp.Injector;
+
+var injector = new ProcessInjector();
+var result = injector.InjectIntoProcess(processId);
+
+if (result.Success)
+{
+    Console.WriteLine($"Injected successfully: {result.Message}");
+}
+else
+{
+    Console.WriteLine($"Injection failed: {result.Error}");
+}
+```
+
+## Alternative: Self-Hosted Mode
 
 For development and testing, the recommended approach is to have your WPF application directly reference the Inspector DLL:
 
@@ -25,49 +93,34 @@ protected override void OnStartup(StartupEventArgs e)
 
 This avoids the complexity of injection and provides the most reliable experience.
 
-### Option 2: Native Injection (Future)
+## Troubleshooting
 
-For production scenarios where you need to attach to arbitrary WPF applications, the following approaches can be considered:
+### "Access denied" or permission errors
 
-1. **CreateRemoteThread with LoadLibrary**
-   - Classic DLL injection technique
-   - Requires a native C++ helper for bootstrapping managed code
+- Run the MCP server as Administrator
+- The target process may have elevated permissions
 
-2. **CLR Debugging APIs (ICorDebug)**
-   - Uses the .NET debugging infrastructure
-   - Can create threads and load assemblies in the target process
+### "Architecture mismatch"
 
-3. **EasyHook or Similar Libraries**
-   - Third-party libraries that simplify managed injection
-   - Handle the complexity of cross-process managed code loading
+- Ensure the server matches the target process architecture
+- Use the x64 build for 64-bit applications
 
-4. **AppDomain Injection via Profiling API**
-   - Uses the CLR profiling infrastructure
-   - Most invasive but most capable option
+### "LoadLibrary failed"
 
-## Why Injection is Complex
+- The bootstrapper DLL may not be found
+- Ensure both `WpfVisualTreeMcp.Bootstrapper.dll` and `WpfVisualTreeMcp.Inspector.dll` are in the same directory
 
-Injecting managed code (.NET) into another managed process is significantly more complex than native DLL injection because:
+### "Application.Current is null"
 
-1. The CLR must be properly initialized in the target process
-2. The injected assembly must be loaded into the correct AppDomain
-3. The injected code must run on the correct thread (usually the UI thread for WPF)
-4. .NET Core/5+ has different hosting requirements than .NET Framework
+- The target application may not have fully initialized yet
+- Try waiting a few seconds after the application starts
 
-## Recommended Development Workflow
+## Security Considerations
 
-1. **During Development**
-   - Use self-hosted mode in your test applications
-   - Reference the Inspector DLL directly
+DLL injection requires elevated permissions and may be flagged by antivirus software. This is expected behavior for debugging tools. The injection is only intended for:
 
-2. **For Testing with External Apps**
-   - Build a test harness that loads Inspector on startup
-   - Use this for integration testing
+- Development and debugging
+- Automated testing
+- UI inspection and analysis
 
-3. **Future Production**
-   - Implement proper injection using one of the approaches above
-   - Or consider a different architecture (e.g., a Visual Studio extension)
-
-## Files
-
-- `ProcessInjector.cs` - Stub implementation with P/Invoke declarations for future use
+Never use this tool on applications you don't own or have permission to inspect.

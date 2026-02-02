@@ -31,6 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
     <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
   </ItemGroup>
 

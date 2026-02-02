@@ -9,7 +9,20 @@ public record WpfProcessInfo
     public string ProcessName { get; init; } = string.Empty;
     public string? MainWindowTitle { get; init; }
     public bool IsAttached { get; init; }
+    public bool IsInjected { get; init; }
     public string? DotNetVersion { get; init; }
+}
+
+/// <summary>
+/// Result of an injection attempt.
+/// </summary>
+public record InjectionResult
+{
+    public bool Success { get; init; }
+    public int ProcessId { get; init; }
+    public string? Error { get; init; }
+    public string? Message { get; init; }
+    public bool AlreadyInjected { get; init; }
 }
 
 /// <summary>
@@ -52,4 +65,19 @@ public interface IProcessManager
     /// Gets the current active session, if any.
     /// </summary>
     InspectionSession? CurrentSession { get; }
+
+    /// <summary>
+    /// Injects the Inspector DLL into a running WPF process.
+    /// This allows inspecting applications that don't have the Inspector pre-loaded.
+    /// </summary>
+    /// <param name="processId">Process ID to inject into.</param>
+    /// <returns>The injection result.</returns>
+    Task<InjectionResult> InjectIntoProcessAsync(int processId);
+
+    /// <summary>
+    /// Checks if a process has the Inspector already loaded.
+    /// </summary>
+    /// <param name="processId">Process ID to check.</param>
+    /// <returns>True if Inspector is loaded.</returns>
+    Task<bool> IsInspectorLoadedAsync(int processId);
 }
