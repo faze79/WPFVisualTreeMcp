@@ -73,6 +73,34 @@ public class ProcessManagerTests
         await _processManager.DetachAsync("non-existent-session");
         _processManager.CurrentSession.Should().BeNull();
     }
+
+    [Fact]
+    public async Task InjectIntoProcessAsync_WithInvalidProcessId_ReturnsFailure()
+    {
+        // Use a very high process ID that's unlikely to exist
+        var invalidProcessId = int.MaxValue - 1;
+
+        // Act
+        var result = await _processManager.InjectIntoProcessAsync(invalidProcessId);
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ProcessId.Should().Be(invalidProcessId);
+        result.Error.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task IsInspectorLoadedAsync_WithInvalidProcessId_ReturnsFalse()
+    {
+        // Use a very high process ID that's unlikely to exist
+        var invalidProcessId = int.MaxValue - 1;
+
+        // Act
+        var result = await _processManager.IsInspectorLoadedAsync(invalidProcessId);
+
+        // Assert
+        result.Should().BeFalse();
+    }
 }
 
 public class WpfProcessInfoTests
@@ -87,6 +115,7 @@ public class WpfProcessInfoTests
             ProcessName = "TestApp",
             MainWindowTitle = "Test Window",
             IsAttached = true,
+            IsInjected = true,
             DotNetVersion = "4.8.0"
         };
 
@@ -95,6 +124,7 @@ public class WpfProcessInfoTests
         processInfo.ProcessName.Should().Be("TestApp");
         processInfo.MainWindowTitle.Should().Be("Test Window");
         processInfo.IsAttached.Should().BeTrue();
+        processInfo.IsInjected.Should().BeTrue();
         processInfo.DotNetVersion.Should().Be("4.8.0");
     }
 
@@ -109,7 +139,64 @@ public class WpfProcessInfoTests
         processInfo.ProcessName.Should().BeEmpty();
         processInfo.MainWindowTitle.Should().BeNull();
         processInfo.IsAttached.Should().BeFalse();
+        processInfo.IsInjected.Should().BeFalse();
         processInfo.DotNetVersion.Should().BeNull();
+    }
+}
+
+public class InjectionResultTests
+{
+    [Fact]
+    public void InjectionResult_HasCorrectProperties()
+    {
+        // Arrange & Act
+        var result = new InjectionResult
+        {
+            Success = true,
+            ProcessId = 1234,
+            Message = "Injection successful",
+            AlreadyInjected = false
+        };
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.ProcessId.Should().Be(1234);
+        result.Message.Should().Be("Injection successful");
+        result.AlreadyInjected.Should().BeFalse();
+        result.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public void InjectionResult_FailureCase()
+    {
+        // Arrange & Act
+        var result = new InjectionResult
+        {
+            Success = false,
+            ProcessId = 5678,
+            Error = "Process not found"
+        };
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ProcessId.Should().Be(5678);
+        result.Error.Should().Be("Process not found");
+        result.Message.Should().BeNull();
+        result.AlreadyInjected.Should().BeFalse();
+    }
+
+    [Fact]
+    public void InjectionResult_DefaultValues()
+    {
+        // Arrange & Act
+        var result = new InjectionResult();
+
+        // Assert
+        result.Success.Should().BeFalse();
+        result.ProcessId.Should().Be(0);
+        result.Error.Should().BeNull();
+        result.Message.Should().BeNull();
+        result.AlreadyInjected.Should().BeFalse();
     }
 }
 

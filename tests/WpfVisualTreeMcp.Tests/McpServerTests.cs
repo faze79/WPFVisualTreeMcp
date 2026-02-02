@@ -36,7 +36,8 @@ public class WpfToolsTests
                 ProcessId = 1234,
                 ProcessName = "TestApp",
                 MainWindowTitle = "Test Window",
-                IsAttached = false
+                IsAttached = false,
+                IsInjected = false
             }
         };
 
@@ -52,6 +53,64 @@ public class WpfToolsTests
         var resultType = result.GetType();
         var processesProperty = resultType.GetProperty("processes");
         processesProperty.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task WpfInject_WithValidProcessId_InjectsInspector()
+    {
+        // Arrange
+        var expectedResult = new InjectionResult
+        {
+            Success = true,
+            ProcessId = 1234,
+            Message = "Injection successful",
+            AlreadyInjected = false
+        };
+
+        _processManagerMock
+            .Setup(x => x.InjectIntoProcessAsync(1234))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfInject(process_id: 1234);
+
+        // Assert
+        result.Should().NotBeNull();
+        _processManagerMock.Verify(x => x.InjectIntoProcessAsync(1234), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfInject_WithInvalidProcessId_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfInject(process_id: 0));
+    }
+
+    [Fact]
+    public async Task WpfInject_WhenAlreadyInjected_ReturnsAlreadyInjected()
+    {
+        // Arrange
+        var expectedResult = new InjectionResult
+        {
+            Success = true,
+            ProcessId = 1234,
+            Message = "Inspector is already loaded in the target process",
+            AlreadyInjected = true
+        };
+
+        _processManagerMock
+            .Setup(x => x.InjectIntoProcessAsync(1234))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfInject(process_id: 1234);
+
+        // Assert
+        result.Should().NotBeNull();
+        var resultType = result.GetType();
+        var alreadyInjectedProp = resultType.GetProperty("already_injected");
+        alreadyInjectedProp.Should().NotBeNull();
+        alreadyInjectedProp!.GetValue(result).Should().Be(true);
     }
 
     [Fact]
