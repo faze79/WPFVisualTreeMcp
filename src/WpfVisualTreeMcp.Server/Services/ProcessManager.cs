@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Injector;
+using InjectorResult = WpfVisualTreeMcp.Injector.InjectionResult;
 
 namespace WpfVisualTreeMcp.Server.Services;
 
@@ -259,7 +260,7 @@ public class ProcessManager : IProcessManager
 
         try
         {
-            var result = _injector.InjectIntoProcess(processId);
+            InjectorResult result = _injector.InjectIntoProcess(processId);
 
             if (result.Success)
             {
