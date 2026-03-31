@@ -261,10 +261,13 @@ public class TreeWalker
     /// <param name="typeName">Optional type name to match.</param>
     /// <param name="elementName">Optional element name to match.</param>
     /// <returns>JSON array of matching elements.</returns>
-    public string FindElementsDeep(DependencyObject root, string? typeName, string? elementName)
+    public string FindElementsDeep(DependencyObject root, string? typeName, string? elementName, int maxResults = 100000)
     {
+        if (maxResults > 100000) maxResults = 100000;
+        if (maxResults < 1) maxResults = 1;
+
         var results = new List<string>();
-        FindElementsDeepRecursive(root, typeName, elementName, results);
+        FindElementsDeepRecursive(root, typeName, elementName, results, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("{\"elements\":[");
@@ -273,12 +276,13 @@ public class TreeWalker
             if (i > 0) sb.Append(",");
             sb.Append(results[i]);
         }
-        sb.Append($"],\"count\":{results.Count}}}");
+        sb.Append($"],\"count\":{results.Count},\"truncated\":{(results.Count >= maxResults).ToString().ToLower()}}}");
         return sb.ToString();
     }
 
-    private void FindElementsDeepRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results)
+    private void FindElementsDeepRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results, int maxResults)
     {
+        if (results.Count >= maxResults) return;
         var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
         var shortTypeName = element.GetType().Name;
         var name = GetElementName(element);
@@ -314,14 +318,15 @@ public class TreeWalker
             results.Add(sb.ToString());
         }
 
-        // Continue traversing all children without limit
+        // Continue traversing all children
         var childCount = VisualTreeHelper.GetChildrenCount(element);
         for (var i = 0; i < childCount; i++)
         {
+            if (results.Count >= maxResults) return;
             var child = VisualTreeHelper.GetChild(element, i);
             if (child != null)
             {
-                FindElementsDeepRecursive(child, typeName, elementName, results);
+                FindElementsDeepRecursive(child, typeName, elementName, results, maxResults);
             }
         }
     }
@@ -401,7 +406,7 @@ public class TreeWalker
     public string ExportToXaml(DependencyObject root)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("<? xml version=\"1.0\" encoding=\"utf-8\" ?>");
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
         sb.AppendLine("<!-- Visual Tree Export -->");
         ExportToXamlRecursive(root, sb, 0);
         return sb.ToString();

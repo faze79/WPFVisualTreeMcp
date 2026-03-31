@@ -39,28 +39,32 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Attach to a WPF application by process ID or name")]
-    public async Task<object> WpfAttach(int? process_id = null, string? process_name = null)
+    [Description("Attach to a WPF application by process ID or name. Set auto_inject=true to automatically inject the Inspector into processes that don't have it pre-loaded.")]
+    public async Task<object> WpfAttach(int? process_id = null, string? process_name = null, bool auto_inject = false)
     {
         if (process_id == null && string.IsNullOrEmpty(process_name))
         {
             throw new ArgumentException("Either process_id or process_name must be provided");
         }
 
-        var session = await _processManager.AttachToProcessAsync(process_id, process_name);
+        var session = await _processManager.AttachToProcessAsync(process_id, process_name, auto_inject);
         return new
         {
             success = true,
             process_id = session.ProcessId,
             session_id = session.SessionId,
-            main_window_handle = session.MainWindowHandle
+            main_window_handle = session.MainWindowHandle,
+            inspector_status = session.InspectorStatus
         };
     }
 
     [McpServerTool]
-    [Description("Get the visual tree hierarchy starting from a root element")]
+    [Description("Get the visual tree hierarchy starting from a root element. Use max_depth to control how deep to traverse (1-100, default 10).")]
     public async Task<object> WpfGetVisualTree(string? root_handle = null, int max_depth = 10)
     {
+        if (max_depth < 1) max_depth = 1;
+        if (max_depth > 100) max_depth = 100;
+
         var result = await _ipcBridge.GetVisualTreeAsync(root_handle, max_depth);
         return result;
     }

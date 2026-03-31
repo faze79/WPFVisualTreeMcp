@@ -67,7 +67,7 @@ public class WpfToolsTests
         };
 
         _processManagerMock
-            .Setup(x => x.AttachToProcessAsync(1234, null))
+            .Setup(x => x.AttachToProcessAsync(1234, null, false))
             .ReturnsAsync(expectedSession);
 
         // Act
@@ -75,7 +75,7 @@ public class WpfToolsTests
 
         // Assert
         result.Should().NotBeNull();
-        _processManagerMock.Verify(x => x.AttachToProcessAsync(1234, null), Times.Once);
+        _processManagerMock.Verify(x => x.AttachToProcessAsync(1234, null, false), Times.Once);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class WpfToolsTests
         };
 
         _processManagerMock
-            .Setup(x => x.AttachToProcessAsync(null, "TestApp"))
+            .Setup(x => x.AttachToProcessAsync(null, "TestApp", false))
             .ReturnsAsync(expectedSession);
 
         // Act
@@ -99,7 +99,7 @@ public class WpfToolsTests
 
         // Assert
         result.Should().NotBeNull();
-        _processManagerMock.Verify(x => x.AttachToProcessAsync(null, "TestApp"), Times.Once);
+        _processManagerMock.Verify(x => x.AttachToProcessAsync(null, "TestApp", false), Times.Once);
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public class WpfToolsTests
         };
 
         _ipcBridgeMock
-            .Setup(x => x.FindElementsAsync("Button", null, null))
+            .Setup(x => x.FindElementsAsync(null, "Button", null, null, 50))
             .ReturnsAsync(expectedResult);
 
         // Act

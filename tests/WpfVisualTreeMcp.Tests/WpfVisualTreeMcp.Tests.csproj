@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Server\WpfVisualTreeMcp.Server.csproj" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
+    <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
   </ItemGroup>
 
 </Project>

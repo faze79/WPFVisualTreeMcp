@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Task",
+      "NotebookEdit",
+      "BashOutput",
+      "KillShell",
+      "TodoWrite",
+      "AskUserQuestion",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "mcp__wpf-visual-tree__wpf_list_processes",
+      "mcp__wpf-visual-tree__wpf_attach",
+      "mcp__wpf-visual-tree__wpf_find_elements",
+      "mcp__wpf-visual-tree__wpf_get_visual_tree",
+      "mcp__wpf-visual-tree__wpf_get_element_properties",
+      "mcp__wpf-visual-tree__wpf_get_layout_info",
+      "mcp__wpf-visual-tree__wpf_get_styles",
+      "mcp__wpf-visual-tree__wpf_get_resources",
+      "mcp__wpf-visual-tree__wpf_export_tree",
+      "mcp__wpf-visual-tree__wpf_get_bindings",
+      "mcp__wpf-visual-tree__wpf_get_binding_errors",
+      "mcp__wpf-visual-tree__wpf_watch_property",
+      "mcp__wpf-visual-tree__wpf_highlight_element",
+      "mcp__wpf-visual-tree__wpf_diff_tree",
+      "WebFetch(domain:docs.claude.com)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "wpf-visual-tree"
+  ]
+}
