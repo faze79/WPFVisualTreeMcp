@@ -60,8 +60,8 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Get the visual tree hierarchy starting from a root element. Use max_depth to control how deep to traverse (1-100, default 10).")]
-    public async Task<object> WpfGetVisualTree(string? root_handle = null, int max_depth = 10)
+    [Description("Get the visual tree hierarchy. Use root_handle to start from a specific element (from wpf_find_elements). Use max_depth to control depth (1-100, default 25). For deep UIs like AvalonDock, increase max_depth or use root_handle to zoom into a subtree.")]
+    public async Task<object> WpfGetVisualTree(string? root_handle = null, int max_depth = 25)
     {
         if (max_depth < 1) max_depth = 1;
         if (max_depth > 100) max_depth = 100;
@@ -84,7 +84,7 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Search for elements by type, name, or property value. Returns up to max_results elements (default: 50, max: 10000). Use root_handle to search from a specific element instead of the main window.")]
+    [Description("Search for elements by type or name. Returns up to max_results (default: 50). Supports partial type matching (e.g. 'Button' matches 'System.Windows.Controls.Button'). Use root_handle to search from a specific element.")]
     public async Task<object> WpfFindElements(
         string? root_handle = null,
         string? type_name = null,
@@ -107,12 +107,17 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Search for ALL elements matching criteria without limit (deep search). WARNING: Can return many results. Use root_handle to search from a specific element.")]
+    [Description("Deep search for ALL elements matching criteria. Requires at least type_name or element_name to avoid returning the entire tree. Use root_handle to limit scope. Supports partial type matching (e.g. 'PdfViewer' matches 'Syncfusion.Windows.PdfViewer.PdfViewerControl').")]
     public async Task<object> WpfFindElementsDeep(
         string? root_handle = null,
         string? type_name = null,
         string? element_name = null)
     {
+        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name))
+        {
+            throw new ArgumentException("At least type_name or element_name is required. Use wpf_get_visual_tree to browse the full tree instead.");
+        }
+
         var result = await _ipcBridge.FindElementsDeepAsync(root_handle, type_name, element_name);
         return result;
     }

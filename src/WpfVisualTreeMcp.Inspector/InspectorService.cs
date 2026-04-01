@@ -205,8 +205,22 @@ public class InspectorService : IDisposable
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
             root = _treeWalker.ResolveHandle(request.RootHandle);
+            if (root == null)
+            {
+                DebugLog($"HandleGetVisualTree: handle '{request.RootHandle}' not found in cache ({_treeWalker.HandleCacheCount} cached elements)");
+                return new GetVisualTreeResponse
+                {
+                    Success = false,
+                    Error = $"Element handle '{request.RootHandle}' not found. The handle may have expired. " +
+                            "Use wpf_find_elements to get fresh handles, then use root_handle with the new handle."
+                };
+            }
+            DebugLog($"HandleGetVisualTree: resolved handle '{request.RootHandle}' to {root.GetType().Name}");
         }
-        root ??= GetDefaultRoot();
+        else
+        {
+            root = GetDefaultRoot();
+        }
 
         if (root == null)
         {

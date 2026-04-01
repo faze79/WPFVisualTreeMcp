@@ -126,7 +126,7 @@ public class WpfToolsTests
         };
 
         _ipcBridgeMock
-            .Setup(x => x.GetVisualTreeAsync(null, 10))
+            .Setup(x => x.GetVisualTreeAsync(null, 25))
             .ReturnsAsync(expectedTree);
 
         // Act

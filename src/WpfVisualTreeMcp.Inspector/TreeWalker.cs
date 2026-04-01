@@ -17,6 +17,8 @@ public class TreeWalker
     private readonly Dictionary<DependencyObject, string> _handleCache = new();
     private int _handleCounter;
 
+    public int HandleCacheCount => _handleCache.Count;
+
     /// <summary>
     /// Walks the visual tree starting from the specified root element.
     /// </summary>

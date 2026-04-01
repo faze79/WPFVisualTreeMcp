@@ -24,7 +24,7 @@ public class GetVisualTreeRequest : IpcRequest
 {
     public override string RequestType => "GetVisualTree";
     public string? RootHandle { get; set; }
-    public int MaxDepth { get; set; } = 10;
+    public int MaxDepth { get; set; } = 25;
 }
 
 public class GetVisualTreeResponse : IpcResponse
