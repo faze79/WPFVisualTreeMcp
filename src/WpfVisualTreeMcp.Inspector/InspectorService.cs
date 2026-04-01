@@ -22,24 +22,64 @@ public class InspectorService : IDisposable
     private bool _isRunning;
     private bool _disposed;
 
+    private static readonly object _initLock = new();
     public static InspectorService? Instance { get; private set; }
 
+    /// <summary>
+    /// Initialize the Inspector service with the current process ID.
+    /// This overload is called by the CLR hosting API (ExecuteInDefaultAppDomain)
+    /// when the Inspector is injected into a running process.
+    /// </summary>
+    /// <param name="processIdString">The process ID as a string.</param>
+    /// <returns>0 on success, non-zero on failure.</returns>
+    public static int Initialize(string processIdString)
+    {
+        try
+        {
+            DebugLog($"Inspector.Initialize(string) called with: {processIdString}");
+
+            if (!int.TryParse(processIdString, out int processId))
+            {
+                DebugLog($"ERROR: Failed to parse process ID from string: {processIdString}");
+                return -1;
+            }
+
+            Initialize(processId);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ERROR in Initialize(string): {ex.Message}\n{ex.StackTrace}");
+            return -1;
+        }
+    }
+
+    /// <summary>
+    /// Initialize the Inspector service with the specified process ID.
+    /// </summary>
+    /// <param name="processId">The process ID to attach to.</param>
     public static void Initialize(int processId)
     {
         if (Instance != null) return;
 
-        try
+        lock (_initLock)
         {
-            DebugLog($"Inspector.Initialize called for PID={processId}");
-            Instance = new InspectorService(processId);
-            DebugLog("Inspector instance created, calling Start()");
-            Instance.Start();
-            DebugLog("Inspector started successfully");
-        }
-        catch (Exception ex)
-        {
-            DebugLog($"ERROR in Initialize: {ex.Message}\n{ex.StackTrace}");
-            throw;
+            if (Instance != null) return; // Double-check after acquiring lock
+
+            try
+            {
+                DebugLog($"Inspector.Initialize called for PID={processId}");
+                Instance = new InspectorService(processId);
+                DebugLog("Inspector instance created, calling Start()");
+                Instance.Start();
+                DebugLog("Inspector started successfully");
+            }
+            catch (Exception ex)
+            {
+                Instance = null; // Reset on failure so retry is possible
+                DebugLog($"ERROR in Initialize: {ex.Message}\n{ex.StackTrace}");
+                throw;
+            }
         }
     }
 
@@ -151,6 +191,7 @@ public class InspectorService : IDisposable
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
+            "CaptureScreenshot" => HandleCaptureScreenshot(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
     }
@@ -165,11 +206,11 @@ public class InspectorService : IDisposable
         {
             root = _treeWalker.ResolveHandle(request.RootHandle);
         }
-        root ??= Application.Current.MainWindow;
+        root ??= GetDefaultRoot();
 
         if (root == null)
         {
-            return new GetVisualTreeResponse { Success = false, Error = "No root element found" };
+            return new GetVisualTreeResponse { Success = false, Error = "No root element found. Ensure the application has at least one visible window." };
         }
 
         var treeJson = _treeWalker.WalkVisualTree(root, maxDepth);
@@ -208,25 +249,67 @@ public class InspectorService : IDisposable
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
 
-        DependencyObject? root = null;
+        var maxResults = request?.MaxResults ?? 50;
+
+        // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
-            root = _treeWalker.ResolveHandle(request.RootHandle);
-        }
-        root ??= Application.Current.MainWindow;
+            var root = _treeWalker.ResolveHandle(request.RootHandle);
+            if (root == null)
+            {
+                return new FindElementsResponse { Success = false, Error = "Root element not found" };
+            }
 
-        if (root == null)
+            var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
+            return new FindElementsResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ElementsJson = elementsJson,
+                Count = ParseJsonCount(elementsJson)
+            };
+        }
+
+        // No root specified: search across ALL windows for maximum coverage
+        var allRoots = TreeWalker.GetAllSearchRoots();
+        if (allRoots.Count == 0)
         {
             return new FindElementsResponse { Success = false, Error = "No root element found" };
         }
 
-        var maxResults = request?.MaxResults ?? 50;
-        var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
+        // Search each window, accumulating results
+        var allResults = new System.Text.StringBuilder();
+        allResults.Append("{\"elements\":[");
+        int totalCount = 0;
+        bool first = true;
+
+        foreach (var root in allRoots)
+        {
+            if (totalCount >= maxResults) break;
+            var json = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults - totalCount);
+            var count = ParseJsonCount(json);
+            if (count > 0)
+            {
+                // Extract elements array content from {"elements":[...],"count":N}
+                var elemStart = json.IndexOf('[') + 1;
+                var elemEnd = json.LastIndexOf(']');
+                if (elemStart > 0 && elemEnd > elemStart)
+                {
+                    if (!first) allResults.Append(",");
+                    first = false;
+                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
+                    totalCount += count;
+                }
+            }
+        }
+
+        allResults.Append($"],\"count\":{totalCount}}}");
+        var resultJson = allResults.ToString();
+
         return new FindElementsResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = elementsJson,
-            Count = ParseJsonCount(elementsJson)
+            ElementsJson = resultJson,
+            Count = totalCount
         };
     }
 
@@ -234,24 +317,62 @@ public class InspectorService : IDisposable
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
 
-        DependencyObject? root = null;
+        // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
-            root = _treeWalker.ResolveHandle(request.RootHandle);
-        }
-        root ??= Application.Current.MainWindow;
+            var root = _treeWalker.ResolveHandle(request.RootHandle);
+            if (root == null)
+            {
+                return new FindElementsDeepResponse { Success = false, Error = "Root element not found" };
+            }
 
-        if (root == null)
+            var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            return new FindElementsDeepResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ElementsJson = elementsJson,
+                Count = ParseJsonCount(elementsJson)
+            };
+        }
+
+        // No root specified: search across ALL windows
+        var allRoots = TreeWalker.GetAllSearchRoots();
+        if (allRoots.Count == 0)
         {
             return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
         }
 
-        var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+        var allResults = new System.Text.StringBuilder();
+        allResults.Append("{\"elements\":[");
+        int totalCount = 0;
+        bool first = true;
+
+        foreach (var root in allRoots)
+        {
+            var json = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            var count = ParseJsonCount(json);
+            if (count > 0)
+            {
+                var elemStart = json.IndexOf('[') + 1;
+                var elemEnd = json.LastIndexOf(']');
+                if (elemStart > 0 && elemEnd > elemStart)
+                {
+                    if (!first) allResults.Append(",");
+                    first = false;
+                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
+                    totalCount += count;
+                }
+            }
+        }
+
+        allResults.Append($"],\"count\":{totalCount},\"truncated\":false}}");
+        var resultJson = allResults.ToString();
+
         return new FindElementsDeepResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = elementsJson,
-            Count = ParseJsonCount(elementsJson)
+            ElementsJson = resultJson,
+            Count = totalCount
         };
     }
 
@@ -405,10 +526,17 @@ public class InspectorService : IDisposable
     private IpcResponse HandleExportTree(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<ExportTreeRequest>(data);
-        var root = Application.Current.MainWindow;
+
+        DependencyObject? root = null;
+        if (!string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.ElementHandle);
+        }
+        root ??= GetDefaultRoot();
+
         if (root == null)
         {
-            return new ExportTreeResponse { Success = false, Error = "No main window" };
+            return new ExportTreeResponse { Success = false, Error = "No root element found" };
         }
 
         var format = request?.Format ?? "json";
@@ -432,6 +560,90 @@ public class InspectorService : IDisposable
             Content = content,
             ElementCount = count
         };
+    }
+
+    private IpcResponse HandleCaptureScreenshot(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data);
+
+        UIElement? element = null;
+        if (!string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            element = _treeWalker.ResolveHandle(request.ElementHandle) as UIElement;
+            if (element == null)
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "Element not found or is not a UIElement"
+                };
+            }
+        }
+        else
+        {
+            element = GetDefaultRoot() as UIElement;
+            if (element == null)
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "No root UIElement found"
+                };
+            }
+        }
+
+        try
+        {
+            var screenshotCapture = new ScreenshotCapture();
+            var (base64, width, height) = screenshotCapture.CaptureElement(
+                element,
+                request?.MaxWidth ?? 1920,
+                request?.MaxHeight ?? 1080);
+
+            return new CaptureScreenshotResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ImageBase64 = base64,
+                Width = width,
+                Height = height,
+                ElementType = element.GetType().Name
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"Screenshot capture failed: {ex.Message}");
+            return new CaptureScreenshotResponse
+            {
+                Success = false,
+                Error = $"Screenshot capture failed: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Gets the default root element for tree operations.
+    /// Falls back to the first open window if MainWindow is null (common in multi-window apps).
+    /// </summary>
+    private static DependencyObject? GetDefaultRoot()
+    {
+        var app = Application.Current;
+        if (app == null) return null;
+
+        if (app.MainWindow != null)
+            return app.MainWindow;
+
+        // Fallback: find the first visible window
+        foreach (Window window in app.Windows)
+        {
+            if (window.IsVisible)
+                return window;
+        }
+
+        // Last resort: any window
+        if (app.Windows.Count > 0)
+            return app.Windows[0];
+
+        return null;
     }
 
     private static int CountElements(string json)

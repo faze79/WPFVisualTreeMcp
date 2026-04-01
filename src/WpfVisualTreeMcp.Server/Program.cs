@@ -50,9 +50,9 @@ try
     builder.Logging.ClearProviders();
     builder.Services.AddSerilog();
 
-// Register WPF-specific services needed by tools
-builder.Services.AddSingleton<IProcessManager, ProcessManager>();
-builder.Services.AddSingleton<IIpcBridge, NamedPipeBridge>();
+    // Register WPF-specific services needed by tools
+    builder.Services.AddSingleton<IProcessManager, ProcessManager>();
+    builder.Services.AddSingleton<IIpcBridge, NamedPipeBridge>();
 
     // Add MCP server with stdio transport and auto-discover tools from this assembly
     builder.Services

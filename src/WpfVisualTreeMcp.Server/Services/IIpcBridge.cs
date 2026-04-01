@@ -67,4 +67,9 @@ public interface IIpcBridge
     /// Exports the visual tree in the specified format.
     /// </summary>
     Task<ExportResult> ExportTreeAsync(string? elementHandle, string format);
+
+    /// <summary>
+    /// Captures a screenshot of the target window or element.
+    /// </summary>
+    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight);
 }

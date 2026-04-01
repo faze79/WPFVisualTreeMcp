@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wpf-visual-tree": {
+      "command": "C:/DevOPS/WPFVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe",
+      "args": []
+    }
+  }
+}

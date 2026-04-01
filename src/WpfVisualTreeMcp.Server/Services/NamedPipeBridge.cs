@@ -280,6 +280,35 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight)
+    {
+        var session = EnsureConnected();
+
+        var request = new CaptureScreenshotRequest
+        {
+            ElementHandle = elementHandle,
+            MaxWidth = maxWidth,
+            MaxHeight = maxHeight
+        };
+
+        var response = await SendRequestAsync<CaptureScreenshotRequest, CaptureScreenshotResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to capture screenshot");
+        }
+
+        return new ScreenshotResult
+        {
+            ImageBase64 = response.ImageBase64 ?? string.Empty,
+            MimeType = "image/png",
+            Width = response.Width,
+            Height = response.Height,
+            ElementType = response.ElementType
+        };
+    }
+
     private async Task<TResponse> SendRequestAsync<TRequest, TResponse>(int processId, TRequest request)
         where TRequest : IpcRequest
         where TResponse : IpcResponse, new()

@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.IO.Pipes;
 using Microsoft.Extensions.Logging;
+using WpfVisualTreeMcp.Injector;
 
 namespace WpfVisualTreeMcp.Server.Services;
 
@@ -9,12 +11,14 @@ namespace WpfVisualTreeMcp.Server.Services;
 public class ProcessManager : IProcessManager
 {
     private readonly ILogger<ProcessManager> _logger;
+    private readonly ProcessInjector _injector;
     private InspectionSession? _currentSession;
     private readonly object _lock = new();
 
     public ProcessManager(ILogger<ProcessManager> logger)
     {
         _logger = logger;
+        _injector = new ProcessInjector();
     }
 
     public InspectionSession? CurrentSession
@@ -70,7 +74,7 @@ public class ProcessManager : IProcessManager
         return Task.FromResult<IReadOnlyList<WpfProcessInfo>>(wpfProcesses);
     }
 
-    public async Task<InspectionSession> AttachToProcessAsync(int? processId, string? processName)
+    public async Task<InspectionSession> AttachToProcessAsync(int? processId, string? processName, bool autoInject = false)
     {
         Process? targetProcess = null;
 
@@ -130,16 +134,87 @@ public class ProcessManager : IProcessManager
             _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");
             session.InspectorStatus = "Loaded (self-hosted)";
         }
+        else if (autoInject)
+        {
+            // Attempt to inject the Inspector DLL
+            _logger.LogInformation("Inspector not loaded, attempting injection...");
+            try
+            {
+                var inspectorPath = _injector.GetInspectorDllPath();
+                var result = _injector.InjectIntoProcess(targetProcess.Id, inspectorPath);
+
+                if (result)
+                {
+                    // Wait for the Inspector to initialize and create its named pipe
+                    var pipeConnected = await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromSeconds(10));
+                    if (pipeConnected)
+                    {
+                        _logger.LogInformation("Inspector successfully injected and initialized");
+                        session.InspectorStatus = "Loaded (injected)";
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Inspector injected but named pipe not available");
+                        session.InspectorStatus = "Injected - pipe timeout";
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Injection returned false - Inspector may not have loaded");
+                    session.InspectorStatus = "Injection failed";
+                }
+            }
+            catch (FileNotFoundException ex)
+            {
+                _logger.LogError(ex, "Injection failed - required DLL not found: {FileName}", ex.FileName);
+                session.InspectorStatus = $"Injection failed - {ex.FileName} not found";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Injection failed");
+                session.InspectorStatus = $"Injection failed: {ex.Message}";
+            }
+        }
         else
         {
             _logger.LogWarning(
                 "Inspector DLL not loaded in target process. " +
-                "For external inspection, the target application must reference the Inspector DLL. " +
-                "See documentation for self-hosted mode setup.");
-            session.InspectorStatus = "Not loaded - use self-hosted mode";
+                "Use autoInject=true to inject automatically, or use self-hosted mode.");
+            session.InspectorStatus = "Not loaded - use autoInject or self-hosted mode";
         }
 
         return session;
+    }
+
+    /// <summary>
+    /// Waits for the Inspector's named pipe to become available.
+    /// </summary>
+    private async Task<bool> WaitForInspectorPipeAsync(int processId, TimeSpan timeout)
+    {
+        var pipeName = $"wpf_inspector_{processId}";
+        var startTime = DateTime.UtcNow;
+
+        while (DateTime.UtcNow - startTime < timeout)
+        {
+            try
+            {
+                using var pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                await pipeClient.ConnectAsync(500); // 500ms connection attempt
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                // Pipe not ready yet, wait and retry
+                await Task.Delay(200);
+            }
+            catch (IOException)
+            {
+                // Pipe doesn't exist yet, wait and retry
+                await Task.Delay(200);
+            }
+        }
+
+        return false;
     }
 
     private bool IsInspectorLoaded(Process process)

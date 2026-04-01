@@ -39,8 +39,9 @@ public interface IProcessManager
     /// </summary>
     /// <param name="processId">Process ID to attach to (optional if processName is provided).</param>
     /// <param name="processName">Process name to attach to (optional if processId is provided).</param>
+    /// <param name="autoInject">If true, automatically inject the Inspector DLL if not already loaded.</param>
     /// <returns>The inspection session.</returns>
-    Task<InspectionSession> AttachToProcessAsync(int? processId, string? processName);
+    Task<InspectionSession> AttachToProcessAsync(int? processId, string? processName, bool autoInject = false);
 
     /// <summary>
     /// Detaches from a WPF process.

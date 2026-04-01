@@ -32,6 +32,51 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
+    <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
+  </ItemGroup>
+
+  <!-- Include pre-built native bootstrapper DLLs and co-located Inspector for injection -->
+  <ItemGroup>
+    <!-- x64 bootstrapper -->
+    <None Include="..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll')"
+          Link="native\x64\WpfInspectorBootstrapper.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <!-- x64 co-located Inspector (required by bootstrapper) -->
+    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net48\WpfVisualTreeMcp.Inspector.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net48\WpfVisualTreeMcp.Inspector.dll')"
+          Link="native\x64\WpfVisualTreeMcp.Inspector.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll')"
+          Link="native\x64\WpfVisualTreeMcp.Shared.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <!-- x86 (Win32) bootstrapper -->
+    <None Include="..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll')"
+          Link="native\x86\WpfInspectorBootstrapper.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <!-- x86 co-located Inspector (required by bootstrapper) -->
+    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net48\WpfVisualTreeMcp.Inspector.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net48\WpfVisualTreeMcp.Inspector.dll')"
+          Link="native\x86\WpfVisualTreeMcp.Inspector.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll')"
+          Link="native\x86\WpfVisualTreeMcp.Shared.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
