@@ -77,11 +77,11 @@ public class ProcessInjectorTests
     }
 
     [Fact]
-    public void InjectIntoProcess_WithValidManagedProcess_ThrowsFileNotFoundForMissingBootstrapper()
+    public void InjectIntoProcess_WithValidManagedProcess_RequiresBootstrapperDll()
     {
-        // This test verifies that injection is implemented and requires the bootstrapper DLL
-        // When the bootstrapper DLL doesn't exist, it should throw FileNotFoundException
-        // (not NotImplementedException)
+        // This test verifies that injection is implemented and either:
+        // - Throws FileNotFoundException if bootstrapper DLL is missing
+        // - Proceeds to actual injection if bootstrapper is found (may fail for other reasons)
 
         // Arrange
         var process = Process.GetCurrentProcess();
@@ -93,14 +93,26 @@ public class ProcessInjectorTests
             return; // Skip test if Inspector DLL not built
         }
 
+        var bootstrapperPath = _injector.GetBootstrapperDllPath();
+        var bootstrapperExists = System.IO.File.Exists(bootstrapperPath);
+
         // Act & Assert
-        // The injection should throw FileNotFoundException for missing bootstrapper
-        // NOT NotImplementedException (which would indicate it's not implemented)
         var act = () => _injector.InjectIntoProcess(process.Id, dllPath);
 
-        act.Should().Throw<FileNotFoundException>(
-            "Should throw FileNotFoundException for missing bootstrapper DLL, not NotImplementedException")
-            .WithMessage("*Bootstrapper*");
+        if (!bootstrapperExists)
+        {
+            // Bootstrapper not built: should throw FileNotFoundException
+            act.Should().Throw<FileNotFoundException>(
+                "Should throw FileNotFoundException for missing bootstrapper DLL")
+                .WithMessage("*Bootstrapper*");
+        }
+        else
+        {
+            // Bootstrapper exists: injection will proceed but may fail (we're injecting into ourselves)
+            // Just verify it doesn't throw NotImplementedException
+            act.Should().NotThrow<NotImplementedException>(
+                "Injection should be implemented, not stubbed");
+        }
     }
 
     [Fact]

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace WpfVisualTreeMcp.Inspector;
@@ -57,26 +60,21 @@ public class TreeWalker
 
         sb.Append($",\"depth\":{depth}");
 
-        // Get children
+        // Get children (including adorners and popup content)
         sb.Append(",\"children\":[");
 
         if (depth < maxDepth)
         {
-            var childCount = VisualTreeHelper.GetChildrenCount(element);
             var first = true;
-
-            for (var i = 0; i < childCount; i++)
+            foreach (var child in GetAllVisualChildren(element))
             {
-                var child = VisualTreeHelper.GetChild(element, i);
-                if (child == null) continue;
-
                 if (!first) sb.Append(",");
                 first = false;
 
                 WalkVisualTreeRecursive(child, sb, depth + 1, maxDepth, ref elementCount, ref maxDepthReached);
             }
         }
-        else if (VisualTreeHelper.GetChildrenCount(element) > 0)
+        else if (HasAnyVisualChildren(element))
         {
             maxDepthReached = true;
         }
@@ -318,16 +316,11 @@ public class TreeWalker
             results.Add(sb.ToString());
         }
 
-        // Continue traversing all children
-        var childCount = VisualTreeHelper.GetChildrenCount(element);
-        for (var i = 0; i < childCount; i++)
+        // Continue traversing all children (including adorners and popup content)
+        foreach (var child in GetAllVisualChildren(element))
         {
             if (results.Count >= maxResults) return;
-            var child = VisualTreeHelper.GetChild(element, i);
-            if (child != null)
-            {
-                FindElementsDeepRecursive(child, typeName, elementName, results, maxResults);
-            }
+            FindElementsDeepRecursive(child, typeName, elementName, results, maxResults);
         }
     }
 
@@ -381,19 +374,14 @@ public class TreeWalker
             }
         }
 
-        var childCount = VisualTreeHelper.GetChildrenCount(element);
-        for (var i = 0; i < childCount; i++)
+        foreach (var child in GetAllVisualChildren(element))
         {
-            var child = VisualTreeHelper.GetChild(element, i);
-            if (child != null)
-            {
-                FindElementsRecursive(child, typeName, elementName, results, maxResults);
+            FindElementsRecursive(child, typeName, elementName, results, maxResults);
 
-                // Stop if we've reached the maximum during child traversal
-                if (results.Count >= maxResults)
-                {
-                    return;
-                }
+            // Stop if we've reached the maximum during child traversal
+            if (results.Count >= maxResults)
+            {
+                return;
             }
         }
     }
@@ -418,9 +406,9 @@ public class TreeWalker
         var typeName = element.GetType().Name;
         var name = GetElementName(element);
 
-        var childCount = VisualTreeHelper.GetChildrenCount(element);
+        var children = GetAllVisualChildren(element).ToList();
 
-        if (childCount == 0)
+        if (children.Count == 0)
         {
             sb.Append($"{indentStr}<{typeName}");
             if (!string.IsNullOrEmpty(name))
@@ -438,17 +426,97 @@ public class TreeWalker
             }
             sb.AppendLine(">");
 
-            for (var i = 0; i < childCount; i++)
+            foreach (var child in children)
             {
-                var child = VisualTreeHelper.GetChild(element, i);
-                if (child != null)
-                {
-                    ExportToXamlRecursive(child, sb, indent + 1);
-                }
+                ExportToXamlRecursive(child, sb, indent + 1);
             }
 
             sb.AppendLine($"{indentStr}</{typeName}>");
         }
+    }
+
+    /// <summary>
+    /// Gets all visual children of an element, including adorner children
+    /// and popup visual trees that VisualTreeHelper alone would miss.
+    /// </summary>
+    private static List<DependencyObject> GetAllVisualChildren(DependencyObject element)
+    {
+        var children = new List<DependencyObject>();
+
+        // Standard visual children
+        var childCount = VisualTreeHelper.GetChildrenCount(element);
+        for (var i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(element, i);
+            if (child != null)
+                children.Add(child);
+        }
+
+        // AdornerLayer: also enumerate adorners explicitly
+        // Some adorners may not appear as standard visual children
+        if (element is UIElement uiElement)
+        {
+            try
+            {
+                var adornerLayer = AdornerLayer.GetAdornerLayer(uiElement);
+                if (adornerLayer != null)
+                {
+                    var adorners = adornerLayer.GetAdorners(uiElement);
+                    if (adorners != null)
+                    {
+                        foreach (var adorner in adorners)
+                        {
+                            if (!children.Contains(adorner))
+                                children.Add(adorner);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // AdornerLayer may not be available for all elements
+            }
+        }
+
+        // Popup: traverse into the popup's separate visual tree
+        if (element is Popup popup && popup.Child != null)
+        {
+            if (!children.Contains(popup.Child))
+                children.Add(popup.Child);
+        }
+
+        return children;
+    }
+
+    /// <summary>
+    /// Checks if an element has any visual children (including adorners/popups).
+    /// </summary>
+    private static bool HasAnyVisualChildren(DependencyObject element)
+    {
+        if (VisualTreeHelper.GetChildrenCount(element) > 0)
+            return true;
+
+        if (element is Popup popup && popup.Child != null)
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets all root elements to search across, including all open windows and popups.
+    /// </summary>
+    public static List<DependencyObject> GetAllSearchRoots()
+    {
+        var roots = new List<DependencyObject>();
+        var app = Application.Current;
+        if (app == null) return roots;
+
+        foreach (Window window in app.Windows)
+        {
+            roots.Add(window);
+        }
+
+        return roots;
     }
 
     private static string EscapeXml(string? text)

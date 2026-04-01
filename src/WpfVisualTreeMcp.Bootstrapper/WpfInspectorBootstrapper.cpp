@@ -74,15 +74,32 @@ void WriteDebugLog(const wchar_t* message)
 
 std::wstring GetInspectorDllPath()
 {
-    // Inspector DLL should be in the same directory as this bootstrapper
-    std::wstring path(g_modulePath);
-    size_t pos = path.find_last_of(L"\\/");
+    std::wstring dir(g_modulePath);
+    size_t pos = dir.find_last_of(L"\\/");
     if (pos != std::wstring::npos)
     {
-        path = path.substr(0, pos + 1);
+        dir = dir.substr(0, pos + 1);
     }
-    path += L"WpfVisualTreeMcp.Inspector.dll";
-    return path;
+
+    // 1. Same directory as bootstrapper (dev layout / co-located)
+    std::wstring sameDirPath = dir + L"WpfVisualTreeMcp.Inspector.dll";
+    if (GetFileAttributesW(sameDirPath.c_str()) != INVALID_FILE_ATTRIBUTES)
+    {
+        WriteDebugLog(L"Found Inspector in same directory");
+        return sameDirPath;
+    }
+
+    // 2. Parent's parent directory (publish layout: native/x64/ -> publish root)
+    std::wstring parentPath = dir + L"..\\..\\WpfVisualTreeMcp.Inspector.dll";
+    if (GetFileAttributesW(parentPath.c_str()) != INVALID_FILE_ATTRIBUTES)
+    {
+        WriteDebugLog(L"Found Inspector in publish root (../../)");
+        return parentPath;
+    }
+
+    // Fallback to same directory path for error reporting
+    WriteDebugLog(L"Inspector DLL not found in any search path");
+    return sameDirPath;
 }
 
 HRESULT InitializeInspector()

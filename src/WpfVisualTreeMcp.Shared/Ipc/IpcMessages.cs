@@ -175,6 +175,23 @@ public class ExportTreeResponse : IpcResponse
     public int ElementCount { get; set; }
 }
 
+// Screenshot Capture
+public class CaptureScreenshotRequest : IpcRequest
+{
+    public override string RequestType => "CaptureScreenshot";
+    public string? ElementHandle { get; set; }
+    public int MaxWidth { get; set; } = 1920;
+    public int MaxHeight { get; set; } = 1080;
+}
+
+public class CaptureScreenshotResponse : IpcResponse
+{
+    public string? ImageBase64 { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public string? ElementType { get; set; }
+}
+
 // Notifications (Inspector -> Server)
 public class PropertyChangedNotification
 {

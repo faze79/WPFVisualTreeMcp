@@ -55,12 +55,16 @@ public class ProcessInjector
             return true; // Already injected
         }
 
+        // Detect target process architecture for correct bootstrapper
+        bool targetIs64Bit = IsProcess64Bit(process);
+
         // Get the bootstrapper DLL path (native DLL that will load the managed Inspector)
-        var bootstrapperPath = GetBootstrapperDllPath();
+        var bootstrapperPath = GetBootstrapperDllPath(targetIs64Bit);
         if (!File.Exists(bootstrapperPath))
         {
             throw new FileNotFoundException(
-                "Bootstrapper DLL not found. Build the native bootstrapper first.",
+                $"Bootstrapper DLL not found ({(targetIs64Bit ? "x64" : "x86")}). " +
+                "Build the native bootstrapper first or run 'dotnet publish' to include it.",
                 bootstrapperPath);
         }
 
@@ -239,15 +243,60 @@ public class ProcessInjector
 
     /// <summary>
     /// Gets the path where the native bootstrapper DLL should be located.
+    /// Searches multiple locations to support both dev and publish layouts.
     /// </summary>
-    public string GetBootstrapperDllPath()
+    public string GetBootstrapperDllPath(bool targetIs64Bit = true)
     {
         var assemblyLocation = typeof(ProcessInjector).Assembly.Location;
-        var directory = Path.GetDirectoryName(assemblyLocation);
-        return Path.Combine(directory!, "WpfInspectorBootstrapper.dll");
+        var directory = Path.GetDirectoryName(assemblyLocation)!;
+        var arch = targetIs64Bit ? "x64" : "x86";
+        var win32Arch = targetIs64Bit ? "x64" : "Win32";
+
+        // 1. Same directory (legacy/dev layout)
+        var sameDirPath = Path.Combine(directory, "WpfInspectorBootstrapper.dll");
+        if (File.Exists(sameDirPath))
+            return sameDirPath;
+
+        // 2. native/{arch}/ subdirectory (publish layout)
+        var nativePath = Path.Combine(directory, "native", arch, "WpfInspectorBootstrapper.dll");
+        if (File.Exists(nativePath))
+            return nativePath;
+
+        // 3. Build output relative to source (dev environment)
+        var devPath = Path.GetFullPath(Path.Combine(directory, "..", "..", "..", "src",
+            "WpfVisualTreeMcp.Bootstrapper", "build", win32Arch, "Release",
+            "WpfInspectorBootstrapper.dll"));
+        if (File.Exists(devPath))
+            return devPath;
+
+        // Return the expected publish path for error messaging
+        return nativePath;
+    }
+
+    /// <summary>
+    /// Determines whether the target process is 64-bit.
+    /// </summary>
+    private bool IsProcess64Bit(Process process)
+    {
+        if (!Environment.Is64BitOperatingSystem)
+            return false;
+
+        try
+        {
+            if (!IsWow64Process(process.Handle, out bool isWow64))
+                return Environment.Is64BitProcess; // fallback
+            return !isWow64; // if NOT running under WoW64, it's a 64-bit process
+        }
+        catch
+        {
+            return Environment.Is64BitProcess; // fallback
+        }
     }
 
     #region Native Methods
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool IsWow64Process(IntPtr hProcess, out bool wow64Process);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(

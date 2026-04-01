@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using WpfVisualTreeMcp.Server.Services;
 
@@ -217,5 +218,35 @@ public class WpfTools
 
         var result = await _ipcBridge.ExportTreeAsync(element_handle, format);
         return result;
+    }
+
+    [McpServerTool]
+    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window.")]
+    public async Task<CallToolResult> WpfCaptureScreenshot(
+        string? element_handle = null,
+        int max_width = 1920,
+        int max_height = 1080)
+    {
+        if (max_width < 1) max_width = 1;
+        if (max_width > 3840) max_width = 3840;
+        if (max_height < 1) max_height = 1;
+        if (max_height > 2160) max_height = 2160;
+
+        var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height);
+
+        var content = new List<ContentBlock>
+        {
+            new ImageContentBlock
+            {
+                Data = result.ImageBase64,
+                MimeType = result.MimeType
+            },
+            new TextContentBlock
+            {
+                Text = $"Screenshot captured: {result.Width}x{result.Height}px, element type: {result.ElementType ?? "Window"}"
+            }
+        };
+
+        return new CallToolResult { Content = content };
     }
 }

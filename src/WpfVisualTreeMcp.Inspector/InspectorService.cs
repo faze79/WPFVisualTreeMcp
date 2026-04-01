@@ -191,6 +191,7 @@ public class InspectorService : IDisposable
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
+            "CaptureScreenshot" => HandleCaptureScreenshot(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
     }
@@ -248,25 +249,67 @@ public class InspectorService : IDisposable
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
 
-        DependencyObject? root = null;
+        var maxResults = request?.MaxResults ?? 50;
+
+        // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
-            root = _treeWalker.ResolveHandle(request.RootHandle);
-        }
-        root ??= GetDefaultRoot();
+            var root = _treeWalker.ResolveHandle(request.RootHandle);
+            if (root == null)
+            {
+                return new FindElementsResponse { Success = false, Error = "Root element not found" };
+            }
 
-        if (root == null)
+            var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
+            return new FindElementsResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ElementsJson = elementsJson,
+                Count = ParseJsonCount(elementsJson)
+            };
+        }
+
+        // No root specified: search across ALL windows for maximum coverage
+        var allRoots = TreeWalker.GetAllSearchRoots();
+        if (allRoots.Count == 0)
         {
             return new FindElementsResponse { Success = false, Error = "No root element found" };
         }
 
-        var maxResults = request?.MaxResults ?? 50;
-        var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
+        // Search each window, accumulating results
+        var allResults = new System.Text.StringBuilder();
+        allResults.Append("{\"elements\":[");
+        int totalCount = 0;
+        bool first = true;
+
+        foreach (var root in allRoots)
+        {
+            if (totalCount >= maxResults) break;
+            var json = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults - totalCount);
+            var count = ParseJsonCount(json);
+            if (count > 0)
+            {
+                // Extract elements array content from {"elements":[...],"count":N}
+                var elemStart = json.IndexOf('[') + 1;
+                var elemEnd = json.LastIndexOf(']');
+                if (elemStart > 0 && elemEnd > elemStart)
+                {
+                    if (!first) allResults.Append(",");
+                    first = false;
+                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
+                    totalCount += count;
+                }
+            }
+        }
+
+        allResults.Append($"],\"count\":{totalCount}}}");
+        var resultJson = allResults.ToString();
+
         return new FindElementsResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = elementsJson,
-            Count = ParseJsonCount(elementsJson)
+            ElementsJson = resultJson,
+            Count = totalCount
         };
     }
 
@@ -274,24 +317,62 @@ public class InspectorService : IDisposable
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
 
-        DependencyObject? root = null;
+        // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
-            root = _treeWalker.ResolveHandle(request.RootHandle);
-        }
-        root ??= GetDefaultRoot();
+            var root = _treeWalker.ResolveHandle(request.RootHandle);
+            if (root == null)
+            {
+                return new FindElementsDeepResponse { Success = false, Error = "Root element not found" };
+            }
 
-        if (root == null)
+            var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            return new FindElementsDeepResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ElementsJson = elementsJson,
+                Count = ParseJsonCount(elementsJson)
+            };
+        }
+
+        // No root specified: search across ALL windows
+        var allRoots = TreeWalker.GetAllSearchRoots();
+        if (allRoots.Count == 0)
         {
             return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
         }
 
-        var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+        var allResults = new System.Text.StringBuilder();
+        allResults.Append("{\"elements\":[");
+        int totalCount = 0;
+        bool first = true;
+
+        foreach (var root in allRoots)
+        {
+            var json = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            var count = ParseJsonCount(json);
+            if (count > 0)
+            {
+                var elemStart = json.IndexOf('[') + 1;
+                var elemEnd = json.LastIndexOf(']');
+                if (elemStart > 0 && elemEnd > elemStart)
+                {
+                    if (!first) allResults.Append(",");
+                    first = false;
+                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
+                    totalCount += count;
+                }
+            }
+        }
+
+        allResults.Append($"],\"count\":{totalCount},\"truncated\":false}}");
+        var resultJson = allResults.ToString();
+
         return new FindElementsDeepResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = elementsJson,
-            Count = ParseJsonCount(elementsJson)
+            ElementsJson = resultJson,
+            Count = totalCount
         };
     }
 
@@ -479,6 +560,64 @@ public class InspectorService : IDisposable
             Content = content,
             ElementCount = count
         };
+    }
+
+    private IpcResponse HandleCaptureScreenshot(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data);
+
+        UIElement? element = null;
+        if (!string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            element = _treeWalker.ResolveHandle(request.ElementHandle) as UIElement;
+            if (element == null)
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "Element not found or is not a UIElement"
+                };
+            }
+        }
+        else
+        {
+            element = GetDefaultRoot() as UIElement;
+            if (element == null)
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "No root UIElement found"
+                };
+            }
+        }
+
+        try
+        {
+            var screenshotCapture = new ScreenshotCapture();
+            var (base64, width, height) = screenshotCapture.CaptureElement(
+                element,
+                request?.MaxWidth ?? 1920,
+                request?.MaxHeight ?? 1080);
+
+            return new CaptureScreenshotResponse
+            {
+                RequestId = request?.RequestId ?? "",
+                ImageBase64 = base64,
+                Width = width,
+                Height = height,
+                ElementType = element.GetType().Name
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"Screenshot capture failed: {ex.Message}");
+            return new CaptureScreenshotResponse
+            {
+                Success = false,
+                Error = $"Screenshot capture failed: {ex.Message}"
+            };
+        }
     }
 
     /// <summary>
