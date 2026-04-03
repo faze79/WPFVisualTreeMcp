@@ -8,7 +8,7 @@
 
 > MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time
 
-> **📢 Latest Updates:** See [RELEASE_NOTES.md](RELEASE_NOTES.md) for recent improvements including IPC deadlock fixes, UTF-8 BOM handling, and the new `max_results` parameter.
+> **📢 Latest Updates:** See [RELEASE_NOTES.md](RELEASE_NOTES.md) for recent improvements including screenshot capture, DLL auto-injection, AdornerLayer/Popup traversal, and IPC deadlock fixes.
 
 ## Overview
 
@@ -40,13 +40,15 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 
 ### Search & Monitoring
 - **Element Search** - Find elements by type, name, or property values
+- **Deep Search** - Search entire tree including AdornerLayer and Popup elements
 - **Property Watching** - Monitor property changes in real-time
-- **Tree Diff** - Compare visual tree snapshots to detect changes
 
 ### Interaction & Export
+- **Screenshot Capture** - Capture window/element screenshots visible to AI agents
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Layout Information** - Get detailed layout metrics
 - **Tree Export** - Export visual tree to XAML or JSON format
+- **Auto-Injection** - Inject Inspector into running WPF processes (no source changes needed)
 
 ## Quick Start
 
@@ -92,10 +94,10 @@ Use the `claude mcp add` command to add the server directly:
 
 ```bash
 # Add to current project only
-claude mcp add wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+claude mcp add wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe
 
 # Add globally (available in all projects)
-claude mcp add --scope user wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe
+claude mcp add --scope user wpf-visual-tree -- C:/path/to/WpfVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe
 ```
 
 You can verify the server was added:
@@ -111,7 +113,7 @@ Create or edit `.mcp.json` in your project root:
 {
   "mcpServers": {
     "wpf-visual-tree": {
-      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "command": "C:/path/to/WpfVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe",
       "args": []
     }
   }
@@ -126,7 +128,7 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "wpf-visual-tree": {
-      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "command": "C:/path/to/WpfVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe",
       "args": []
     }
   }
@@ -147,7 +149,7 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 {
   "mcpServers": {
     "wpf-visual-tree": {
-      "command": "C:/path/to/WpfVisualTreeMcp/src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe",
+      "command": "C:/path/to/WpfVisualTreeMcp/publish/WpfVisualTreeMcp.Server.exe",
       "args": []
     }
   }
@@ -257,10 +259,12 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | Tool | Description |
 |------|-------------|
 | `wpf_list_processes` | List all running WPF applications |
-| `wpf_attach` | Attach to a WPF application by process ID or name |
-| `wpf_get_visual_tree` | Get the visual tree hierarchy |
+| `wpf_attach` | Attach to a WPF application (supports `auto_inject` for DLL injection) |
+| `wpf_get_visual_tree` | Get the visual tree hierarchy (default depth: 25, max: 100) |
 | `wpf_get_element_properties` | Get all dependency properties of an element |
-| `wpf_find_elements` | Search for elements by criteria |
+| `wpf_find_elements` | Search for elements by type or name (partial matching) |
+| `wpf_find_elements_deep` | Deep search across all windows including adorners/popups |
+| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image) |
 | `wpf_get_bindings` | Get data bindings for an element |
 | `wpf_get_binding_errors` | List all binding errors |
 | `wpf_get_resources` | Enumerate resource dictionaries |
@@ -289,14 +293,16 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Style and template inspection
 - [x] Property change monitoring (with notifications)
 
-### Phase 3: Interaction & Diagnostics (In Progress)
+### Phase 3: Interaction & Diagnostics ✅
 - [x] Element highlighting overlay
 - [x] XAML/JSON export
-- [ ] Visual tree diff/comparison
-- [ ] Performance diagnostics
+- [x] Screenshot capture (returns MCP `ImageContentBlock`)
+- [x] DLL auto-injection into running WPF processes (x64/x86)
+- [x] AdornerLayer and Popup visual tree traversal
 
 ### Future Considerations
-- [ ] DLL injection for external processes (currently self-hosted mode)
+- [ ] Visual tree diff/comparison
+- [ ] Performance diagnostics
 - [ ] Visual tree modification capabilities
 
 ## Contributing
@@ -334,18 +340,21 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ```
 WpfVisualTreeMcp/
 ├── src/
-│   ├── WpfVisualTreeMcp.Server/      # MCP Server (.NET 8) - Uses official MCP SDK
-│   │   ├── Program.cs                # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs               # 13 WPF inspection tools
-│   │   └── Services/                 # Process & IPC management
-│   ├── WpfVisualTreeMcp.Inspector/   # Injected DLL (.NET Framework 4.8)
-│   ├── WpfVisualTreeMcp.Injector/    # Native injector
-│   └── WpfVisualTreeMcp.Shared/      # Shared models
+│   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
+│   │   ├── Program.cs                  # Server initialization with MCP SDK
+│   │   ├── WpfTools.cs                 # 15 WPF inspection tools
+│   │   └── Services/                   # Process & IPC management
+│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
+│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread)
+│   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting
+│   └── WpfVisualTreeMcp.Shared/        # Shared models & IPC contracts
 ├── samples/
-│   └── SampleWpfApp/                 # Test application
+│   └── SampleWpfApp/                   # Test application
 ├── tests/
-│   └── WpfVisualTreeMcp.Tests/       # Unit tests
-└── docs/                             # Documentation
+│   └── WpfVisualTreeMcp.Tests/         # Unit tests (48 tests)
+├── publish/                            # Published server + native DLLs
+│   └── native/{x64,x86}/              # Architecture-specific bootstrapper
+└── docs/                               # Documentation
 ```
 
 ### Technical Details
@@ -354,7 +363,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 (Inspector)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 13 inspection tools auto-discovered via `[McpServerTool]` attributes
+- **Tools**: 15 inspection tools auto-discovered via `[McpServerTool]` attributes
 
 ## Acknowledgments
 
