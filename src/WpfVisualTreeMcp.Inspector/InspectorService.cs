@@ -55,6 +55,37 @@ public class InspectorService : IDisposable
     }
 
     /// <summary>
+    /// Entry point for CoreCLR hosting via hostfxr load_assembly_and_get_function_pointer.
+    /// Signature matches component_entry_point_fn: (IntPtr args, int sizeBytes) -> int.
+    /// The IntPtr points to a 4-byte buffer containing the process ID as a little-endian int32.
+    /// </summary>
+    public static int InitializeUnmanaged(IntPtr args, int sizeBytes)
+    {
+        try
+        {
+            int processId;
+            if (args == IntPtr.Zero || sizeBytes < sizeof(int))
+            {
+                processId = System.Diagnostics.Process.GetCurrentProcess().Id;
+                DebugLog($"InitializeUnmanaged: no args, using current PID={processId}");
+            }
+            else
+            {
+                processId = System.Runtime.InteropServices.Marshal.ReadInt32(args);
+                DebugLog($"InitializeUnmanaged: PID={processId} from args");
+            }
+
+            Initialize(processId);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ERROR in InitializeUnmanaged: {ex.Message}\n{ex.StackTrace}");
+            return -1;
+        }
+    }
+
+    /// <summary>
     /// Initialize the Inspector service with the specified process ID.
     /// </summary>
     /// <param name="processId">The process ID to attach to.</param>

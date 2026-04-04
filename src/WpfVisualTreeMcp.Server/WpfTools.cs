@@ -34,7 +34,8 @@ public class WpfTools
                 process_name = p.ProcessName,
                 main_window_title = p.MainWindowTitle,
                 is_attached = p.IsAttached,
-                dotnet_version = p.DotNetVersion
+                dotnet_version = p.DotNetVersion,
+                runtime_type = p.RuntimeType
             })
         };
     }

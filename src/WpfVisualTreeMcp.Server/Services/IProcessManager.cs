@@ -10,6 +10,7 @@ public record WpfProcessInfo
     public string? MainWindowTitle { get; init; }
     public bool IsAttached { get; init; }
     public string? DotNetVersion { get; init; }
+    public string? RuntimeType { get; init; }  // "Framework" or "CoreCLR"
 }
 
 /// <summary>

@@ -79,4 +79,44 @@
     </None>
   </ItemGroup>
 
+  <!-- CoreCLR Inspector (net8.0-windows) for .NET 5+/8+ target processes -->
+  <ItemGroup>
+    <!-- x64 CoreCLR Inspector -->
+    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll')"
+          Link="native\x64\coreclr\WpfVisualTreeMcp.Inspector.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
+          Link="native\x64\coreclr\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll')"
+          Link="native\x64\coreclr\WpfVisualTreeMcp.Shared.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <!-- x86 CoreCLR Inspector (same managed DLLs, AnyCPU) -->
+    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll')"
+          Link="native\x86\coreclr\WpfVisualTreeMcp.Inspector.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
+          Link="native\x86\coreclr\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll')"
+          Link="native\x86\coreclr\WpfVisualTreeMcp.Shared.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

@@ -56,7 +56,8 @@ public class ProcessManager : IProcessManager
                             ProcessName = process.ProcessName,
                             MainWindowTitle = GetMainWindowTitle(process),
                             IsAttached = isAttached,
-                            DotNetVersion = GetDotNetVersion(process)
+                            DotNetVersion = GetDotNetVersion(process),
+                            RuntimeType = GetRuntimeType(process)
                         });
                     }
                 }
@@ -299,6 +300,21 @@ public class ProcessManager : IProcessManager
         {
             return null;
         }
+    }
+
+    private string? GetRuntimeType(Process process)
+    {
+        try
+        {
+            foreach (ProcessModule module in process.Modules)
+            {
+                var name = module.ModuleName.ToLowerInvariant();
+                if (name == "coreclr.dll") return "CoreCLR";
+                if (name == "clr.dll" || name == "mscorwks.dll") return "Framework";
+            }
+        }
+        catch { }
+        return null;
     }
 
     private string? GetDotNetVersion(Process process)
