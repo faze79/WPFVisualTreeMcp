@@ -113,6 +113,29 @@ public class GetBindingErrorsResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// DataContext
+public class GetDataContextRequest : IpcRequest
+{
+    public override string RequestType => "GetDataContext";
+    public string ElementHandle { get; set; } = string.Empty;
+}
+
+public class GetDataContextResponse : IpcResponse
+{
+    public string? DataContextJson { get; set; }
+}
+
+// Clear Binding Errors
+public class ClearBindingErrorsRequest : IpcRequest
+{
+    public override string RequestType => "ClearBindingErrors";
+}
+
+public class ClearBindingErrorsResponse : IpcResponse
+{
+    public int Count { get; set; }
+}
+
 // Resources & Styles
 public class GetResourcesRequest : IpcRequest
 {

@@ -46,3 +46,12 @@ public class BindingErrorsResult
     public List<BindingError> Errors { get; set; } = new();
     public int Count { get; set; }
 }
+
+/// <summary>
+/// Result of a DataContext query.
+/// </summary>
+public class DataContextResult
+{
+    public ElementInfo Element { get; set; } = new();
+    public string? DataContextJson { get; set; }
+}

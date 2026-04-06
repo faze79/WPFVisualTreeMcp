@@ -72,4 +72,14 @@ public interface IIpcBridge
     /// Captures a screenshot of the target window or element.
     /// </summary>
     Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight);
+
+    /// <summary>
+    /// Gets the DataContext chain for an element.
+    /// </summary>
+    Task<DataContextResult> GetDataContextAsync(string elementHandle);
+
+    /// <summary>
+    /// Clears all captured binding errors.
+    /// </summary>
+    Task ClearBindingErrorsAsync();
 }

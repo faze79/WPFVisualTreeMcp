@@ -14,10 +14,12 @@ namespace WpfVisualTreeMcp.Inspector;
 public class BindingAnalyzer
 {
     private readonly List<BindingErrorInfo> _capturedErrors = new();
+    private readonly object _errorLock = new();
+    private const int MaxCapturedErrors = 1000;
     private TraceListener? _errorListener;
 
     /// <summary>
-    /// Gets all bindings for an element.
+    /// Gets all bindings for an element, including MultiBinding and detailed binding info.
     /// </summary>
     public string GetBindings(DependencyObject element)
     {
@@ -29,49 +31,91 @@ public class BindingAnalyzer
         var bindings = GetAllBindings(element);
         var first = true;
 
-        foreach (var binding in bindings)
+        foreach (var bd in bindings)
         {
             if (!first) sb.Append(",");
             first = false;
 
-            sb.Append("{");
-            sb.Append($"\"property\":\"{EscapeJson(binding.Property.Name)}\"");
-            sb.Append($",\"path\":\"{EscapeJson(binding.Binding.Path?.Path ?? "(none)")}\"");
-
-            if (binding.Binding.Source != null)
+            if (bd.IsMultiBinding)
             {
-                sb.Append($",\"source\":\"{EscapeJson(binding.Binding.Source.GetType().Name)}\"");
-            }
-            else if (binding.Binding.RelativeSource != null)
-            {
-                sb.Append($",\"source\":\"RelativeSource({binding.Binding.RelativeSource.Mode})\"");
-            }
-            else if (binding.Binding.ElementName != null)
-            {
-                sb.Append($",\"source\":\"ElementName({EscapeJson(binding.Binding.ElementName)})\"");
+                AppendMultiBindingJson(sb, bd, element);
             }
             else
             {
-                sb.Append(",\"source\":\"DataContext\"");
+                AppendBindingJson(sb, bd, element);
             }
-
-            sb.Append($",\"mode\":\"{binding.Binding.Mode}\"");
-
-            if (binding.Binding.UpdateSourceTrigger != UpdateSourceTrigger.Default)
-            {
-                sb.Append($",\"updateTrigger\":\"{binding.Binding.UpdateSourceTrigger}\"");
-            }
-
-            var status = GetBindingStatus(binding.Expression);
-            sb.Append($",\"status\":\"{status}\"");
-
-            var currentValue = element.GetValue(binding.Property);
-            sb.Append($",\"currentValue\":{FormatValue(currentValue)}");
-
-            sb.Append("}");
         }
 
         sb.Append("]}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Gets the DataContext chain for an element, walking up the visual/logical tree.
+    /// </summary>
+    public string GetDataContext(DependencyObject element)
+    {
+        var sb = new StringBuilder();
+        sb.Append("{\"element\":");
+        sb.Append(GetElementInfo(element));
+
+        if (element is FrameworkElement fe)
+        {
+            var dc = fe.DataContext;
+            sb.Append(",\"dataContext\":");
+            AppendDataContextInfo(sb, dc);
+
+            // Check if DataContext is inherited or local
+            var source = DependencyPropertyHelper.GetValueSource(fe, FrameworkElement.DataContextProperty);
+            sb.Append($",\"dataContextSource\":\"{source.BaseValueSource}\"");
+
+            // Walk up the tree to show DataContext inheritance chain
+            sb.Append(",\"inheritanceChain\":[");
+            var chainFirst = true;
+            var current = fe;
+            var visited = new HashSet<DependencyObject>();
+
+            while (current != null && visited.Add(current))
+            {
+                if (!chainFirst) sb.Append(",");
+                chainFirst = false;
+
+                var typeName = current.GetType().Name;
+                var name = string.IsNullOrEmpty(current.Name) ? null : current.Name;
+                var currentDc = current.DataContext;
+                var dcSource = DependencyPropertyHelper.GetValueSource(current, FrameworkElement.DataContextProperty);
+
+                sb.Append("{");
+                sb.Append($"\"typeName\":\"{EscapeJson(typeName)}\"");
+                if (name != null) sb.Append($",\"name\":\"{EscapeJson(name)}\"");
+                sb.Append($",\"dataContextType\":\"{EscapeJson(currentDc?.GetType().FullName ?? "(null)")}\"");
+                sb.Append($",\"source\":\"{dcSource.BaseValueSource}\"");
+
+                // Check if this element has its own DataContext (Local or set explicitly)
+                if (dcSource.BaseValueSource == BaseValueSource.Local ||
+                    dcSource.BaseValueSource == BaseValueSource.Style ||
+                    dcSource.BaseValueSource == BaseValueSource.StyleTrigger)
+                {
+                    sb.Append(",\"setsDataContext\":true");
+                }
+
+                sb.Append("}");
+
+                // Walk up
+                var parent = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                current = parent as FrameworkElement;
+            }
+
+            sb.Append("]");
+        }
+        else
+        {
+            sb.Append(",\"dataContext\":null");
+            sb.Append(",\"dataContextSource\":\"N/A\"");
+            sb.Append(",\"inheritanceChain\":[]");
+        }
+
+        sb.Append("}");
         return sb.ToString();
     }
 
@@ -80,11 +124,17 @@ public class BindingAnalyzer
     /// </summary>
     public string GetBindingErrors()
     {
+        List<BindingErrorInfo> errorsCopy;
+        lock (_errorLock)
+        {
+            errorsCopy = new List<BindingErrorInfo>(_capturedErrors);
+        }
+
         var sb = new StringBuilder();
         sb.Append("{\"errors\":[");
 
         var first = true;
-        foreach (var error in _capturedErrors)
+        foreach (var error in errorsCopy)
         {
             if (!first) sb.Append(",");
             first = false;
@@ -99,11 +149,23 @@ public class BindingAnalyzer
             sb.Append($",\"bindingPath\":\"{EscapeJson(error.BindingPath)}\"");
             sb.Append($",\"errorType\":\"{EscapeJson(error.ErrorType)}\"");
             sb.Append($",\"message\":\"{EscapeJson(error.Message)}\"");
+            sb.Append($",\"timestamp\":\"{error.Timestamp:yyyy-MM-ddTHH:mm:ss.fffZ}\"");
             sb.Append("}");
         }
 
-        sb.Append($"],\"count\":{_capturedErrors.Count}}}");
+        sb.Append($"],\"count\":{errorsCopy.Count}}}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Clears all captured binding errors.
+    /// </summary>
+    public void ClearBindingErrors()
+    {
+        lock (_errorLock)
+        {
+            _capturedErrors.Clear();
+        }
     }
 
     /// <summary>
@@ -113,7 +175,7 @@ public class BindingAnalyzer
     {
         if (_errorListener != null) return;
 
-        _errorListener = new BindingErrorTraceListener(_capturedErrors);
+        _errorListener = new BindingErrorTraceListener(_capturedErrors, _errorLock, MaxCapturedErrors);
         PresentationTraceSources.DataBindingSource.Listeners.Add(_errorListener);
         PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Warning;
     }
@@ -130,6 +192,8 @@ public class BindingAnalyzer
         _errorListener = null;
     }
 
+    #region Binding Enumeration
+
     private IEnumerable<BindingData> GetAllBindings(DependencyObject element)
     {
         var bindings = new List<BindingData>();
@@ -139,14 +203,30 @@ public class BindingAnalyzer
             var dpd = DependencyPropertyDescriptor.FromProperty(pd);
             if (dpd?.DependencyProperty == null) continue;
 
-            var binding = BindingOperations.GetBindingExpression(element, dpd.DependencyProperty);
-            if (binding?.ParentBinding != null)
+            // Check for single binding
+            var bindingExpr = BindingOperations.GetBindingExpression(element, dpd.DependencyProperty);
+            if (bindingExpr?.ParentBinding != null)
             {
                 bindings.Add(new BindingData
                 {
                     Property = dpd.DependencyProperty,
-                    Binding = binding.ParentBinding,
-                    Expression = binding
+                    Binding = bindingExpr.ParentBinding,
+                    Expression = bindingExpr,
+                    IsMultiBinding = false
+                });
+                continue;
+            }
+
+            // Check for MultiBinding
+            var multiExpr = BindingOperations.GetMultiBindingExpression(element, dpd.DependencyProperty);
+            if (multiExpr?.ParentMultiBinding != null)
+            {
+                bindings.Add(new BindingData
+                {
+                    Property = dpd.DependencyProperty,
+                    MultiBinding = multiExpr.ParentMultiBinding,
+                    MultiExpression = multiExpr,
+                    IsMultiBinding = true
                 });
             }
         }
@@ -154,12 +234,208 @@ public class BindingAnalyzer
         return bindings;
     }
 
+    #endregion
+
+    #region JSON Serialization
+
+    private void AppendBindingJson(StringBuilder sb, BindingData bd, DependencyObject element)
+    {
+        var binding = bd.Binding!;
+        var expression = bd.Expression!;
+
+        sb.Append("{");
+        sb.Append($"\"property\":\"{EscapeJson(bd.Property.Name)}\"");
+        sb.Append($",\"path\":\"{EscapeJson(binding.Path?.Path ?? "(none)")}\"");
+        sb.Append(",\"type\":\"Binding\"");
+
+        // Source
+        AppendBindingSource(sb, binding);
+
+        // Mode & trigger
+        sb.Append($",\"mode\":\"{binding.Mode}\"");
+        if (binding.UpdateSourceTrigger != UpdateSourceTrigger.Default)
+            sb.Append($",\"updateTrigger\":\"{binding.UpdateSourceTrigger}\"");
+
+        // Converter details
+        if (binding.Converter != null)
+        {
+            sb.Append($",\"converter\":\"{EscapeJson(binding.Converter.GetType().Name)}\"");
+            if (binding.ConverterParameter != null)
+                sb.Append($",\"converterParameter\":{FormatValue(binding.ConverterParameter)}");
+        }
+
+        // StringFormat, FallbackValue, TargetNullValue
+        if (!string.IsNullOrEmpty(binding.StringFormat))
+            sb.Append($",\"stringFormat\":\"{EscapeJson(binding.StringFormat)}\"");
+        if (binding.FallbackValue != DependencyProperty.UnsetValue && binding.FallbackValue != null)
+            sb.Append($",\"fallbackValue\":{FormatValue(binding.FallbackValue)}");
+        if (binding.TargetNullValue != DependencyProperty.UnsetValue && binding.TargetNullValue != null)
+            sb.Append($",\"targetNullValue\":{FormatValue(binding.TargetNullValue)}");
+
+        // IsAsync
+        if (binding.IsAsync)
+            sb.Append(",\"isAsync\":true");
+
+        // Status & value
+        var status = GetBindingStatus(expression);
+        sb.Append($",\"status\":\"{status}\"");
+
+        if (expression.HasError)
+        {
+            var validationError = System.Windows.Controls.Validation.GetErrors(element as DependencyObject);
+            if (validationError?.Count > 0)
+            {
+                sb.Append($",\"validationError\":\"{EscapeJson(validationError[0].ErrorContent?.ToString() ?? "")}\"");
+            }
+        }
+
+        var currentValue = element.GetValue(bd.Property);
+        sb.Append($",\"currentValue\":{FormatValue(currentValue)}");
+
+        sb.Append("}");
+    }
+
+    private void AppendMultiBindingJson(StringBuilder sb, BindingData bd, DependencyObject element)
+    {
+        var multi = bd.MultiBinding!;
+        var multiExpr = bd.MultiExpression!;
+
+        sb.Append("{");
+        sb.Append($"\"property\":\"{EscapeJson(bd.Property.Name)}\"");
+        sb.Append(",\"type\":\"MultiBinding\"");
+        sb.Append($",\"mode\":\"{multi.Mode}\"");
+
+        if (multi.Converter != null)
+            sb.Append($",\"converter\":\"{EscapeJson(multi.Converter.GetType().Name)}\"");
+        if (multi.ConverterParameter != null)
+            sb.Append($",\"converterParameter\":{FormatValue(multi.ConverterParameter)}");
+        if (!string.IsNullOrEmpty(multi.StringFormat))
+            sb.Append($",\"stringFormat\":\"{EscapeJson(multi.StringFormat)}\"");
+
+        // Child bindings
+        sb.Append(",\"childBindings\":[");
+        var first = true;
+        for (int i = 0; i < multi.Bindings.Count; i++)
+        {
+            if (multi.Bindings[i] is Binding childBinding)
+            {
+                if (!first) sb.Append(",");
+                first = false;
+
+                sb.Append("{");
+                sb.Append($"\"path\":\"{EscapeJson(childBinding.Path?.Path ?? "(none)")}\"");
+                AppendBindingSource(sb, childBinding);
+                sb.Append($",\"mode\":\"{childBinding.Mode}\"");
+
+                // Get child binding status
+                if (i < multiExpr.BindingExpressions.Count)
+                {
+                    var childExpr = multiExpr.BindingExpressions[i] as BindingExpression;
+                    if (childExpr != null)
+                    {
+                        sb.Append($",\"status\":\"{GetBindingStatus(childExpr)}\"");
+                    }
+                }
+
+                sb.Append("}");
+            }
+        }
+        sb.Append("]");
+
+        var currentValue = element.GetValue(bd.Property);
+        sb.Append($",\"currentValue\":{FormatValue(currentValue)}");
+
+        sb.Append("}");
+    }
+
+    private void AppendBindingSource(StringBuilder sb, Binding binding)
+    {
+        if (binding.Source != null)
+        {
+            var sourceType = binding.Source.GetType();
+            sb.Append($",\"source\":\"{EscapeJson(sourceType.Name)}\"");
+            sb.Append($",\"sourceType\":\"{EscapeJson(sourceType.FullName ?? sourceType.Name)}\"");
+
+            // Check if source implements INotifyPropertyChanged
+            if (binding.Source is System.ComponentModel.INotifyPropertyChanged)
+                sb.Append(",\"sourceImplementsINPC\":true");
+        }
+        else if (binding.RelativeSource != null)
+        {
+            sb.Append($",\"source\":\"RelativeSource({binding.RelativeSource.Mode})\"");
+            if (binding.RelativeSource.Mode == RelativeSourceMode.FindAncestor && binding.RelativeSource.AncestorType != null)
+            {
+                sb.Append($",\"ancestorType\":\"{EscapeJson(binding.RelativeSource.AncestorType.Name)}\"");
+                if (binding.RelativeSource.AncestorLevel > 1)
+                    sb.Append($",\"ancestorLevel\":{binding.RelativeSource.AncestorLevel}");
+            }
+        }
+        else if (binding.ElementName != null)
+        {
+            sb.Append($",\"source\":\"ElementName({EscapeJson(binding.ElementName)})\"");
+        }
+        else
+        {
+            sb.Append(",\"source\":\"DataContext\"");
+        }
+    }
+
+    private void AppendDataContextInfo(StringBuilder sb, object? dc)
+    {
+        if (dc == null)
+        {
+            sb.Append("null");
+            return;
+        }
+
+        var type = dc.GetType();
+        sb.Append("{");
+        sb.Append($"\"type\":\"{EscapeJson(type.FullName ?? type.Name)}\"");
+        sb.Append($",\"shortType\":\"{EscapeJson(type.Name)}\"");
+
+        // Check INPC
+        if (dc is System.ComponentModel.INotifyPropertyChanged)
+            sb.Append(",\"implementsINPC\":true");
+        else
+            sb.Append(",\"implementsINPC\":false");
+
+        // List public properties (useful for binding path validation)
+        sb.Append(",\"properties\":[");
+        var props = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var first = true;
+        var count = 0;
+        foreach (var prop in props)
+        {
+            if (count >= 50) // Cap at 50 properties
+            {
+                if (!first) sb.Append(",");
+                sb.Append("{\"name\":\"...\",\"type\":\"(truncated)\"}");
+                break;
+            }
+            if (!first) sb.Append(",");
+            first = false;
+
+            sb.Append("{");
+            sb.Append($"\"name\":\"{EscapeJson(prop.Name)}\"");
+            sb.Append($",\"type\":\"{EscapeJson(prop.PropertyType.Name)}\"");
+            sb.Append($",\"canRead\":{(prop.CanRead ? "true" : "false")}");
+            sb.Append($",\"canWrite\":{(prop.CanWrite ? "true" : "false")}");
+            sb.Append("}");
+            count++;
+        }
+        sb.Append("]");
+
+        sb.Append("}");
+    }
+
+    #endregion
+
+    #region Helpers
+
     private string GetBindingStatus(BindingExpression expression)
     {
         if (expression.HasError)
-        {
             return "Error";
-        }
 
         return expression.Status switch
         {
@@ -181,17 +457,13 @@ public class BindingAnalyzer
         string? name = null;
 
         if (element is FrameworkElement fe)
-        {
             name = string.IsNullOrEmpty(fe.Name) ? null : fe.Name;
-        }
 
         var sb = new StringBuilder();
         sb.Append("{");
         sb.Append($"\"typeName\":\"{EscapeJson(typeName)}\"");
         if (name != null)
-        {
             sb.Append($",\"name\":\"{EscapeJson(name)}\"");
-        }
         sb.Append("}");
         return sb.ToString();
     }
@@ -206,7 +478,7 @@ public class BindingAnalyzer
         if (type.IsPrimitive || type == typeof(decimal)) return value.ToString() ?? "null";
 
         var str = value.ToString() ?? "";
-        if (str.Length > 100) str = str.Substring(0, 100) + "...";
+        if (str.Length > 200) str = str.Substring(0, 200) + "...";
         return $"\"{EscapeJson(str)}\"";
     }
 
@@ -220,14 +492,21 @@ public class BindingAnalyzer
             .Replace("\t", "\\t");
     }
 
+    #endregion
+
+    #region Internal Types
+
     private class BindingData
     {
         public DependencyProperty Property { get; set; } = null!;
-        public Binding Binding { get; set; } = null!;
-        public BindingExpression Expression { get; set; } = null!;
+        public Binding? Binding { get; set; }
+        public BindingExpression? Expression { get; set; }
+        public MultiBinding? MultiBinding { get; set; }
+        public MultiBindingExpression? MultiExpression { get; set; }
+        public bool IsMultiBinding { get; set; }
     }
 
-    private class BindingErrorInfo
+    internal class BindingErrorInfo
     {
         public string ElementType { get; set; } = string.Empty;
         public string? ElementName { get; set; }
@@ -235,124 +514,104 @@ public class BindingAnalyzer
         public string BindingPath { get; set; } = string.Empty;
         public string ErrorType { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 
     private class BindingErrorTraceListener : TraceListener
     {
         private readonly List<BindingErrorInfo> _errors;
+        private readonly object _lock;
+        private readonly int _maxErrors;
         private readonly StringBuilder _buffer = new();
 
-        public BindingErrorTraceListener(List<BindingErrorInfo> errors)
+        public BindingErrorTraceListener(List<BindingErrorInfo> errors, object errorLock, int maxErrors)
         {
             _errors = errors;
+            _lock = errorLock;
+            _maxErrors = maxErrors;
         }
 
         public override void Write(string? message)
         {
             if (!string.IsNullOrEmpty(message))
-            {
                 _buffer.Append(message);
-            }
         }
 
         public override void WriteLine(string? message)
         {
             if (!string.IsNullOrEmpty(message))
-            {
                 _buffer.Append(message);
-            }
 
             if (_buffer.Length == 0) return;
 
             var fullMessage = _buffer.ToString();
             _buffer.Clear();
 
-            // Parse the binding error message to extract useful information
             var error = ParseBindingError(fullMessage);
             if (error != null)
             {
-                _errors.Add(error);
+                lock (_lock)
+                {
+                    if (_errors.Count >= _maxErrors)
+                        _errors.RemoveAt(0); // Remove oldest
+                    _errors.Add(error);
+                }
             }
         }
 
         private BindingErrorInfo? ParseBindingError(string message)
         {
-            // Skip informational messages, only capture warnings/errors
             if (message.Contains("Information:")) return null;
 
             var error = new BindingErrorInfo
             {
-                Message = TruncateMessage(message, 500)
+                Message = TruncateMessage(message, 500),
+                Timestamp = DateTime.UtcNow
             };
 
             // Determine error type
             if (message.Contains("Cannot find source"))
-            {
                 error.ErrorType = "SourceNotFound";
-            }
             else if (message.Contains("path error") || message.Contains("BindingExpression path error"))
-            {
                 error.ErrorType = "PathError";
-            }
             else if (message.Contains("Cannot convert"))
-            {
                 error.ErrorType = "ConversionError";
-            }
             else if (message.Contains("ValidationError"))
-            {
                 error.ErrorType = "ValidationError";
-            }
             else if (message.Contains("UpdateSourceExceptionFilter"))
-            {
                 error.ErrorType = "UpdateSourceError";
-            }
             else
-            {
                 error.ErrorType = "Unknown";
-            }
 
-            // Try to extract binding path
-            // Pattern: Path=PropertyName or Path='PropertyName.SubProperty'
+            // Extract binding path
             var pathMatch = System.Text.RegularExpressions.Regex.Match(
                 message, @"Path[=:]'?([^';]+)'?");
             if (pathMatch.Success)
-            {
                 error.BindingPath = pathMatch.Groups[1].Value.Trim();
-            }
 
-            // Try to extract target element type
-            // Pattern: target element is 'TypeName' (Name='elementName')
+            // Extract target element type
             var targetMatch = System.Text.RegularExpressions.Regex.Match(
                 message, @"target element is '([^']+)'");
             if (targetMatch.Success)
-            {
                 error.ElementType = targetMatch.Groups[1].Value;
-            }
 
-            // Try to extract element name
+            // Extract element name
             var nameMatch = System.Text.RegularExpressions.Regex.Match(
                 message, @"\(Name='([^']+)'\)");
             if (nameMatch.Success)
-            {
                 error.ElementName = nameMatch.Groups[1].Value;
-            }
 
-            // Try to extract property name
-            // Pattern: TargetProperty: PropertyName or target property is 'PropertyName'
+            // Extract property name
             var propMatch = System.Text.RegularExpressions.Regex.Match(
                 message, @"target property is '([^']+)'");
             if (propMatch.Success)
-            {
                 error.Property = propMatch.Groups[1].Value;
-            }
             else
             {
                 var propMatch2 = System.Text.RegularExpressions.Regex.Match(
                     message, @"TargetProperty[=:]'?([^';(]+)'?");
                 if (propMatch2.Success)
-                {
                     error.Property = propMatch2.Groups[1].Value.Trim();
-                }
             }
 
             return error;
@@ -364,4 +623,6 @@ public class BindingAnalyzer
             return message.Substring(0, maxLength) + "...";
         }
     }
+
+    #endregion
 }

@@ -309,6 +309,45 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<DataContextResult> GetDataContextAsync(string elementHandle)
+    {
+        var session = EnsureConnected();
+
+        var request = new GetDataContextRequest
+        {
+            ElementHandle = elementHandle
+        };
+
+        var response = await SendRequestAsync<GetDataContextRequest, GetDataContextResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to get DataContext");
+        }
+
+        return new DataContextResult
+        {
+            Element = new ElementInfo { Handle = elementHandle },
+            DataContextJson = response.DataContextJson
+        };
+    }
+
+    public async Task ClearBindingErrorsAsync()
+    {
+        var session = EnsureConnected();
+
+        var request = new ClearBindingErrorsRequest();
+
+        var response = await SendRequestAsync<ClearBindingErrorsRequest, ClearBindingErrorsResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to clear binding errors");
+        }
+    }
+
     private async Task<TResponse> SendRequestAsync<TRequest, TResponse>(int processId, TRequest request)
         where TRequest : IpcRequest
         where TResponse : IpcResponse, new()

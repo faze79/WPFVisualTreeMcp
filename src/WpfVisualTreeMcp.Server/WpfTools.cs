@@ -137,10 +137,31 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("List all binding errors in the application")]
+    [Description("List all binding errors captured since application start. Errors are detected via WPF trace listener. Use wpf_clear_binding_errors to reset the list.")]
     public async Task<object> WpfGetBindingErrors()
     {
         var result = await _ipcBridge.GetBindingErrorsAsync();
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("Clear the captured binding errors list. Useful before testing specific scenarios.")]
+    public async Task<object> WpfClearBindingErrors()
+    {
+        await _ipcBridge.ClearBindingErrorsAsync();
+        return new { success = true, message = "Binding errors cleared" };
+    }
+
+    [McpServerTool]
+    [Description("Get the DataContext for an element, including type info, properties, INPC status, and inheritance chain up the visual tree. Essential for diagnosing binding path errors.")]
+    public async Task<object> WpfGetDataContext(string element_handle)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+
+        var result = await _ipcBridge.GetDataContextAsync(element_handle);
         return result;
     }
 

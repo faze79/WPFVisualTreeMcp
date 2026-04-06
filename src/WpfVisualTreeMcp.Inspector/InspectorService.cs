@@ -223,6 +223,8 @@ public class InspectorService : IDisposable
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
             "CaptureScreenshot" => HandleCaptureScreenshot(data),
+            "GetDataContext" => HandleGetDataContext(data),
+            "ClearBindingErrors" => HandleClearBindingErrors(),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
     }
@@ -663,6 +665,34 @@ public class InspectorService : IDisposable
                 Error = $"Screenshot capture failed: {ex.Message}"
             };
         }
+    }
+
+    private IpcResponse HandleGetDataContext(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<GetDataContextRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new GetDataContextResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (element == null)
+        {
+            return new GetDataContextResponse { Success = false, Error = "Element not found" };
+        }
+
+        var dcJson = _bindingAnalyzer.GetDataContext(element);
+        return new GetDataContextResponse
+        {
+            RequestId = request.RequestId,
+            DataContextJson = dcJson
+        };
+    }
+
+    private IpcResponse HandleClearBindingErrors()
+    {
+        _bindingAnalyzer.ClearBindingErrors();
+        return new ClearBindingErrorsResponse();
     }
 
     /// <summary>
