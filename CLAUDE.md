@@ -51,7 +51,7 @@ Target WPF Application (.NET Framework)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server initialization with MCP SDK |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 15 tools with `[McpServerTool]` attributes |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 17 tools with `[McpServerTool]` attributes |
 | IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
 | Process Manager | `src/WpfVisualTreeMcp.Server/Services/ProcessManager.cs` | WPF process discovery and attachment |
 | Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected DLL main entry point |

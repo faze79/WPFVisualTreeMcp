@@ -33,8 +33,9 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 - **Property Inspection** - Read all dependency properties of any UI element
 
 ### Binding & Resources
-- **Binding Analysis** - Inspect data bindings with their current status
-- **Binding Error Detection** - Automatically find and report binding errors
+- **Binding Analysis** - Inspect bindings with converter, StringFormat, FallbackValue, MultiBinding support
+- **DataContext Inspection** - View DataContext type, properties, INPC status, and inheritance chain
+- **Binding Error Detection** - Automatically capture and report binding errors with classification
 - **Resource Enumeration** - Browse resource dictionaries at any scope
 - **Style Inspection** - View applied styles and templates
 
@@ -265,8 +266,10 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_find_elements` | Search for elements by type or name (partial matching) |
 | `wpf_find_elements_deep` | Deep search across all windows including adorners/popups |
 | `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image) |
-| `wpf_get_bindings` | Get data bindings for an element |
-| `wpf_get_binding_errors` | List all binding errors |
+| `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
+| `wpf_get_binding_errors` | List all captured binding errors |
+| `wpf_clear_binding_errors` | Clear the captured binding errors list |
+| `wpf_get_data_context` | Get DataContext type, properties, INPC status, and inheritance chain |
 | `wpf_get_resources` | Enumerate resource dictionaries |
 | `wpf_get_styles` | Get applied styles and templates |
 | `wpf_watch_property` | Monitor a property for changes |
@@ -342,7 +345,7 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 15 WPF inspection tools
+│   │   ├── WpfTools.cs                 # 17 WPF inspection tools
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
 │   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread)
@@ -361,9 +364,9 @@ WpfVisualTreeMcp/
 
 - **MCP SDK**: Built with the [official C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk) from Microsoft/Anthropic
 - **Protocol**: JSON-RPC 2.0 over stdio transport
-- **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 (Inspector)
+- **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 15 inspection tools auto-discovered via `[McpServerTool]` attributes
+- **Tools**: 17 inspection tools auto-discovered via `[McpServerTool]` attributes
 
 ## Acknowledgments
 
