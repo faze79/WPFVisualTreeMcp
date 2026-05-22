@@ -11,11 +11,15 @@
   </PropertyGroup>
 
   <!-- .NET Framework 4.8: explicit WPF references -->
+  <!-- (net8.0-windows pulls these in automatically via UseWPF) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
     <Reference Include="System.Xaml" />
+    <!-- UI Automation provider interfaces used by ControlInteractor (click support) -->
+    <Reference Include="UIAutomationProvider" />
+    <Reference Include="UIAutomationTypes" />
     <PackageReference Include="System.IO.Pipes" Version="4.3.0" />
   </ItemGroup>
 

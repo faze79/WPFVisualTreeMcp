@@ -348,6 +348,32 @@ public class NamedPipeBridge : IIpcBridge
         }
     }
 
+    public async Task<ClickResult> ClickElementAsync(string elementHandle, bool physical)
+    {
+        var session = EnsureConnected();
+
+        var request = new ClickElementRequest
+        {
+            ElementHandle = elementHandle,
+            Physical = physical
+        };
+
+        var response = await SendRequestAsync<ClickElementRequest, ClickElementResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to click element");
+        }
+
+        return new ClickResult
+        {
+            Method = response.Method ?? "Unknown",
+            ElementType = response.ElementType,
+            Detail = response.Detail
+        };
+    }
+
     private async Task<TResponse> SendRequestAsync<TRequest, TResponse>(int processId, TRequest request)
         where TRequest : IpcRequest
         where TResponse : IpcResponse, new()

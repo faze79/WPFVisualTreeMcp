@@ -1,5 +1,96 @@
 # Release Notes
 
+## v0.4.0 — CLI mode and click interaction (2026-05-23)
+
+This release adds two substantial capabilities without changing how the MCP
+server itself behaves: a one-shot **CLI front-end** sharing the same code as
+the MCP tools, and a **`wpf_click_element`** / `click` command that actually
+drives controls.
+
+### What's new
+
+#### Dual-mode executable — CLI + MCP
+
+`WpfVisualTreeMcp.Server.exe` with no arguments still runs as the MCP stdio
+server. With any recognised subcommand (`list`, `attach`, `tree`, `find`,
+`props`, `bindings`, `screenshot`, ...) it runs as a **one-shot CLI**
+instead. Same 18 capabilities, no MCP connection required — useful when
+the MCP server is not connected, for scripting, and for verifying the
+pipeline manually.
+
+```text
+WpfVisualTreeMcp.Server.exe list
+WpfVisualTreeMcp.Server.exe attach --pid 1234 --auto-inject
+WpfVisualTreeMcp.Server.exe find --pid 1234 --type Button
+WpfVisualTreeMcp.Server.exe screenshot --pid 1234 --out app.png
+WpfVisualTreeMcp.Server.exe help                # full reference
+WpfVisualTreeMcp.Server.exe <command> --help    # one command
+```
+
+- Output is JSON on stdout (use `--compact` for single-line); logging is
+  routed to stderr so stdout stays pipe-friendly.
+- `screenshot` writes a PNG file and prints its path — an AI agent can
+  re-read the file with its normal Read tool, no base64 round-trip.
+- `export` writes to `--out` if given, otherwise prints content inline.
+- Each invocation is stateless. Element handles live inside the Inspector
+  in the *target* process, so they remain valid across separate CLI calls
+  for as long as the target app keeps running.
+
+#### `wpf_click_element` — drive controls
+
+A new MCP tool (and `click` CLI command) lets an AI agent actually interact
+with WPF controls — the first state-changing capability in an otherwise
+read-only tool.
+
+- **Default — UI Automation.** Invokes the control's action via the first
+  matching pattern: `Invoke` (buttons, menu items, hyperlinks), `Toggle`
+  (checkboxes, radio buttons, toggle buttons), `SelectionItem` (list items,
+  tab items, combo box items), `ExpandCollapse` (expanders, tree view
+  items). No cursor movement, no window focus required. Elements with no
+  automation pattern fall back to best-effort routed mouse events.
+- **`physical=true` / `--physical`.** A real OS mouse click at the
+  element's on-screen centre — moves the cursor and brings the window
+  forward. Use this when the default doesn't trigger the behaviour you
+  want (custom-drawn elements without an automation peer, etc.).
+- The response reports which `method` actually fired, so the caller knows
+  whether the action was an `Invoke`, a `Toggle`, a `Physical` click, etc.
+- Disabled or zero-size elements are refused with a clear error.
+
+#### User-level Claude Code skill
+
+A standalone `wpf-inspector` skill (installed under
+`~/.claude/skills/wpf-inspector/`) bundles a self-contained Release build
+of the CLI. It documents the workflow and all 18 commands so any Claude
+Code session on the machine can drive and inspect WPF apps without setting
+up an MCP server.
+
+### Known limitations
+
+**Auto-injection is same-architecture only.** A 64-bit CLI / MCP server
+cannot inject into a 32-bit target — the remote `LoadLibraryW` thread
+starts at the injector's 64-bit `kernel32` address, which is invalid in the
+target's 32-bit address space, and the bootstrapper DLL never runs (silent
+"Injection failed", no log entries). For 32-bit WPF apps the workaround is
+**self-hosted mode** — reference the Inspector DLL and call
+`InspectorService.Initialize(Process.GetCurrentProcess().Id)` from
+`App.OnStartup`. The Inspector's `net8.0-windows` build is AnyCPU and loads
+fine inside an x86 process. A clearer error on bitness mismatch (instead of
+the current silent failure) is a planned follow-up.
+
+### Files of note
+
+- `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` — new CLI front-end.
+- `src/WpfVisualTreeMcp.Server/Program.cs` — routes to CLI vs MCP based
+  on `args[0]`.
+- `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` — UI Automation
+  patterns + synthetic mouse fallback + physical OS click.
+- `src/WpfVisualTreeMcp.Shared/Models/InteractionModels.cs` — new
+  `ClickResult` model.
+- `src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj` —
+  adds `UIAutomationProvider` / `UIAutomationTypes` references for net48.
+
+---
+
 ## Recent Improvements (PR #10)
 
 ### Critical Bug Fixes

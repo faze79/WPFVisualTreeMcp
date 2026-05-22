@@ -19,6 +19,7 @@ public class InspectorService : IDisposable
     private readonly ElementHighlighter _highlighter;
     private readonly PropertyWatcher _propertyWatcher;
     private readonly ResourceInspector _resourceInspector;
+    private readonly ControlInteractor _interactor;
     private bool _isRunning;
     private bool _disposed;
 
@@ -122,6 +123,7 @@ public class InspectorService : IDisposable
         _highlighter = new ElementHighlighter();
         _propertyWatcher = new PropertyWatcher();
         _resourceInspector = new ResourceInspector();
+        _interactor = new ControlInteractor();
         _ipcServer = new IpcServer(processId, HandleRequestAsync);
 
         // Wire up property change notifications
@@ -225,6 +227,7 @@ public class InspectorService : IDisposable
             "CaptureScreenshot" => HandleCaptureScreenshot(data),
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
+            "ClickElement" => HandleClickElement(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
     }
@@ -693,6 +696,39 @@ public class InspectorService : IDisposable
     {
         _bindingAnalyzer.ClearBindingErrors();
         return new ClearBindingErrorsResponse();
+    }
+
+    private IpcResponse HandleClickElement(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<ClickElementRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new ClickElementResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
+        if (element == null)
+        {
+            return new ClickElementResponse { Success = false, Error = "Element not found or is not a UIElement" };
+        }
+
+        try
+        {
+            var outcome = _interactor.Click(element, request.Physical);
+            DebugLog($"ClickElement: {element.GetType().Name} clicked via {outcome.Method}");
+            return new ClickElementResponse
+            {
+                RequestId = request.RequestId,
+                Method = outcome.Method,
+                ElementType = element.GetType().Name,
+                Detail = outcome.Detail
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"ClickElement failed: {ex.Message}");
+            return new ClickElementResponse { Success = false, Error = ex.Message };
+        }
     }
 
     /// <summary>

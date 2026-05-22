@@ -215,6 +215,26 @@ public class CaptureScreenshotResponse : IpcResponse
     public string? ElementType { get; set; }
 }
 
+// Click / Interaction
+public class ClickElementRequest : IpcRequest
+{
+    public override string RequestType => "ClickElement";
+    public string ElementHandle { get; set; } = string.Empty;
+
+    /// <summary>When true, perform a real OS mouse click instead of a UI Automation invoke.</summary>
+    public bool Physical { get; set; }
+}
+
+public class ClickElementResponse : IpcResponse
+{
+    /// <summary>How the click was carried out: Invoke, Toggle, SelectionItem.Select, ExpandCollapse.*, SyntheticMouse, Physical.</summary>
+    public string? Method { get; set; }
+    public string? ElementType { get; set; }
+
+    /// <summary>Optional extra detail, e.g. the resulting toggle state or click coordinates.</summary>
+    public string? Detail { get; set; }
+}
+
 // Notifications (Inspector -> Server)
 public class PropertyChangedNotification
 {

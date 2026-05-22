@@ -47,9 +47,17 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 ### Interaction & Export
 - **Screenshot Capture** - Capture window/element screenshots visible to AI agents
 - **Element Highlighting** - Visually highlight elements in the running app
+- **Control Click** *(new in v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click; the only state-changing tool
 - **Layout Information** - Get detailed layout metrics
 - **Tree Export** - Export visual tree to XAML or JSON format
 - **Auto-Injection** - Inject Inspector into running WPF processes (no source changes needed)
+
+### Dual-Mode CLI *(new in v0.4.0)*
+The same `WpfVisualTreeMcp.Server.exe` runs as either an MCP stdio server
+(no arguments, default) or as a **one-shot CLI** (any recognised subcommand).
+Useful when the MCP server isn't connected, for scripting, and for verifying
+the pipeline manually. Run `WpfVisualTreeMcp.Server.exe help` for the full
+command list. Output is JSON on stdout; diagnostics go to stderr.
 
 ## Quick Start
 
@@ -274,6 +282,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_styles` | Get applied styles and templates |
 | `wpf_watch_property` | Monitor a property for changes |
 | `wpf_highlight_element` | Visually highlight an element |
+| `wpf_click_element` | **Click a control** — UI Automation invoke by default, `physical=true` for a real OS mouse click. *Only state-changing tool.* |
 | `wpf_get_layout_info` | Get layout information |
 | `wpf_export_tree` | Export visual tree to XAML or JSON |
 
@@ -303,7 +312,15 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] DLL auto-injection into running WPF processes (x64/x86)
 - [x] AdornerLayer and Popup visual tree traversal
 
+### Phase 4: CLI + Driving the App ✅ *(v0.4.0)*
+- [x] Dual-mode executable (MCP stdio + one-shot CLI)
+- [x] Control click via UI Automation patterns
+- [x] Physical OS mouse click as opt-in fallback
+- [x] User-level Claude Code skill bundling the CLI
+
 ### Future Considerations
+- [ ] Cross-architecture injection (x86 server build for 32-bit targets)
+- [ ] Arch-mismatch guard in `ProcessInjector` (fail loudly instead of silently)
 - [ ] Visual tree diff/comparison
 - [ ] Performance diagnostics
 - [ ] Visual tree modification capabilities
@@ -345,7 +362,8 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 17 WPF inspection tools
+│   │   ├── WpfTools.cs                 # 18 WPF tools (17 inspection + click)
+│   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
 │   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread)
@@ -366,7 +384,8 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 17 inspection tools auto-discovered via `[McpServerTool]` attributes
+- **Tools**: 18 tools auto-discovered via `[McpServerTool]` attributes (17 read-only inspection + `wpf_click_element`)
+- **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments
 

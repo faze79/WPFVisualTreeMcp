@@ -248,6 +248,25 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward). NOTE: this is the only tool that changes application state.")]
+    public async Task<object> WpfClickElement(string element_handle, bool physical = false)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+
+        var result = await _ipcBridge.ClickElementAsync(element_handle, physical);
+        return new
+        {
+            success = true,
+            method = result.Method,
+            element_type = result.ElementType,
+            detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
     [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window.")]
     public async Task<CallToolResult> WpfCaptureScreenshot(
         string? element_handle = null,

@@ -82,4 +82,10 @@ public interface IIpcBridge
     /// Clears all captured binding errors.
     /// </summary>
     Task ClearBindingErrorsAsync();
+
+    /// <summary>
+    /// Clicks an element. Uses UI Automation by default; when <paramref name="physical"/>
+    /// is true, performs a real OS mouse click at the element's screen position.
+    /// </summary>
+    Task<ClickResult> ClickElementAsync(string elementHandle, bool physical);
 }

@@ -21,8 +21,12 @@ dotnet test WpfVisualTreeMcp.sln
 # Run sample WPF app for testing
 dotnet run --project samples/SampleWpfApp
 
-# Publish MCP Server executable
+# Publish MCP Server executable (same exe also runs as the CLI)
 dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
+
+# Run as CLI (any subcommand switches from MCP server mode to CLI mode)
+dotnet run --project src/WpfVisualTreeMcp.Server -- list
+./publish/WpfVisualTreeMcp.Server.exe help
 ```
 
 ## Architecture
@@ -31,7 +35,7 @@ dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Rel
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (15 inspection tools)
+    ├─ WpfTools (18 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -41,17 +45,20 @@ Target WPF Application (.NET Framework)
         ├─ ScreenshotCapture (RenderTargetBitmap element capture)
         ├─ PropertyReader (dependency properties)
         ├─ BindingAnalyzer (binding inspection)
+        ├─ ControlInteractor (UI Automation / physical click)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only.
+**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`**, which invokes a control and changes application state.
 
 ## Key Source Locations
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server initialization with MCP SDK |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 17 tools with `[McpServerTool]` attributes |
+| MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 18 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (18 commands) |
+| Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks elements via UI Automation or a physical OS mouse click |
 | IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
 | Process Manager | `src/WpfVisualTreeMcp.Server/Services/ProcessManager.cs` | WPF process discovery and attachment |
 | Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected DLL main entry point |
@@ -137,6 +144,42 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
   }
 }
 ```
+
+## CLI Mode
+
+The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
+with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
+it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
+`CliRunner.IsCliCommand`). This gives the same 18 capabilities without an MCP
+connection — useful when the MCP server is not connected, for scripting, or for
+verifying the pipeline manually.
+
+**Why it exists:** AI agents (and humans) can invoke inspection through a plain
+shell call. No MCP handshake required; `--help` is self-documenting.
+
+### CLI behaviour
+- **Output:** JSON to stdout (indented by default, `--compact` for single-line).
+  All logging goes to stderr so stdout stays parseable.
+- **Errors:** `{"error": "..."}` to stdout + a plain line to stderr, exit code `1`.
+- **Stateless:** each command re-creates the lightweight session internally, so
+  element handles (which live in the Inspector) stay valid across separate calls
+  as long as the target app keeps running.
+- **Targeting:** every command except `list` takes `--pid <id>` or `--process <name>`.
+- **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
+  **export** writes to `--out` if given, otherwise prints content inline.
+- **click** is the only state-changing command: UI Automation invoke by default,
+  `--physical` for a real OS mouse click. See `ControlInteractor`.
+
+### Typical CLI workflow
+```bash
+WpfVisualTreeMcp.Server.exe list                              # find the PID
+WpfVisualTreeMcp.Server.exe attach --pid 1234 --auto-inject   # inject Inspector (once)
+WpfVisualTreeMcp.Server.exe find --pid 1234 --type Button
+WpfVisualTreeMcp.Server.exe props --pid 1234 --handle elem_00000052
+WpfVisualTreeMcp.Server.exe screenshot --pid 1234 --out app.png
+```
+Run `WpfVisualTreeMcp.Server.exe help` for the full command list, or
+`<command> --help` for one command.
 
 ## Test Framework
 

@@ -4,7 +4,18 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using Serilog;
 using Serilog.Events;
+using WpfVisualTreeMcp.Server.Cli;
 using WpfVisualTreeMcp.Server.Services;
+
+// --- Mode selection -------------------------------------------------------
+// With no arguments the process runs as the MCP stdio server (the default,
+// e.g. when launched from .mcp.json). With a recognised subcommand it runs as
+// a one-shot CLI instead, exposing the same inspection capabilities over a
+// plain command line. See CliRunner for the available commands.
+if (args.Length > 0 && CliRunner.IsCliCommand(args[0]))
+{
+    return await CliRunner.RunAsync(args);
+}
 
 // Configure Serilog for file logging
 var logFilePath = Path.Combine(
@@ -74,3 +85,5 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+return 0;
