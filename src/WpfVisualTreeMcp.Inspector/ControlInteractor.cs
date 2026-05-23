@@ -1,111 +1,100 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace WpfVisualTreeMcp.Inspector;
 
 /// <summary>
-/// Performs interaction (clicks) on WPF elements.
+/// Performs interaction (clicks, text input, keyboard shortcuts) on WPF elements.
 ///
 /// UI Automation patterns are the default mechanism — they invoke the control's
 /// action directly, raise proper events, need no window focus, and do not move the
-/// mouse. An optional physical mode drives the real OS mouse for elements that have
-/// no automation pattern but must still be clicked at their on-screen position.
+/// mouse. An optional physical mode drives the real OS mouse/keyboard for elements
+/// that have no automation pattern but must still be driven at the OS input level.
 ///
 /// All methods must be called on the UI dispatcher thread.
 /// </summary>
 internal sealed class ControlInteractor
 {
-    /// <summary>Describes how a click was carried out.</summary>
-    public readonly struct ClickOutcome
+    /// <summary>Describes how an interaction was carried out.</summary>
+    public readonly struct InteractionOutcome
     {
-        public ClickOutcome(string method, string? detail)
+        public InteractionOutcome(string method, string? detail)
         {
             Method = method;
             Detail = detail;
         }
 
-        /// <summary>The mechanism used (Invoke, Toggle, Physical, ...).</summary>
+        /// <summary>The mechanism used (Invoke, Toggle, Physical, ValueProvider.SetValue, ...).</summary>
         public string Method { get; }
 
-        /// <summary>Optional extra detail (resulting toggle state, click coordinates, ...).</summary>
+        /// <summary>Optional extra detail (resulting toggle state, click coordinates, key combo, ...).</summary>
         public string? Detail { get; }
     }
+
+    // ---------------------------------------------------------------------
+    // Click
+    // ---------------------------------------------------------------------
 
     /// <summary>
     /// Clicks the given element. When <paramref name="physical"/> is false (default)
     /// the control's action is invoked via UI Automation; when true, a real OS mouse
     /// click is performed at the element's on-screen centre.
     /// </summary>
-    public ClickOutcome Click(UIElement element, bool physical)
+    public InteractionOutcome Click(UIElement element, bool physical)
     {
-        if (!element.IsEnabled)
-            throw new InvalidOperationException("Element is disabled and cannot be clicked.");
-
-        if (!element.IsVisible)
-            throw new InvalidOperationException("Element is not visible and cannot be clicked.");
-
+        EnsureInteractable(element, "clicked");
         return physical ? PhysicalClick(element) : AutomationClick(element);
     }
 
-    /// <summary>
-    /// Invokes the control via the first matching UI Automation pattern. Falls back to
-    /// synthetic routed mouse events when the element exposes no pattern.
-    /// </summary>
-    private static ClickOutcome AutomationClick(UIElement element)
+    private static InteractionOutcome AutomationClick(UIElement element)
     {
         var peer = UIElementAutomationPeer.CreatePeerForElement(element);
         if (peer != null)
         {
-            // Buttons, menu items, hyperlinks, repeat buttons, ...
             if (peer.GetPattern(PatternInterface.Invoke) is IInvokeProvider invoke)
             {
                 invoke.Invoke();
-                return new ClickOutcome("Invoke", null);
+                return new InteractionOutcome("Invoke", null);
             }
 
-            // Check boxes, toggle buttons, radio buttons.
             if (peer.GetPattern(PatternInterface.Toggle) is IToggleProvider toggle)
             {
                 toggle.Toggle();
-                return new ClickOutcome("Toggle", $"new toggle state: {toggle.ToggleState}");
+                return new InteractionOutcome("Toggle", $"new toggle state: {toggle.ToggleState}");
             }
 
-            // List items, combo box items, tab items, tree view items.
             if (peer.GetPattern(PatternInterface.SelectionItem) is ISelectionItemProvider selectionItem)
             {
                 selectionItem.Select();
-                return new ClickOutcome("SelectionItem.Select", null);
+                return new InteractionOutcome("SelectionItem.Select", null);
             }
 
-            // Expanders, tree view items.
             if (peer.GetPattern(PatternInterface.ExpandCollapse) is IExpandCollapseProvider expandCollapse)
             {
                 if (expandCollapse.ExpandCollapseState == ExpandCollapseState.Collapsed)
                 {
                     expandCollapse.Expand();
-                    return new ClickOutcome("ExpandCollapse.Expand", null);
+                    return new InteractionOutcome("ExpandCollapse.Expand", null);
                 }
 
                 expandCollapse.Collapse();
-                return new ClickOutcome("ExpandCollapse.Collapse", null);
+                return new InteractionOutcome("ExpandCollapse.Collapse", null);
             }
         }
 
-        // No automation pattern (e.g. a Border/Grid/TextBlock with a custom MouseDown
-        // handler): raise the routed mouse events directly on the element.
         return SyntheticMouseClick(element);
     }
 
-    /// <summary>
-    /// Best-effort click for elements with no UI Automation pattern: raises the
-    /// left-button down/up routed event pair on the element itself.
-    /// </summary>
-    private static ClickOutcome SyntheticMouseClick(UIElement element)
+    private static InteractionOutcome SyntheticMouseClick(UIElement element)
     {
         var device = Mouse.PrimaryDevice;
         var timestamp = Environment.TickCount;
@@ -124,16 +113,12 @@ internal sealed class ControlInteractor
         Raise(UIElement.PreviewMouseLeftButtonUpEvent);
         Raise(UIElement.MouseLeftButtonUpEvent);
 
-        return new ClickOutcome(
+        return new InteractionOutcome(
             "SyntheticMouse",
             "element exposes no UI Automation pattern; raised routed mouse events (best-effort)");
     }
 
-    /// <summary>
-    /// Performs a real OS mouse click at the element's on-screen centre. Brings the
-    /// host window forward first so the click lands on the intended element.
-    /// </summary>
-    private static ClickOutcome PhysicalClick(UIElement element)
+    private static InteractionOutcome PhysicalClick(UIElement element)
     {
         var size = element.RenderSize;
         if (size.Width <= 0 || size.Height <= 0)
@@ -150,13 +135,156 @@ internal sealed class ControlInteractor
 
         NativeMethods.MouseLeftClick();
 
-        return new ClickOutcome("Physical", $"OS mouse click at screen ({x},{y})");
+        return new InteractionOutcome("Physical", $"OS mouse click at screen ({x},{y})");
     }
+
+    // ---------------------------------------------------------------------
+    // Set text / fill value
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Replaces the text/value of <paramref name="element"/> with <paramref name="text"/>.
+    /// Default: <see cref="IValueProvider.SetValue"/> via UI Automation, with a
+    /// <c>TextBox.Text</c> / <c>PasswordBox.Password</c> / reflected <c>Text</c>
+    /// fallback. With <paramref name="physical"/>=true, focuses the element and
+    /// types the text via OS keyboard input (selecting and deleting any prior
+    /// value first).
+    /// </summary>
+    public InteractionOutcome SetText(UIElement element, string text, bool physical)
+    {
+        EnsureInteractable(element, "given text");
+        text ??= string.Empty;
+        return physical ? PhysicalSetText(element, text) : AutomationSetText(element, text);
+    }
+
+    private static InteractionOutcome AutomationSetText(UIElement element, string text)
+    {
+        var peer = UIElementAutomationPeer.CreatePeerForElement(element);
+        if (peer?.GetPattern(PatternInterface.Value) is IValueProvider value)
+        {
+            if (value.IsReadOnly)
+                throw new InvalidOperationException("Element value is read-only and cannot be set.");
+            value.SetValue(text);
+            return new InteractionOutcome("ValueProvider.SetValue", $"text length: {text.Length}");
+        }
+
+        // Direct-property fallbacks for the common cases that lack a pattern.
+        if (element is TextBox tb)
+        {
+            tb.Text = text;
+            return new InteractionOutcome("DirectProperty.Text", $"text length: {text.Length}");
+        }
+        if (element is PasswordBox pb)
+        {
+            pb.Password = text;
+            return new InteractionOutcome("DirectProperty.Password", $"length: {text.Length}");
+        }
+
+        // Last resort: reflect for a settable string `Text` property (covers many
+        // third-party controls that expose Text but no automation peer).
+        var prop = element.GetType().GetProperty("Text", BindingFlags.Public | BindingFlags.Instance);
+        if (prop != null && prop.CanWrite && prop.PropertyType == typeof(string))
+        {
+            prop.SetValue(element, text);
+            return new InteractionOutcome("Reflected.Text", $"text length: {text.Length}");
+        }
+
+        throw new InvalidOperationException(
+            $"Element type '{element.GetType().Name}' has no IValueProvider and no settable string 'Text' property. " +
+            "Try physical=true to type via OS keyboard input.");
+    }
+
+    private static InteractionOutcome PhysicalSetText(UIElement element, string text)
+    {
+        if (!FocusForKeyboardInput(element))
+            throw new InvalidOperationException(
+                "Element is not focusable; physical typing has nowhere to land. " +
+                "Use the default UI Automation mode or set Focusable=true.");
+
+        // Select-all + delete the existing content first.
+        NativeMethods.KeyDown(NativeMethods.VK_CONTROL);
+        NativeMethods.KeyDown((byte)'A');
+        NativeMethods.KeyUp((byte)'A');
+        NativeMethods.KeyUp(NativeMethods.VK_CONTROL);
+        NativeMethods.KeyDown(NativeMethods.VK_DELETE);
+        NativeMethods.KeyUp(NativeMethods.VK_DELETE);
+
+        foreach (var c in text)
+        {
+            NativeMethods.SendUnicodeChar(c);
+        }
+
+        return new InteractionOutcome("Physical", $"typed {text.Length} char(s) after Ctrl+A/Delete");
+    }
+
+    // ---------------------------------------------------------------------
+    // Send keys (shortcut)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Sends a single key combination (e.g. <c>Ctrl+S</c>, <c>Enter</c>, <c>F5</c>,
+    /// <c>Alt+F4</c>) to the given element, or to whatever currently has focus when
+    /// <paramref name="element"/> is null. Uses OS keyboard input.
+    /// </summary>
+    public InteractionOutcome SendKeys(UIElement? element, string keys)
+    {
+        if (string.IsNullOrWhiteSpace(keys))
+            throw new ArgumentException("Key combo is required (e.g. \"Ctrl+S\", \"Enter\", \"F5\").");
+
+        if (element != null)
+            EnsureInteractable(element, "given keys");
+
+        var (modifiers, key) = KeyComboParser.Parse(keys);
+
+        if (element != null)
+            FocusForKeyboardInput(element);
+
+        foreach (var modifier in modifiers)
+            NativeMethods.KeyDown(modifier);
+
+        NativeMethods.KeyDown(key);
+        NativeMethods.KeyUp(key);
+
+        // Release modifiers in reverse order, matching how a human would let go.
+        foreach (var modifier in modifiers.Reverse())
+            NativeMethods.KeyUp(modifier);
+
+        return new InteractionOutcome("Physical", $"sent '{keys}'");
+    }
+
+    // ---------------------------------------------------------------------
+    // Shared helpers
+    // ---------------------------------------------------------------------
+
+    private static void EnsureInteractable(UIElement element, string action)
+    {
+        if (!element.IsEnabled)
+            throw new InvalidOperationException($"Element is disabled and cannot be {action}.");
+        if (!element.IsVisible)
+            throw new InvalidOperationException($"Element is not visible and cannot be {action}.");
+    }
+
+    /// <summary>
+    /// Brings the host window forward and tries to give keyboard focus to the element.
+    /// Returns true when the element actually accepted focus.
+    /// </summary>
+    private static bool FocusForKeyboardInput(UIElement element)
+    {
+        Window.GetWindow(element)?.Activate();
+        var focused = element.Focus();
+        Keyboard.Focus(element);
+        return focused;
+    }
+
+    // ---------------------------------------------------------------------
+    // Native interop (mouse + keyboard input)
+    // ---------------------------------------------------------------------
 
     private static class NativeMethods
     {
+        // -- Mouse -------------------------------------------------------
         private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+        private const uint MOUSEEVENTF_LEFTUP   = 0x0004;
 
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -169,6 +297,219 @@ internal sealed class ControlInteractor
         {
             mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, IntPtr.Zero);
             mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, IntPtr.Zero);
+        }
+
+        // -- Keyboard ----------------------------------------------------
+        public const byte VK_BACK    = 0x08;
+        public const byte VK_TAB     = 0x09;
+        public const byte VK_RETURN  = 0x0D;
+        public const byte VK_SHIFT   = 0x10;
+        public const byte VK_CONTROL = 0x11;
+        public const byte VK_MENU    = 0x12;  // Alt
+        public const byte VK_ESCAPE  = 0x1B;
+        public const byte VK_SPACE   = 0x20;
+        public const byte VK_PRIOR   = 0x21;  // PageUp
+        public const byte VK_NEXT    = 0x22;  // PageDown
+        public const byte VK_END     = 0x23;
+        public const byte VK_HOME    = 0x24;
+        public const byte VK_LEFT    = 0x25;
+        public const byte VK_UP      = 0x26;
+        public const byte VK_RIGHT   = 0x27;
+        public const byte VK_DOWN    = 0x28;
+        public const byte VK_INSERT  = 0x2D;
+        public const byte VK_DELETE  = 0x2E;
+        public const byte VK_LWIN    = 0x5B;
+
+        private const uint INPUT_KEYBOARD     = 1;
+        private const uint KEYEVENTF_KEYUP    = 0x0002;
+        private const uint KEYEVENTF_UNICODE  = 0x0004;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, IntPtr dwExtraInfo);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        public static void KeyDown(byte vk) => keybd_event(vk, 0, 0, IntPtr.Zero);
+        public static void KeyUp(byte vk)   => keybd_event(vk, 0, KEYEVENTF_KEYUP, IntPtr.Zero);
+
+        /// <summary>
+        /// Types a single Unicode character via SendInput with KEYEVENTF_UNICODE.
+        /// Unlike keybd_event (whose scan code is a byte), SendInput's wScan is a
+        /// ushort, so this handles the full BMP.
+        /// </summary>
+        public static void SendUnicodeChar(char c)
+        {
+            var inputs = new INPUT[2];
+
+            inputs[0].type        = INPUT_KEYBOARD;
+            inputs[0].u.ki.wVk    = 0;
+            inputs[0].u.ki.wScan  = c;
+            inputs[0].u.ki.dwFlags = KEYEVENTF_UNICODE;
+
+            inputs[1].type        = INPUT_KEYBOARD;
+            inputs[1].u.ki.wVk    = 0;
+            inputs[1].u.ki.wScan  = c;
+            inputs[1].u.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+
+            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct HARDWAREINPUT
+        {
+            public uint uMsg;
+            public ushort wParamL;
+            public ushort wParamH;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)] public MOUSEINPUT mi;
+            [FieldOffset(0)] public KEYBDINPUT ki;
+            [FieldOffset(0)] public HARDWAREINPUT hi;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public InputUnion u;
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Key-combo parser
+    // ---------------------------------------------------------------------
+
+    private static class KeyComboParser
+    {
+        /// <summary>
+        /// Parses a key combo like <c>Ctrl+S</c>, <c>Ctrl+Shift+F5</c>, <c>Alt+F4</c>,
+        /// <c>Enter</c>, <c>F1</c>, <c>Win+R</c>. The last segment is the key; any
+        /// preceding segments are modifiers.
+        /// </summary>
+        public static (byte[] Modifiers, byte Key) Parse(string keys)
+        {
+            var parts = keys.Split('+');
+            if (parts.Length == 0)
+                throw new ArgumentException("Empty key combo.");
+
+            var modifiers = new List<byte>();
+            byte? key = null;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var token = parts[i].Trim();
+                if (token.Length == 0)
+                    throw new ArgumentException($"Empty token in key combo '{keys}'.");
+
+                if (i < parts.Length - 1)
+                {
+                    var mod = MapModifier(token)
+                        ?? throw new ArgumentException(
+                            $"Unknown modifier '{token}' in '{keys}'. Expected: Ctrl, Shift, Alt, or Win.");
+                    modifiers.Add(mod);
+                }
+                else
+                {
+                    key = MapKey(token)
+                        ?? throw new ArgumentException(
+                            $"Unknown key '{token}' in '{keys}'. " +
+                            "Supported: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, " +
+                            "Backspace, Delete, Insert, Home, End, PageUp, PageDown, " +
+                            "Left, Right, Up, Down.");
+                }
+            }
+
+            return (modifiers.ToArray(), key!.Value);
+        }
+
+        private static byte? MapModifier(string token)
+        {
+            switch (token.ToLowerInvariant())
+            {
+                case "ctrl":
+                case "control":  return NativeMethods.VK_CONTROL;
+                case "shift":    return NativeMethods.VK_SHIFT;
+                case "alt":
+                case "menu":     return NativeMethods.VK_MENU;
+                case "win":
+                case "windows":
+                case "meta":
+                case "lwin":     return NativeMethods.VK_LWIN;
+                default:         return null;
+            }
+        }
+
+        private static byte? MapKey(string token)
+        {
+            // Single character: letter or digit.
+            if (token.Length == 1)
+            {
+                var c = char.ToUpperInvariant(token[0]);
+                if (c >= 'A' && c <= 'Z') return (byte)c;
+                if (c >= '0' && c <= '9') return (byte)c;
+            }
+
+            var lower = token.ToLowerInvariant();
+
+            // F1..F12
+            if (lower.Length >= 2 && lower[0] == 'f'
+                && int.TryParse(lower.Substring(1), out var n)
+                && n >= 1 && n <= 12)
+            {
+                return (byte)(0x6F + n);  // VK_F1 = 0x70
+            }
+
+            switch (lower)
+            {
+                case "enter":
+                case "return":    return NativeMethods.VK_RETURN;
+                case "esc":
+                case "escape":    return NativeMethods.VK_ESCAPE;
+                case "tab":       return NativeMethods.VK_TAB;
+                case "space":     return NativeMethods.VK_SPACE;
+                case "back":
+                case "backspace": return NativeMethods.VK_BACK;
+                case "del":
+                case "delete":    return NativeMethods.VK_DELETE;
+                case "ins":
+                case "insert":    return NativeMethods.VK_INSERT;
+                case "home":      return NativeMethods.VK_HOME;
+                case "end":       return NativeMethods.VK_END;
+                case "pgup":
+                case "pageup":    return NativeMethods.VK_PRIOR;
+                case "pgdn":
+                case "pagedown":  return NativeMethods.VK_NEXT;
+                case "left":      return NativeMethods.VK_LEFT;
+                case "right":     return NativeMethods.VK_RIGHT;
+                case "up":        return NativeMethods.VK_UP;
+                case "down":      return NativeMethods.VK_DOWN;
+                default:          return null;
+            }
         }
     }
 }

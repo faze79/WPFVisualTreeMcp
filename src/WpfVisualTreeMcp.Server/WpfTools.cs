@@ -248,7 +248,7 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward). NOTE: this is the only tool that changes application state.")]
+    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward). STATE-CHANGING.")]
     public async Task<object> WpfClickElement(string element_handle, bool physical = false)
     {
         if (string.IsNullOrEmpty(element_handle))
@@ -257,6 +257,44 @@ public class WpfTools
         }
 
         var result = await _ipcBridge.ClickElementAsync(element_handle, physical);
+        return new
+        {
+            success = true,
+            method = result.Method,
+            element_type = result.ElementType,
+            detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
+    [Description("Set the text/value of a UI element (TextBox, ComboBox, etc.). By default uses UI Automation IValueProvider.SetValue (clean, no focus needed, raises proper events). Falls back to setting TextBox.Text or PasswordBox.Password directly, or a reflected string 'Text' property. Set physical=true to focus the element and type via OS keyboard input (clears existing text with Ctrl+A/Delete first, then types each character; moves window focus). STATE-CHANGING.")]
+    public async Task<object> WpfSetText(string element_handle, string text, bool physical = false)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+
+        var result = await _ipcBridge.SetTextAsync(element_handle, text ?? string.Empty, physical);
+        return new
+        {
+            success = true,
+            method = result.Method,
+            element_type = result.ElementType,
+            detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
+    [Description("Send a keyboard shortcut / key combination to a WPF element (or to whatever currently has keyboard focus, when element_handle is omitted). Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'Escape', 'F5', 'Alt+F4', 'Win+R'. Modifiers: Ctrl, Shift, Alt, Win. Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right. Uses OS keyboard input - brings the target window to the foreground. STATE-CHANGING.")]
+    public async Task<object> WpfSendKeys(string keys, string? element_handle = null)
+    {
+        if (string.IsNullOrWhiteSpace(keys))
+        {
+            throw new ArgumentException("keys is required (e.g. \"Ctrl+S\")");
+        }
+
+        var result = await _ipcBridge.SendKeysAsync(element_handle, keys);
         return new
         {
             success = true,

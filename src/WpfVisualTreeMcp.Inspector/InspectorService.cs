@@ -228,6 +228,8 @@ public class InspectorService : IDisposable
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "ClickElement" => HandleClickElement(data),
+            "SetText" => HandleSetText(data),
+            "SendKeys" => HandleSendKeys(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
     }
@@ -728,6 +730,76 @@ public class InspectorService : IDisposable
         {
             DebugLog($"ClickElement failed: {ex.Message}");
             return new ClickElementResponse { Success = false, Error = ex.Message };
+        }
+    }
+
+    private IpcResponse HandleSetText(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<SetTextRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new SetTextResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
+        if (element == null)
+        {
+            return new SetTextResponse { Success = false, Error = "Element not found or is not a UIElement" };
+        }
+
+        try
+        {
+            var outcome = _interactor.SetText(element, request.Text ?? string.Empty, request.Physical);
+            DebugLog($"SetText: {element.GetType().Name} via {outcome.Method}");
+            return new SetTextResponse
+            {
+                RequestId = request.RequestId,
+                Method = outcome.Method,
+                ElementType = element.GetType().Name,
+                Detail = outcome.Detail
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"SetText failed: {ex.Message}");
+            return new SetTextResponse { Success = false, Error = ex.Message };
+        }
+    }
+
+    private IpcResponse HandleSendKeys(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<SendKeysRequest>(data);
+        if (request == null || string.IsNullOrWhiteSpace(request.Keys))
+        {
+            return new SendKeysResponse { Success = false, Error = "Keys required (e.g. \"Ctrl+S\")" };
+        }
+
+        UIElement? element = null;
+        if (!string.IsNullOrEmpty(request.ElementHandle))
+        {
+            element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
+            if (element == null)
+            {
+                return new SendKeysResponse { Success = false, Error = "Element not found or is not a UIElement" };
+            }
+        }
+
+        try
+        {
+            var outcome = _interactor.SendKeys(element, request.Keys!);
+            DebugLog($"SendKeys: '{request.Keys}' to {element?.GetType().Name ?? "(focused)"}");
+            return new SendKeysResponse
+            {
+                RequestId = request.RequestId,
+                Method = outcome.Method,
+                ElementType = element?.GetType().Name,
+                Detail = outcome.Detail
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"SendKeys failed: {ex.Message}");
+            return new SendKeysResponse { Success = false, Error = ex.Message };
         }
     }
 

@@ -235,6 +235,44 @@ public class ClickElementResponse : IpcResponse
     public string? Detail { get; set; }
 }
 
+// Set Text / Type into a value-bearing element
+public class SetTextRequest : IpcRequest
+{
+    public override string RequestType => "SetText";
+    public string ElementHandle { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>When true, focus the element and type via OS keyboard input instead of UI Automation.</summary>
+    public bool Physical { get; set; }
+}
+
+public class SetTextResponse : IpcResponse
+{
+    /// <summary>How the value was applied: ValueProvider.SetValue, DirectProperty.Text, DirectProperty.Password, Reflected.Text, Physical.</summary>
+    public string? Method { get; set; }
+    public string? ElementType { get; set; }
+    public string? Detail { get; set; }
+}
+
+// Send keyboard shortcut / key combination
+public class SendKeysRequest : IpcRequest
+{
+    public override string RequestType => "SendKeys";
+
+    /// <summary>Optional. When omitted, keys go to whatever is currently focused.</summary>
+    public string? ElementHandle { get; set; }
+
+    /// <summary>Key spec like "Ctrl+S", "Ctrl+Shift+F5", "Enter", "Alt+F4", or just "F1".</summary>
+    public string Keys { get; set; } = string.Empty;
+}
+
+public class SendKeysResponse : IpcResponse
+{
+    public string? Method { get; set; }
+    public string? ElementType { get; set; }
+    public string? Detail { get; set; }
+}
+
 // Notifications (Inspector -> Server)
 public class PropertyChangedNotification
 {

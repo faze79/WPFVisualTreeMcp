@@ -88,4 +88,18 @@ public interface IIpcBridge
     /// is true, performs a real OS mouse click at the element's screen position.
     /// </summary>
     Task<ClickResult> ClickElementAsync(string elementHandle, bool physical);
+
+    /// <summary>
+    /// Sets the text/value of an element. Uses UI Automation IValueProvider by default,
+    /// with TextBox/PasswordBox/reflected fallbacks. When <paramref name="physical"/>
+    /// is true, focuses the element and types via OS keyboard input.
+    /// </summary>
+    Task<SetTextResult> SetTextAsync(string elementHandle, string text, bool physical);
+
+    /// <summary>
+    /// Sends a keyboard shortcut or key combination (e.g. "Ctrl+S", "Enter", "F5") to
+    /// the given element via OS keyboard input. When <paramref name="elementHandle"/>
+    /// is null, the keys go to whatever currently has keyboard focus.
+    /// </summary>
+    Task<SendKeysResult> SendKeysAsync(string? elementHandle, string keys);
 }

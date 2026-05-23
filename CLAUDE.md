@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (18 tools)
+    ├─ WpfTools (20 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -49,16 +49,16 @@ Target WPF Application (.NET Framework)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`**, which invokes a control and changes application state.
+**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`, `wpf_set_text`, and `wpf_send_keys`**, which drive controls and change application state.
 
 ## Key Source Locations
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 18 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (18 commands) |
-| Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks elements via UI Automation or a physical OS mouse click |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 20 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (20 commands) |
+| Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks, text input, and keyboard shortcuts (UI Automation + SendInput physical fallback) |
 | IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
 | Process Manager | `src/WpfVisualTreeMcp.Server/Services/ProcessManager.cs` | WPF process discovery and attachment |
 | Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected DLL main entry point |
@@ -150,7 +150,7 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
 The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
 with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
 it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
-`CliRunner.IsCliCommand`). This gives the same 18 capabilities without an MCP
+`CliRunner.IsCliCommand`). This gives the same 20 capabilities without an MCP
 connection — useful when the MCP server is not connected, for scripting, or for
 verifying the pipeline manually.
 
@@ -167,8 +167,13 @@ shell call. No MCP handshake required; `--help` is self-documenting.
 - **Targeting:** every command except `list` takes `--pid <id>` or `--process <name>`.
 - **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
   **export** writes to `--out` if given, otherwise prints content inline.
-- **click** is the only state-changing command: UI Automation invoke by default,
-  `--physical` for a real OS mouse click. See `ControlInteractor`.
+- **click / set-text / send-keys** are the three state-changing commands.
+  - `click` — UI Automation invoke by default; `--physical` for OS mouse click.
+  - `set-text` — `IValueProvider.SetValue` by default, with TextBox/PasswordBox
+    direct-property and reflected fallbacks; `--physical` types via keyboard.
+  - `send-keys` — OS-level keyboard input; modifiers `Ctrl/Shift/Alt/Win` plus
+    letters, digits, F1-F12, and named keys.
+  - All three live in `ControlInteractor`.
 
 ### Typical CLI workflow
 ```bash

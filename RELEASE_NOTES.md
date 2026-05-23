@@ -1,5 +1,55 @@
 # Release Notes
 
+## v0.5.0 — Text input and keyboard shortcuts (2026-05-23)
+
+This release extends v0.4.0's interaction surface with two more state-changing commands so an AI agent can fully drive a WPF app: **type text** into inputs and **send keyboard shortcuts**.
+
+### `wpf_set_text` / `set-text` — fill TextBox / ComboBox / RichTextBox / PasswordBox
+
+- **Default — UI Automation.** `IValueProvider.SetValue(text)`. Clean, no focus needed, raises proper events. Read-only fields are refused with a clear error.
+- **Fallbacks when no value pattern is exposed:** `TextBox.Text` → `PasswordBox.Password` → reflected string `Text` property (covers many third-party controls without an automation peer).
+- **`physical=true` / `--physical`.** Focuses the element, clears with `Ctrl+A` + `Delete`, then types each character via `SendInput` with `KEYEVENTF_UNICODE` — full Unicode BMP support, not just ASCII.
+
+```text
+wpfinspect set-text --pid 1234 --handle elem_0052 --text "hello world"
+wpfinspect set-text --pid 1234 --handle elem_0052 --text "12345" --physical
+```
+
+### `wpf_send_keys` / `send-keys` — keyboard shortcuts
+
+Send a key combination via OS keyboard input. The keys go to the focused element first and bubble up to window-level `InputBindings`, so window-scoped commands (like Save) work even when you target a child element.
+
+- **Modifiers:** `Ctrl`, `Shift`, `Alt`, `Win`.
+- **Keys:** `A`-`Z`, `0`-`9`, `F1`-`F12`, `Enter`, `Esc`, `Tab`, `Space`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, `Up`, `Down`, `Left`, `Right`.
+- **`element_handle` is optional** — when omitted, keys go to whatever currently has keyboard focus.
+
+```text
+wpfinspect send-keys --pid 1234 --keys "Ctrl+S"
+wpfinspect send-keys --pid 1234 --keys "Alt+F4"
+wpfinspect send-keys --pid 1234 --keys "Enter" --handle elem_0052
+wpfinspect send-keys --pid 1234 --keys "F5"
+```
+
+### Implementation notes
+
+- `ControlInteractor.ClickOutcome` renamed to `InteractionOutcome` (now shared by `Click`, `SetText`, and `SendKeys`). Internal type, no public API impact.
+- Native interop adds `SendInput` with proper `INPUT`/`KEYBDINPUT`/`InputUnion` structs alongside the existing `mouse_event`. Unicode typing uses `KEYEVENTF_UNICODE` so the full BMP is sent through `SendInput`, while modifier/function keys use `keybd_event` for simplicity.
+- `IValueProvider.SetValue` uses `UIAutomationProvider` + `UIAutomationTypes`, already referenced as of v0.4.0.
+
+### Testing
+
+All 48 existing unit tests pass. CLI smoke tests cover help surfacing, the error paths (missing args, unknown modifier/key in the parser), and the new dispatch.
+
+### Tool count
+
+`WpfTools` now exposes **20 tools**: 17 read-only inspection + 3 state-changing (`click`, `set-text`, `send-keys`).
+
+### Asset
+
+`WpfVisualTreeMcp-v0.5.0-win-x64.zip` — framework-dependent publish of the Server/CLI (.NET 8 Desktop Runtime required on the target machine), including the x64 and x86 native bootstrappers under `native/`.
+
+---
+
 ## v0.4.0 — CLI mode and click interaction (2026-05-23)
 
 This release adds two substantial capabilities without changing how the MCP

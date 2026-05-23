@@ -21,8 +21,8 @@ public static class CliRunner
     {
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
-        "styles", "watch-property", "highlight", "click", "layout", "export",
-        "screenshot",
+        "styles", "watch-property", "highlight", "click", "set-text", "send-keys",
+        "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -226,6 +226,39 @@ public static class CliRunner
                     break;
                 }
 
+                case "set-text":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.SetTextAsync(
+                        cli.GetRequired("handle"),
+                        cli.GetRequired("text"),
+                        cli.Flags.Contains("physical"));
+                    WriteJson(new
+                    {
+                        success = true,
+                        method = result.Method,
+                        elementType = result.ElementType,
+                        detail = result.Detail,
+                    }, cli);
+                    break;
+                }
+
+                case "send-keys":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.SendKeysAsync(
+                        cli.GetStringOrNull("handle"),
+                        cli.GetRequired("keys"));
+                    WriteJson(new
+                    {
+                        success = true,
+                        method = result.Method,
+                        elementType = result.ElementType,
+                        detail = result.Detail,
+                    }, cli);
+                    break;
+                }
+
                 case "layout":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -377,6 +410,8 @@ COMMANDS
   watch-property        --pid --handle H --property P
   highlight     --pid --handle H [--duration MS]
   click         --pid --handle H [--physical]      (changes app state)
+  set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
+  send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N]
@@ -426,6 +461,20 @@ TYPICAL WORKFLOW
                      + "  menu items, tabs, list items, expanders) — no cursor movement.\n"
                      + "  --physical: real OS mouse click at the element (moves the cursor and\n"
                      + "  brings the window forward). This command CHANGES application state.",
+            "set-text" => "set-text --pid <id> --handle <handle> --text <value> [--physical]\n"
+                        + "  Replace the text/value of an element (TextBox, ComboBox, ...).\n"
+                        + "  Default: UI Automation IValueProvider.SetValue, with a\n"
+                        + "  TextBox.Text / PasswordBox.Password / reflected-Text fallback.\n"
+                        + "  --physical: focus the element and type via OS keyboard input\n"
+                        + "  (clears existing text with Ctrl+A/Delete first, then types each\n"
+                        + "  character). This command CHANGES application state.",
+            "send-keys" => "send-keys --pid <id> --keys <combo> [--handle <handle>]\n"
+                         + "  Send a keyboard shortcut to an element, or to whatever has focus\n"
+                         + "  when --handle is omitted. Modifiers: Ctrl, Shift, Alt, Win.\n"
+                         + "  Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace,\n"
+                         + "        Delete, Insert, Home, End, PageUp, PageDown, Up/Down/Left/Right.\n"
+                         + "  Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'F5', 'Alt+F4', 'Win+R'.\n"
+                         + "  This command CHANGES application state.",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "export" => "export --pid <id> [--handle <handle>] [--format json|xaml] [--out <file>]\n"
                       + "  Export the tree. Writes to --out if given, otherwise prints content inline.",

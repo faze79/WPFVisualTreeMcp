@@ -374,6 +374,59 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<SetTextResult> SetTextAsync(string elementHandle, string text, bool physical)
+    {
+        var session = EnsureConnected();
+
+        var request = new SetTextRequest
+        {
+            ElementHandle = elementHandle,
+            Text = text ?? string.Empty,
+            Physical = physical
+        };
+
+        var response = await SendRequestAsync<SetTextRequest, SetTextResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to set element text");
+        }
+
+        return new SetTextResult
+        {
+            Method = response.Method ?? "Unknown",
+            ElementType = response.ElementType,
+            Detail = response.Detail
+        };
+    }
+
+    public async Task<SendKeysResult> SendKeysAsync(string? elementHandle, string keys)
+    {
+        var session = EnsureConnected();
+
+        var request = new SendKeysRequest
+        {
+            ElementHandle = elementHandle,
+            Keys = keys
+        };
+
+        var response = await SendRequestAsync<SendKeysRequest, SendKeysResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to send keys");
+        }
+
+        return new SendKeysResult
+        {
+            Method = response.Method ?? "Unknown",
+            ElementType = response.ElementType,
+            Detail = response.Detail
+        };
+    }
+
     private async Task<TResponse> SendRequestAsync<TRequest, TResponse>(int processId, TRequest request)
         where TRequest : IpcRequest
         where TResponse : IpcResponse, new()

@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-23
+
+### Added
+
+- **`wpf_set_text` MCP tool and `set-text` CLI command.** Replace the
+  text/value of an element (TextBox, ComboBox, RichTextBox, PasswordBox, ...).
+  - Default: UI Automation `IValueProvider.SetValue(text)` — clean, no focus
+    needed, raises proper events, refuses read-only fields with a clear error.
+  - Fallbacks when no value pattern is exposed: `TextBox.Text`,
+    `PasswordBox.Password`, then a reflected string `Text` property (covers
+    many third-party controls without an automation peer).
+  - `physical=true` / `--physical` — focuses the element, clears existing
+    text with `Ctrl+A` + `Delete`, then types each character via `SendInput`
+    with `KEYEVENTF_UNICODE` (full Unicode BMP, not just ASCII).
+
+- **`wpf_send_keys` MCP tool and `send-keys` CLI command.** Send a keyboard
+  shortcut / key combination to an element (or to whatever currently has
+  focus, when no handle is given).
+  - Modifiers: `Ctrl`, `Shift`, `Alt`, `Win`.
+  - Keys: `A`-`Z`, `0`-`9`, `F1`-`F12`, `Enter`, `Esc`, `Tab`, `Space`,
+    `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`,
+    `Up`, `Down`, `Left`, `Right`.
+  - Examples: `Ctrl+S`, `Ctrl+Shift+F`, `Alt+F4`, `F5`, `Enter`, `Win+R`.
+
+- `KeyComboParser` and `SendInput` + `KEYBDINPUT` interop in
+  [`ControlInteractor`](src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs);
+  `SetTextResult` and `SendKeysResult` shared models.
+
+### Changed
+
+- `WpfTools` now exposes **20 tools** (up from 18) — 17 read-only inspection
+  + 3 state-changing (`click`, `set-text`, `send-keys`).
+- `ControlInteractor.ClickOutcome` renamed to `InteractionOutcome` (it now
+  serves click, set-text, and send-keys). Internal type — no public API
+  impact.
+- `CLAUDE.md`, the architecture diagram, and the `Key Source Locations`
+  table updated to reflect three state-changing commands.
+
+### Testing
+
+All 48 existing unit tests pass against this change.
+
 ## [0.4.0] - 2026-05-23
 
 ### Added
