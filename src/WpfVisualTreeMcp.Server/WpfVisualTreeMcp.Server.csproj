@@ -10,7 +10,7 @@
 
     <!-- Package metadata -->
     <PackageId>WpfVisualTreeMcp</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>faze79</Authors>
     <Description>MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time</Description>
     <PackageTags>mcp;wpf;visual-tree;debugging;dotnet;ai-agents</PackageTags>
@@ -33,6 +33,17 @@
   <ItemGroup>
     <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
     <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
+    <!--
+      Build the x86 injector helper alongside Server so cross-arch injection works.
+      We don't link against its output (it's a separate exe, not an assembly we
+      consume); we just want MSBuild to build it before our own publish so its
+      bin files are present for the <None Include> globs below.
+    -->
+    <ProjectReference Include="..\WpfVisualTreeMcp.InjectorHelper\WpfVisualTreeMcp.InjectorHelper.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      UndefineProperties="Platform;RuntimeIdentifier"
+                      SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <!-- Include pre-built native bootstrapper DLLs and co-located Inspector for injection -->
@@ -74,6 +85,41 @@
     <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll"
           Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net48\WpfVisualTreeMcp.Shared.dll')"
           Link="native\x86\WpfVisualTreeMcp.Shared.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- x86 InjectorHelper.exe — invoked by ProcessInjector when a 64-bit server -->
+  <!-- needs to inject into a 32-bit WPF target. Framework-dependent .NET 8.   -->
+  <ItemGroup>
+    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe"
+          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe')"
+          Link="native\x86\WpfInjectorHelper.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.dll')"
+          Link="native\x86\WpfInjectorHelper.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.runtimeconfig.json"
+          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.runtimeconfig.json')"
+          Link="native\x86\WpfInjectorHelper.runtimeconfig.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.deps.json"
+          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.deps.json')"
+          Link="native\x86\WpfInjectorHelper.deps.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll"
+          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll')"
+          Link="native\x86\WpfVisualTreeMcp.Injector.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>

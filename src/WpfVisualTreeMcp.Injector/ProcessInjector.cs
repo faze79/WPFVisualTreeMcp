@@ -68,7 +68,133 @@ public class ProcessInjector
                 bootstrapperPath);
         }
 
+        // Same-bitness injection happens in-process. Cross-bitness injection (e.g.
+        // a 64-bit server reaching a 32-bit WPF app) cannot work in-process because
+        // the remote LoadLibraryW thread would start at the injector's own kernel32
+        // address, which is invalid in the target's address space. Spawn the
+        // matching-bitness helper instead so it can do the LoadLibrary call from a
+        // process that shares the target's bitness.
+        bool injectorIs64Bit = Environment.Is64BitProcess;
+        if (targetIs64Bit != injectorIs64Bit)
+        {
+            return InjectViaHelper(processId, bootstrapperPath, targetIs64Bit);
+        }
+
         return InjectDll(process, bootstrapperPath);
+    }
+
+    /// <summary>
+    /// Low-level injection entry point: performs CreateRemoteThread + LoadLibraryW
+    /// on the given native DLL in the given process, with no architecture detection
+    /// or bootstrapper resolution. The caller is responsible for ensuring that the
+    /// current process and target process share the same bitness — this is invoked
+    /// from inside <see cref="InjectIntoProcess"/> directly (same-bitness path) and
+    /// from the cross-bitness helper exe.
+    /// </summary>
+    public bool InjectBootstrapper(int processId, string bootstrapperDllPath)
+    {
+        if (!File.Exists(bootstrapperDllPath))
+        {
+            throw new FileNotFoundException("Bootstrapper DLL not found", bootstrapperDllPath);
+        }
+
+        Process process;
+        try
+        {
+            process = Process.GetProcessById(processId);
+            if (process.HasExited)
+                throw new InvalidOperationException("Target process has exited");
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidOperationException($"Process with ID {processId} not found");
+        }
+
+        return InjectDll(process, bootstrapperDllPath);
+    }
+
+    /// <summary>
+    /// Spawns the architecture-matching helper exe to perform the LoadLibrary
+    /// injection in the correct bitness. Returns true if the helper reports
+    /// success (exit code 0).
+    /// </summary>
+    private bool InjectViaHelper(int processId, string bootstrapperDllPath, bool targetIs64Bit)
+    {
+        var helperPath = GetHelperExePath(targetIs64Bit);
+        if (!File.Exists(helperPath))
+        {
+            throw new FileNotFoundException(
+                $"Architecture-mismatch injector helper not found ({(targetIs64Bit ? "x64" : "x86")}). " +
+                "Build / publish the WpfVisualTreeMcp.InjectorHelper project so " +
+                $"'{Path.GetFileName(helperPath)}' lands next to the server.",
+                helperPath);
+        }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = helperPath,
+            // Quote the DLL path in case it contains spaces; both --pid and the
+            // helper's own filename are guaranteed not to.
+            Arguments = $"--pid {processId} --dll \"{bootstrapperDllPath}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using var helperProc = Process.Start(psi);
+        if (helperProc == null)
+            return false;
+
+        if (!helperProc.WaitForExit(15000))
+        {
+            try { helperProc.Kill(); } catch { /* best effort */ }
+            throw new TimeoutException(
+                $"Architecture-mismatch helper timed out injecting into process {processId}.");
+        }
+
+        // Drain output streams to avoid the helper hanging on a full pipe.
+        var stdout = helperProc.StandardOutput.ReadToEnd();
+        var stderr = helperProc.StandardError.ReadToEnd();
+        // (Streams are surfaced via the helper's exit code; we deliberately don't
+        // throw on non-empty stderr because warnings are informational.)
+        _ = stdout;
+        _ = stderr;
+
+        return helperProc.ExitCode == 0;
+    }
+
+    /// <summary>
+    /// Resolves the path to the bitness-matching injector helper exe (looks under
+    /// <c>native/{arch}/WpfInjectorHelper.exe</c> next to this assembly, falling
+    /// back to the dev build output).
+    /// </summary>
+    private string GetHelperExePath(bool targetIs64Bit)
+    {
+        var assemblyLocation = typeof(ProcessInjector).Assembly.Location;
+        var directory = Path.GetDirectoryName(assemblyLocation)!;
+        var arch = targetIs64Bit ? "x64" : "x86";
+
+        // 1. native/{arch}/ subdirectory (publish layout — what we ship)
+        var nativePath = Path.Combine(directory, "native", arch, "WpfInjectorHelper.exe");
+        if (File.Exists(nativePath))
+            return nativePath;
+
+        // 2. Build output relative to source (dev environment). The InjectorHelper
+        // is published per-RID, so its bin layout is bin/<Configuration>/net8.0/win-<arch>/.
+        foreach (var config in new[] { "Release", "Debug" })
+        {
+            var devPath = Path.GetFullPath(Path.Combine(
+                directory, "..", "..", "..", "..",
+                "src", "WpfVisualTreeMcp.InjectorHelper",
+                "bin", config, "net8.0", $"win-{arch}",
+                "WpfInjectorHelper.exe"));
+            if (File.Exists(devPath))
+                return devPath;
+        }
+
+        // Return the expected publish path for the error message.
+        return nativePath;
     }
 
     /// <summary>

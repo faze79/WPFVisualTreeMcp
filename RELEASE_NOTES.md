@@ -1,5 +1,47 @@
 # Release Notes
 
+## v0.6.0 — Cross-architecture auto-injection (2026-05-24)
+
+This release removes the **v0.5.0 known limitation**: a 64-bit server can now auto-inject into 32-bit WPF targets (and the converse, with the symmetric helper). The mechanism is a new tiny architecture-matching helper exe that performs the `CreateRemoteThread` + `LoadLibraryW` step in matching bitness, spawned on demand by the server.
+
+### What's new
+
+#### `WpfInjectorHelper.exe` — architecture-matching injection helper
+
+A 64-bit process cannot do the standard remote-LoadLibrary injection into a 32-bit target — `GetProcAddress(kernel32, "LoadLibraryW")` resolves to the **64-bit** kernel32 base, which is invalid in the target's 32-bit address space, so the remote thread runs at a bogus address and returns 0 (no bootstrapper log, silent "Injection failed"). This was documented as a known limitation in v0.5.0.
+
+The fix:
+
+- New project [`WpfVisualTreeMcp.InjectorHelper`](src/WpfVisualTreeMcp.InjectorHelper/) — a small **32-bit .NET 8 console app** that takes `--pid <id> --dll <path>` and calls `ProcessInjector.InjectBootstrapper`. Framework-dependent (~150 KB unpacked), uses the 32-bit .NET 8 runtime on the target machine.
+- `ProcessInjector.InjectIntoProcess` now compares `Environment.Is64BitProcess` against the target's bitness. **Same bitness:** in-process injection, as before. **Different bitness:** spawns the matching helper exe, waits for it (15 s timeout), reports success via the helper's exit code.
+- `WpfVisualTreeMcp.Injector` is now multi-targeted (`net48;net8.0`) so the helper can reference it cleanly.
+- The Server publish layout grows by five files under `native/x86/`: the helper exe + its `.dll` + two `.json` config files + a copy of `WpfVisualTreeMcp.Injector.dll`. Release zip is ~140 KB larger as a result.
+
+### What this enables
+
+- **Inject into 32-bit WPF apps from the default 64-bit server.** No more "Injection failed" with no explanation against `<PlatformTarget>x86</PlatformTarget>` apps like OCONWPF, MFC port targets, or apps that need 32-bit OLE/Jet/ODBC drivers.
+- All 20 MCP tools / CLI commands work against both architectures from a single deployment.
+
+### Caveats
+
+- The x86 helper requires the **32-bit .NET 8 Desktop Runtime** on the machine. If you already run any 32-bit .NET 8 WPF app, it's already installed. Otherwise grab it from <https://dotnet.microsoft.com/download/dotnet/8.0>.
+- The **reverse direction** (an x86 server reaching x64 targets) needs a symmetric x64 helper. Not shipped yet because the default Server publish is `AnyCPU`/x64. When encountered, `ProcessInjector` raises a clear error pointing at the missing helper.
+- The helper inherits one current `ProcessInjector` limitation: the LoadLibrary success check via `GetExitCodeThread` returns a 32-bit value, which truncates the HMODULE on x64. In practice this only mis-reports when the module's low 32 bits are exactly zero (vanishingly unlikely). A more rigorous check could verify by re-enumerating the target's loaded modules.
+
+### Tool count
+
+Unchanged at 20. This release adds capability rather than commands.
+
+### Testing
+
+All 48 existing unit tests continue to pass. Solution builds clean across `net48`, `net8.0`, and `net8.0-windows` target frameworks. The publish output now includes 5 new files under `native/x86/`; the existing files in `native/x64/`, `native/x86/`, and `native/x64/coreclr/`, `native/x86/coreclr/` are unchanged.
+
+### Asset
+
+`WpfVisualTreeMcp-v0.6.0-win-x64.zip` — framework-dependent publish of the Server/CLI (.NET 8 Desktop Runtime required), now including the x86 InjectorHelper alongside the bootstrappers under `native/`.
+
+---
+
 ## v0.5.0 — Text input and keyboard shortcuts (2026-05-23)
 
 This release extends v0.4.0's interaction surface with two more state-changing commands so an AI agent can fully drive a WPF app: **type text** into inputs and **send keyboard shortcuts**.

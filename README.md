@@ -52,7 +52,7 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 - **Send Keys** *(new in v0.5.0)* - Send keyboard shortcuts (`Ctrl+S`, `Alt+F4`, `F5`, `Enter`, `Ctrl+Shift+F`, ...) to an element or the focused window via OS keyboard input
 - **Layout Information** - Get detailed layout metrics
 - **Tree Export** - Export visual tree to XAML or JSON format
-- **Auto-Injection** - Inject Inspector into running WPF processes (no source changes needed)
+- **Auto-Injection** - Inject Inspector into running WPF processes (no source changes needed); **multi-architecture** since v0.6.0 — a 64-bit server can inject into 32-bit WPF apps via a bundled `WpfInjectorHelper.exe`
 
 ### Dual-Mode CLI *(new in v0.4.0)*
 The same `WpfVisualTreeMcp.Server.exe` runs as either an MCP stdio server
@@ -325,9 +325,13 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Physical keyboard typing with Unicode BMP support *(v0.5.0)*
 - [x] Keyboard shortcuts (`Ctrl+S`, `Alt+F4`, `F5`, ...) via OS input *(v0.5.0)*
 
+### Phase 5: Multi-architecture ✅ *(v0.6.0)*
+- [x] Cross-bitness auto-injection (64-bit server → 32-bit target)
+- [x] Architecture-matching `WpfInjectorHelper.exe` (32-bit .NET 8)
+- [x] Removes v0.5.0 known limitation; both x86 and x64 WPF apps drivable
+
 ### Future Considerations
-- [ ] Cross-architecture injection (x86 server build for 32-bit targets)
-- [ ] Arch-mismatch guard in `ProcessInjector` (fail loudly instead of silently)
+- [ ] Symmetric x64 helper for x86-server-to-x64-target injection
 - [ ] Visual tree diff/comparison
 - [ ] Performance diagnostics
 - [ ] Visual tree modification capabilities
@@ -373,7 +377,8 @@ WpfVisualTreeMcp/
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
-│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread)
+│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; net48 + net8.0)
+│   ├── WpfVisualTreeMcp.InjectorHelper/# x86 .NET 8 helper exe for cross-arch injection (v0.6.0)
 │   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting
 │   └── WpfVisualTreeMcp.Shared/        # Shared models & IPC contracts
 ├── samples/

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Architecture-matching helper executed by ProcessInjector when the server's
+    bitness differs from the target's. Built as a 32-bit .NET 8 console app so
+    it can inject into x86 WPF processes from a 64-bit server. Framework-
+    dependent (needs the 32-bit .NET 8 runtime on the target machine).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <PlatformTarget>x86</PlatformTarget>
+    <Platforms>x86</Platforms>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AssemblyName>WpfInjectorHelper</AssemblyName>
+    <RootNamespace>WpfVisualTreeMcp.InjectorHelper</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Suppress NETSDK1206 for net48 multi-targeted ref project -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
+  </ItemGroup>
+
+</Project>

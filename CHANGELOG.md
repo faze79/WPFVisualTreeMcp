@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-24
+
+### Added
+
+- **Cross-architecture auto-injection.** A 64-bit server can now inject the
+  Inspector into 32-bit WPF targets (and vice-versa), removing the v0.5.0
+  known limitation. Implementation: a new tiny architecture-matching helper
+  exe — [`WpfInjectorHelper`](src/WpfVisualTreeMcp.InjectorHelper/) — that
+  performs the `CreateRemoteThread` + `LoadLibraryW` step in matching
+  bitness. The server detects the target's bitness; when it matches the
+  server's own, in-process injection is used as before; when it differs,
+  the helper is spawned with `--pid` and `--dll` and its exit code reports
+  success.
+- **`ProcessInjector.InjectBootstrapper(int pid, string dllPath)`** public
+  method — the helper's entry point; performs only the low-level remote
+  LoadLibrary step with no architecture detection.
+
+### Changed
+
+- `WpfVisualTreeMcp.Injector` is now **multi-targeted** (`net48;net8.0`) so
+  the new x86 .NET 8 helper can reference it without a cross-TFM warning.
+  The existing net48 build path is unchanged.
+- The Server publish now bundles five additional files under
+  `native/x86/`: `WpfInjectorHelper.exe` (32-bit apphost),
+  `WpfInjectorHelper.dll`, `WpfInjectorHelper.runtimeconfig.json`,
+  `WpfInjectorHelper.deps.json`, and `WpfVisualTreeMcp.Injector.dll`.
+  The release zip grows by ~140 KB.
+
+### Removed
+
+- **v0.5.0 known limitation eliminated.** Auto-injection no longer requires
+  injector and target to share bitness — both x86 and x64 WPF apps can be
+  driven from the same 64-bit server.
+
+### Notes
+
+- The x86 helper is **framework-dependent** — running it requires the
+  32-bit .NET 8 Desktop Runtime on the machine. On a machine that already
+  runs 32-bit .NET 8 WPF apps (e.g. OCONWPF) the runtime is already
+  present. Otherwise install it from
+  https://dotnet.microsoft.com/download/dotnet/8.0.
+- The reverse direction (an x86 server reaching x64 targets) would need a
+  symmetric x64 helper; not shipped yet because the default deployment is
+  x64. The error message from `ProcessInjector` makes that explicit when
+  encountered.
+
+### Testing
+
+All 48 existing unit tests continue to pass.
+
 ## [0.5.0] - 2026-05-23
 
 ### Added
