@@ -85,42 +85,56 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Search for elements by type or name. Returns up to max_results (default: 50). Supports partial type matching (e.g. 'Button' matches 'System.Windows.Controls.Button'). Use root_handle to search from a specific element.")]
+    [Description("Query elements across all open windows. Filters combine with AND: type_name (partial match, e.g. 'Button' matches 'System.Windows.Controls.Button'), element_name (x:Name substring), text (visible text content — matches a Button's caption, TextBlock text, Window title, AutomationProperties.Name, ToolTip; case-insensitive substring), property_filter (object of property name → expected value substring, e.g. {\"IsEnabled\": \"True\"}), visible_only (exclude collapsed/hidden elements — recommended when looking for something the user can see). PREFER text over dumping the tree: e.g. text='Save' + type_name='Button' finds the Save button directly. Results include text, automationId, isVisible, isEnabled and screenBounds (device pixels) so you can pick the right element without extra calls. Returns up to max_results (default 50).")]
     public async Task<object> WpfFindElements(
         string? root_handle = null,
         string? type_name = null,
         string? element_name = null,
+        string? text = null,
         JsonElement? property_filter = null,
+        bool visible_only = false,
         int max_results = 50)
     {
-        Dictionary<string, string>? filterDict = null;
-        if (property_filter.HasValue && property_filter.Value.ValueKind == JsonValueKind.Object)
-        {
-            filterDict = new Dictionary<string, string>();
-            foreach (var prop in property_filter.Value.EnumerateObject())
-            {
-                filterDict[prop.Name] = prop.Value.ToString();
-            }
-        }
-
-        var result = await _ipcBridge.FindElementsAsync(root_handle, type_name, element_name, filterDict, max_results);
+        var result = await _ipcBridge.FindElementsAsync(
+            root_handle, type_name, element_name, text,
+            ToFilterDictionary(property_filter), visible_only, max_results);
         return result;
     }
 
     [McpServerTool]
-    [Description("Deep search for ALL elements matching criteria. Requires at least type_name or element_name to avoid returning the entire tree. Use root_handle to limit scope. Supports partial type matching (e.g. 'PdfViewer' matches 'Syncfusion.Windows.PdfViewer.PdfViewerControl').")]
+    [Description("Deep search for ALL elements matching criteria (no result limit). Requires at least type_name, element_name or text to avoid returning the entire tree. Same filters as wpf_find_elements: type_name (partial match), element_name (x:Name substring), text (visible text content), property_filter, visible_only. Use root_handle to limit scope.")]
     public async Task<object> WpfFindElementsDeep(
         string? root_handle = null,
         string? type_name = null,
-        string? element_name = null)
+        string? element_name = null,
+        string? text = null,
+        JsonElement? property_filter = null,
+        bool visible_only = false)
     {
-        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name))
+        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
         {
-            throw new ArgumentException("At least type_name or element_name is required. Use wpf_get_visual_tree to browse the full tree instead.");
+            throw new ArgumentException("At least type_name, element_name or text is required. Use wpf_get_visual_tree to browse the full tree instead.");
         }
 
-        var result = await _ipcBridge.FindElementsDeepAsync(root_handle, type_name, element_name);
+        var result = await _ipcBridge.FindElementsDeepAsync(
+            root_handle, type_name, element_name, text,
+            ToFilterDictionary(property_filter), visible_only);
         return result;
+    }
+
+    private static Dictionary<string, string>? ToFilterDictionary(JsonElement? propertyFilter)
+    {
+        if (!propertyFilter.HasValue || propertyFilter.Value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var filterDict = new Dictionary<string, string>();
+        foreach (var prop in propertyFilter.Value.EnumerateObject())
+        {
+            filterDict[prop.Name] = prop.Value.ToString();
+        }
+        return filterDict;
     }
 
     [McpServerTool]
@@ -248,15 +262,38 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward). STATE-CHANGING.")]
-    public async Task<object> WpfClickElement(string element_handle, bool physical = false)
+    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward; auto-scrolls the element into view first). click_type: 'single' (default), 'double' (open items), 'right' (context menus) — double and right are always physical. After opening a context menu or dropdown, use wpf_capture_screenshot with mode='screen' to see it. STATE-CHANGING.")]
+    public async Task<object> WpfClickElement(string element_handle, bool physical = false, string? click_type = null)
     {
         if (string.IsNullOrEmpty(element_handle))
         {
             throw new ArgumentException("element_handle is required");
         }
 
-        var result = await _ipcBridge.ClickElementAsync(element_handle, physical);
+        var result = await _ipcBridge.ClickElementAsync(element_handle, physical, click_type);
+        return new
+        {
+            success = true,
+            method = result.Method,
+            element_type = result.ElementType,
+            detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
+    [Description("Select an item in a ComboBox, ListBox, ListView or TabControl by visible text (item_text, case-insensitive substring) or zero-based index. PREFER this over clicking for dropdowns/lists: it works even when items are virtualized (not yet in the visual tree) and raises proper selection events. On failure the error lists the available items. STATE-CHANGING.")]
+    public async Task<object> WpfSelectItem(string element_handle, string? item_text = null, int? index = null)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+        if (string.IsNullOrEmpty(item_text) && index == null)
+        {
+            throw new ArgumentException("Provide item_text or index to choose the item to select");
+        }
+
+        var result = await _ipcBridge.SelectItemAsync(element_handle, item_text, index);
         return new
         {
             success = true,
@@ -305,18 +342,23 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window.")]
+    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window. mode='render' (default) re-renders the visual off-screen — works even if the window is covered, but CANNOT see open Popups, ComboBox dropdowns, context menus or tooltips. mode='screen' captures the actual on-screen pixels (GDI) and DOES include them — use it right after clicking something that opened a popup/menu; requires the window to be visible and unobstructed.")]
     public async Task<CallToolResult> WpfCaptureScreenshot(
         string? element_handle = null,
         int max_width = 1920,
-        int max_height = 1080)
+        int max_height = 1080,
+        string mode = "render")
     {
         if (max_width < 1) max_width = 1;
         if (max_width > 3840) max_width = 3840;
         if (max_height < 1) max_height = 1;
         if (max_height > 2160) max_height = 2160;
+        if (mode != "render" && mode != "screen")
+        {
+            throw new ArgumentException("mode must be 'render' or 'screen'");
+        }
 
-        var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height);
+        var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height, mode);
 
         var content = new List<ContentBlock>
         {

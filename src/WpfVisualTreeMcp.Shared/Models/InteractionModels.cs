@@ -37,6 +37,21 @@ public class SetTextResult
 }
 
 /// <summary>
+/// Result of selecting an item in a Selector control (ComboBox, ListBox, TabControl, ...).
+/// </summary>
+public class SelectItemResult
+{
+    /// <summary>How the selection was carried out (currently "Selector.SelectedIndex").</summary>
+    public string Method { get; set; } = string.Empty;
+
+    /// <summary>The runtime type name of the Selector control.</summary>
+    public string? ElementType { get; set; }
+
+    /// <summary>Which item ended up selected (index and display text).</summary>
+    public string? Detail { get; set; }
+}
+
+/// <summary>
 /// Result of sending a keyboard shortcut / key combination.
 /// </summary>
 public class SendKeysResult

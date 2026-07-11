@@ -53,7 +53,15 @@ public class FindElementsRequest : IpcRequest
     public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
+
+    /// <summary>Case-insensitive substring match against the element's visible text content.</summary>
+    public string? Text { get; set; }
+
     public Dictionary<string, string>? PropertyFilter { get; set; }
+
+    /// <summary>When true, only elements currently visible on screen are returned.</summary>
+    public bool VisibleOnly { get; set; }
+
     public int MaxResults { get; set; } = 50;
 }
 
@@ -70,6 +78,14 @@ public class FindElementsDeepRequest : IpcRequest
     public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
+
+    /// <summary>Case-insensitive substring match against the element's visible text content.</summary>
+    public string? Text { get; set; }
+
+    public Dictionary<string, string>? PropertyFilter { get; set; }
+
+    /// <summary>When true, only elements currently visible on screen are returned.</summary>
+    public bool VisibleOnly { get; set; }
 }
 
 public class FindElementsDeepResponse : IpcResponse
@@ -205,6 +221,13 @@ public class CaptureScreenshotRequest : IpcRequest
     public string? ElementHandle { get; set; }
     public int MaxWidth { get; set; } = 1920;
     public int MaxHeight { get; set; } = 1080;
+
+    /// <summary>
+    /// "render" (default): off-screen RenderTargetBitmap of the visual — works even when
+    /// covered, but cannot see Popups/menus. "screen": GDI capture of the on-screen pixels —
+    /// includes open Popups, ComboBox dropdowns, context menus and tooltips.
+    /// </summary>
+    public string Mode { get; set; } = "render";
 }
 
 public class CaptureScreenshotResponse : IpcResponse
@@ -223,6 +246,9 @@ public class ClickElementRequest : IpcRequest
 
     /// <summary>When true, perform a real OS mouse click instead of a UI Automation invoke.</summary>
     public bool Physical { get; set; }
+
+    /// <summary>"single" (default), "double" or "right". Double and right clicks always use the physical path.</summary>
+    public string? ClickType { get; set; }
 }
 
 public class ClickElementResponse : IpcResponse
@@ -251,6 +277,28 @@ public class SetTextResponse : IpcResponse
     /// <summary>How the value was applied: ValueProvider.SetValue, DirectProperty.Text, DirectProperty.Password, Reflected.Text, Physical.</summary>
     public string? Method { get; set; }
     public string? ElementType { get; set; }
+    public string? Detail { get; set; }
+}
+
+// Select an item in a Selector control (ComboBox, ListBox, TabControl, ...)
+public class SelectItemRequest : IpcRequest
+{
+    public override string RequestType => "SelectItem";
+    public string ElementHandle { get; set; } = string.Empty;
+
+    /// <summary>Visible text of the item to select (case-insensitive substring). Alternative to Index.</summary>
+    public string? ItemText { get; set; }
+
+    /// <summary>Zero-based index of the item to select. Alternative to ItemText.</summary>
+    public int? Index { get; set; }
+}
+
+public class SelectItemResponse : IpcResponse
+{
+    public string? Method { get; set; }
+    public string? ElementType { get; set; }
+
+    /// <summary>Which item ended up selected (index and display text).</summary>
     public string? Detail { get; set; }
 }
 

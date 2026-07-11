@@ -205,7 +205,7 @@ public class WpfToolsTests
         };
 
         _ipcBridgeMock
-            .Setup(x => x.FindElementsAsync(null, "Button", null, null, 50))
+            .Setup(x => x.FindElementsAsync(null, "Button", null, null, null, false, 50))
             .ReturnsAsync(expectedResult);
 
         // Act
@@ -214,6 +214,62 @@ public class WpfToolsTests
         // Assert
         result.Should().NotBeNull();
         result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfFindElements_PassesTextAndVisibilityFilters()
+    {
+        // Arrange
+        var expectedResult = new FindElementsResult
+        {
+            Elements = new List<FoundElement>
+            {
+                new FoundElement
+                {
+                    Handle = "btn_1",
+                    TypeName = "Button",
+                    Text = "Save",
+                    IsVisible = true,
+                    IsEnabled = true,
+                    ScreenBounds = new ScreenBounds { X = 10, Y = 20, Width = 80, Height = 24 }
+                }
+            },
+            Count = 1
+        };
+
+        _ipcBridgeMock
+            .Setup(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfFindElements(type_name: "Button", text: "Save", visible_only: true);
+
+        // Assert
+        result.Should().BeEquivalentTo(expectedResult);
+        _ipcBridgeMock.Verify(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfFindElementsDeep_WithOnlyText_IsAccepted()
+    {
+        // Arrange
+        var expectedResult = new FindElementsResult { Count = 0 };
+        _ipcBridgeMock
+            .Setup(x => x.FindElementsDeepAsync(null, null, null, "Save", null, false))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfFindElementsDeep(text: "Save");
+
+        // Assert
+        result.Should().BeEquivalentTo(expectedResult);
+    }
+
+    [Fact]
+    public async Task WpfFindElementsDeep_WithoutAnyCriteria_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfFindElementsDeep());
     }
 
     [Fact]

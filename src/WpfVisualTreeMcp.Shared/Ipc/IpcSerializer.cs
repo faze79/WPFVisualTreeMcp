@@ -27,11 +27,14 @@ public static class IpcSerializer
 
     public static string SerializeRequest(IpcRequest request)
     {
-        // Wrap with type info for deserialization
+        // Wrap with type info for deserialization.
+        // data must be declared as object: System.Text.Json serializes by declared type,
+        // and typing it as IpcRequest would silently drop every derived-class property
+        // (TypeName, ElementHandle, MaxResults, ...).
         var wrapper = new
         {
             type = request.RequestType,
-            data = request
+            data = (object)request
         };
         return JsonSerializer.Serialize(wrapper, Options);
     }

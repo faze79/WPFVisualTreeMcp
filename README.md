@@ -273,9 +273,9 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_attach` | Attach to a WPF application (supports `auto_inject` for DLL injection) |
 | `wpf_get_visual_tree` | Get the visual tree hierarchy (default depth: 25, max: 100) |
 | `wpf_get_element_properties` | Get all dependency properties of an element |
-| `wpf_find_elements` | Search for elements by type or name (partial matching) |
-| `wpf_find_elements_deep` | Deep search across all windows including adorners/popups |
-| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image) |
+| `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
+| `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
+| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |
@@ -284,7 +284,8 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_styles` | Get applied styles and templates |
 | `wpf_watch_property` | Monitor a property for changes |
 | `wpf_highlight_element` | Visually highlight an element |
-| `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click. *State-changing.* |
+| `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
+| `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
 | `wpf_set_text` | **Set text/value** of a TextBox/ComboBox/PasswordBox — UI Automation `IValueProvider.SetValue` by default, `physical=true` to type via OS keyboard input. *State-changing.* |
 | `wpf_send_keys` | **Send a keyboard shortcut** (`Ctrl+S`, `Alt+F4`, `F5`, `Enter`, ...) to an element or the focused window. *State-changing.* |
 | `wpf_get_layout_info` | Get layout information |
@@ -396,7 +397,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 20 tools auto-discovered via `[McpServerTool]` attributes (17 read-only inspection + 3 state-changing: `wpf_click_element`, `wpf_set_text`, `wpf_send_keys`)
+- **Tools**: 21 tools auto-discovered via `[McpServerTool]` attributes (17 read-only inspection + 4 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

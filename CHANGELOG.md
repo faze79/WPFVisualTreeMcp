@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-12
+
+### Fixed
+
+- **CRITICAL: IPC requests silently dropped every parameter.**
+  `IpcSerializer.SerializeRequest` wrapped the payload in an anonymous object whose
+  `data` member was statically typed as `IpcRequest` — System.Text.Json serializes
+  by declared type, so every derived-class property (search filters, element
+  handles, text to type, key combos, ...) never reached the Inspector. In practice:
+  `find` always returned the first 50 elements unfiltered, and **all handle-based
+  operations** (`props`, `layout`, `click`, `set-text`, ...) failed with
+  "ElementHandle required". Only parameterless operations (window screenshot,
+  default-depth tree) appeared to work. Fixed by serializing the payload by its
+  runtime type (`data = (object)request`); guarded by round-trip regression tests
+  in `IpcSerializerTests`.
+
+### Added
+
+- **Element query engine** in `wpf_find_elements` / `wpf_find_elements_deep`
+  (CLI `find` / `find-deep`). New AND-combinable filters:
+  - `text` — visible text content: button captions (even nested in templates),
+    TextBlock/TextBox text, window title, `AutomationProperties.Name`, ToolTip;
+    case-insensitive substring.
+  - `property_filter` — property name → value substring (declared in the IPC
+    contract since v0.1 but never implemented; now wired end-to-end).
+  - `visible_only` — excludes collapsed/hidden elements, pruning invisible
+    subtrees during traversal.
+  - Results now include `text`, `automationId`, `isVisible`, `isEnabled` and
+    `screenBounds` (physical pixels, same space as the OS mouse), so an agent can
+    pick the right control without follow-up property dumps.
+- **`wpf_select_item` / `select-item`** (21st tool) — select an item in any
+  `Selector` control (ComboBox, ListBox, ListView, TabControl) by visible text or
+  zero-based index. Drives `Items`/`SelectedIndex`, so it works with virtualized
+  items that have no visual-tree container yet and raises proper selection events.
+  Understands containers, `DisplayMemberPath`, overridden `ToString()`, realized
+  `ItemTemplate` content, and common display properties; failed matches list the
+  available items in the error.
+- **`click_type` on `wpf_click_element` / `click`** — `double` and `right`
+  (physical) clicks in addition to `single`; right-click opens context menus.
+- **Screen-mode screenshots** — `wpf_capture_screenshot(mode='screen')` /
+  `screenshot --mode screen` captures the actual on-screen pixels via GDI BitBlt
+  (`CAPTUREBLT`), including open Popups, ComboBox dropdowns, context menus and
+  tooltips that `RenderTargetBitmap` cannot see. Default `render` mode unchanged.
+- **Scroll-into-view** before physical clicks and keyboard focus
+  (`BringIntoView` + layout pass) so off-viewport elements get correct
+  screen coordinates.
+- **Read-back verification in `wpf_set_text` / `set-text`** — the response reports
+  the element's value after the write (`value now: '...'`) and flags coercion or
+  validation mismatches. Passwords report length only.
+
+### Changed
+
+- **Element handle cache uses weak references** (`ConditionalWeakTable` + reverse
+  lookup) — the Inspector no longer keeps removed UI subtrees alive, and handle
+  resolution is O(1) instead of a linear scan.
+- **Stale-handle errors are consistent and actionable** across all 15 handle-based
+  operations: they name the handle, explain why it expired, and say how to recover
+  (re-run `wpf_find_elements`). "Not a UIElement" is now reported distinctly from
+  "handle not found".
+- `wpf_find_elements_deep` accepts `text` as its bounding criterion (previously
+  required `type_name` or `element_name`).
+
+### Testing
+
+57 unit tests pass (9 new: IPC envelope round-trip regressions, query
+pass-through, new-criteria validation).
+
 ## [0.6.0] - 2026-05-24
 
 ### Added

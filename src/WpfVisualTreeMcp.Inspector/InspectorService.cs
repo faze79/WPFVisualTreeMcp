@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -228,6 +229,7 @@ public class InspectorService : IDisposable
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "ClickElement" => HandleClickElement(data),
+            "SelectItem" => HandleSelectItem(data),
             "SetText" => HandleSetText(data),
             "SendKeys" => HandleSendKeys(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
@@ -249,8 +251,7 @@ public class InspectorService : IDisposable
                 return new GetVisualTreeResponse
                 {
                     Success = false,
-                    Error = $"Element handle '{request.RootHandle}' not found. The handle may have expired. " +
-                            "Use wpf_find_elements to get fresh handles, then use root_handle with the new handle."
+                    Error = StaleHandleError(request.RootHandle)
                 };
             }
             DebugLog($"HandleGetVisualTree: resolved handle '{request.RootHandle}' to {root.GetType().Name}");
@@ -286,7 +287,7 @@ public class InspectorService : IDisposable
         var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
-            return new GetElementPropertiesResponse { Success = false, Error = "Element not found" };
+            return new GetElementPropertiesResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
         }
 
         var propsJson = _propertyReader.GetProperties(element);
@@ -297,11 +298,35 @@ public class InspectorService : IDisposable
         };
     }
 
+    /// <summary>
+    /// Consistent error for expired/unknown element handles, with recovery guidance for the caller.
+    /// </summary>
+    private static string StaleHandleError(string handle) =>
+        $"Element handle '{handle}' not found. Handles expire when the target app restarts, " +
+        "the Inspector is re-injected, or the element is removed from the UI and garbage-collected. " +
+        "Re-run wpf_find_elements (CLI: find) to get fresh handles.";
+
+    private static string WrongElementTypeError(string handle, DependencyObject element, string requiredType) =>
+        $"Element '{handle}' is a {element.GetType().Name}, which is not a {requiredType}; " +
+        $"this operation requires a {requiredType}.";
+
+    private static FindCriteria BuildCriteria(string? typeName, string? elementName, string? text,
+        Dictionary<string, string>? propertyFilter, bool visibleOnly) => new()
+    {
+        TypeName = typeName,
+        ElementName = elementName,
+        Text = text,
+        PropertyFilter = propertyFilter,
+        VisibleOnly = visibleOnly
+    };
+
     private IpcResponse HandleFindElements(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
 
         var maxResults = request?.MaxResults ?? 50;
+        var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
+            request?.PropertyFilter, request?.VisibleOnly ?? false);
 
         // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
@@ -309,10 +334,10 @@ public class InspectorService : IDisposable
             var root = _treeWalker.ResolveHandle(request.RootHandle);
             if (root == null)
             {
-                return new FindElementsResponse { Success = false, Error = "Root element not found" };
+                return new FindElementsResponse { Success = false, Error = StaleHandleError(request.RootHandle) };
             }
 
-            var elementsJson = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults);
+            var elementsJson = _treeWalker.FindElements(root, criteria, maxResults);
             return new FindElementsResponse
             {
                 RequestId = request?.RequestId ?? "",
@@ -337,7 +362,7 @@ public class InspectorService : IDisposable
         foreach (var root in allRoots)
         {
             if (totalCount >= maxResults) break;
-            var json = _treeWalker.FindElements(root, request?.TypeName, request?.ElementName, maxResults - totalCount);
+            var json = _treeWalker.FindElements(root, criteria, maxResults - totalCount);
             var count = ParseJsonCount(json);
             if (count > 0)
             {
@@ -369,16 +394,19 @@ public class InspectorService : IDisposable
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
 
+        var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
+            request?.PropertyFilter, request?.VisibleOnly ?? false);
+
         // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
         {
             var root = _treeWalker.ResolveHandle(request.RootHandle);
             if (root == null)
             {
-                return new FindElementsDeepResponse { Success = false, Error = "Root element not found" };
+                return new FindElementsDeepResponse { Success = false, Error = StaleHandleError(request.RootHandle) };
             }
 
-            var elementsJson = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            var elementsJson = _treeWalker.FindElementsDeep(root, criteria);
             return new FindElementsDeepResponse
             {
                 RequestId = request?.RequestId ?? "",
@@ -401,7 +429,7 @@ public class InspectorService : IDisposable
 
         foreach (var root in allRoots)
         {
-            var json = _treeWalker.FindElementsDeep(root, request?.TypeName, request?.ElementName);
+            var json = _treeWalker.FindElementsDeep(root, criteria);
             var count = ParseJsonCount(json);
             if (count > 0)
             {
@@ -439,7 +467,7 @@ public class InspectorService : IDisposable
         var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
-            return new GetBindingsResponse { Success = false, Error = "Element not found" };
+            return new GetBindingsResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
         }
 
         var bindingsJson = _bindingAnalyzer.GetBindings(element);
@@ -487,10 +515,14 @@ public class InspectorService : IDisposable
             return new GetStylesResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle) as FrameworkElement;
-        if (element == null)
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle);
+        if (resolved == null)
         {
-            return new GetStylesResponse { Success = false, Error = "Element not found or not FrameworkElement" };
+            return new GetStylesResponse { Success = false, Error = StaleHandleError(request.ElementHandle) };
+        }
+        if (resolved is not FrameworkElement element)
+        {
+            return new GetStylesResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle, resolved, "FrameworkElement") };
         }
 
         var stylesJson = _resourceInspector.GetStyle(element);
@@ -509,10 +541,14 @@ public class InspectorService : IDisposable
             return new HighlightElementResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle) as UIElement;
-        if (element == null)
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle);
+        if (resolved == null)
         {
-            return new HighlightElementResponse { Success = false, Error = "Element not found or not UIElement" };
+            return new HighlightElementResponse { Success = false, Error = StaleHandleError(request.ElementHandle) };
+        }
+        if (resolved is not UIElement element)
+        {
+            return new HighlightElementResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle, resolved, "UIElement") };
         }
 
         _highlighter.Highlight(element, request.DurationMs);
@@ -530,7 +566,7 @@ public class InspectorService : IDisposable
         var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
-            return new GetLayoutInfoResponse { Success = false, Error = "Element not found" };
+            return new GetLayoutInfoResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
         }
 
         var layoutJson = _propertyReader.GetLayoutInfo(element);
@@ -556,7 +592,7 @@ public class InspectorService : IDisposable
         var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
-            return new WatchPropertyResponse { Success = false, Error = "Element not found" };
+            return new WatchPropertyResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
         }
 
         try
@@ -621,13 +657,22 @@ public class InspectorService : IDisposable
         UIElement? element = null;
         if (!string.IsNullOrEmpty(request?.ElementHandle))
         {
-            element = _treeWalker.ResolveHandle(request.ElementHandle) as UIElement;
+            var resolved = _treeWalker.ResolveHandle(request.ElementHandle);
+            if (resolved == null)
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = StaleHandleError(request.ElementHandle)
+                };
+            }
+            element = resolved as UIElement;
             if (element == null)
             {
                 return new CaptureScreenshotResponse
                 {
                     Success = false,
-                    Error = "Element not found or is not a UIElement"
+                    Error = WrongElementTypeError(request.ElementHandle, resolved, "UIElement")
                 };
             }
         }
@@ -646,11 +691,23 @@ public class InspectorService : IDisposable
 
         try
         {
+            var mode = request?.Mode?.ToLowerInvariant() ?? "render";
+            if (mode != "render" && mode != "screen")
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = $"Unknown screenshot mode '{request?.Mode}'. Expected 'render' or 'screen'."
+                };
+            }
+
             var screenshotCapture = new ScreenshotCapture();
-            var (base64, width, height) = screenshotCapture.CaptureElement(
-                element,
-                request?.MaxWidth ?? 1920,
-                request?.MaxHeight ?? 1080);
+            var maxWidth = request?.MaxWidth ?? 1920;
+            var maxHeight = request?.MaxHeight ?? 1080;
+
+            var (base64, width, height) = mode == "screen"
+                ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
+                : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
 
             return new CaptureScreenshotResponse
             {
@@ -683,7 +740,7 @@ public class InspectorService : IDisposable
         var element = _treeWalker.ResolveHandle(request.ElementHandle!);
         if (element == null)
         {
-            return new GetDataContextResponse { Success = false, Error = "Element not found" };
+            return new GetDataContextResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
         }
 
         var dcJson = _bindingAnalyzer.GetDataContext(element);
@@ -708,15 +765,19 @@ public class InspectorService : IDisposable
             return new ClickElementResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
-        if (element == null)
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (resolved == null)
         {
-            return new ClickElementResponse { Success = false, Error = "Element not found or is not a UIElement" };
+            return new ClickElementResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+        if (resolved is not UIElement element)
+        {
+            return new ClickElementResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle!, resolved, "UIElement") };
         }
 
         try
         {
-            var outcome = _interactor.Click(element, request.Physical);
+            var outcome = _interactor.Click(element, request.Physical, request.ClickType);
             DebugLog($"ClickElement: {element.GetType().Name} clicked via {outcome.Method}");
             return new ClickElementResponse
             {
@@ -733,6 +794,43 @@ public class InspectorService : IDisposable
         }
     }
 
+    private IpcResponse HandleSelectItem(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<SelectItemRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new SelectItemResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (resolved == null)
+        {
+            return new SelectItemResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+        if (resolved is not UIElement element)
+        {
+            return new SelectItemResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle!, resolved, "UIElement") };
+        }
+
+        try
+        {
+            var outcome = _interactor.SelectItem(element, request.ItemText, request.Index);
+            DebugLog($"SelectItem: {element.GetType().Name} via {outcome.Method} ({outcome.Detail})");
+            return new SelectItemResponse
+            {
+                RequestId = request.RequestId,
+                Method = outcome.Method,
+                ElementType = element.GetType().Name,
+                Detail = outcome.Detail
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"SelectItem failed: {ex.Message}");
+            return new SelectItemResponse { Success = false, Error = ex.Message };
+        }
+    }
+
     private IpcResponse HandleSetText(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<SetTextRequest>(data);
@@ -741,10 +839,14 @@ public class InspectorService : IDisposable
             return new SetTextResponse { Success = false, Error = "ElementHandle required" };
         }
 
-        var element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
-        if (element == null)
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (resolved == null)
         {
-            return new SetTextResponse { Success = false, Error = "Element not found or is not a UIElement" };
+            return new SetTextResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+        if (resolved is not UIElement element)
+        {
+            return new SetTextResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle!, resolved, "UIElement") };
         }
 
         try
@@ -777,10 +879,15 @@ public class InspectorService : IDisposable
         UIElement? element = null;
         if (!string.IsNullOrEmpty(request.ElementHandle))
         {
-            element = _treeWalker.ResolveHandle(request.ElementHandle!) as UIElement;
+            var resolved = _treeWalker.ResolveHandle(request.ElementHandle!);
+            if (resolved == null)
+            {
+                return new SendKeysResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+            }
+            element = resolved as UIElement;
             if (element == null)
             {
-                return new SendKeysResponse { Success = false, Error = "Element not found or is not a UIElement" };
+                return new SendKeysResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle!, resolved, "UIElement") };
             }
         }
 

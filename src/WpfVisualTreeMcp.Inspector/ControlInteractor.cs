@@ -8,6 +8,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 
 namespace WpfVisualTreeMcp.Inspector;
@@ -48,11 +49,21 @@ internal sealed class ControlInteractor
     /// Clicks the given element. When <paramref name="physical"/> is false (default)
     /// the control's action is invoked via UI Automation; when true, a real OS mouse
     /// click is performed at the element's on-screen centre.
+    /// <paramref name="clickType"/> selects single (default), "double" or "right" —
+    /// double and right clicks are OS-level notions, so they always use the physical path.
     /// </summary>
-    public InteractionOutcome Click(UIElement element, bool physical)
+    public InteractionOutcome Click(UIElement element, bool physical, string? clickType = null)
     {
         EnsureInteractable(element, "clicked");
-        return physical ? PhysicalClick(element) : AutomationClick(element);
+
+        var type = string.IsNullOrEmpty(clickType) ? "single" : clickType!.ToLowerInvariant();
+        if (type != "single" && type != "double" && type != "right")
+            throw new ArgumentException($"Unknown click_type '{clickType}'. Expected: single, double, or right.");
+
+        if (type != "single")
+            return PhysicalClick(element, type);
+
+        return physical ? PhysicalClick(element, type) : AutomationClick(element);
     }
 
     private static InteractionOutcome AutomationClick(UIElement element)
@@ -118,13 +129,14 @@ internal sealed class ControlInteractor
             "element exposes no UI Automation pattern; raised routed mouse events (best-effort)");
     }
 
-    private static InteractionOutcome PhysicalClick(UIElement element)
+    private static InteractionOutcome PhysicalClick(UIElement element, string clickType = "single")
     {
         var size = element.RenderSize;
         if (size.Width <= 0 || size.Height <= 0)
             throw new InvalidOperationException("Element has zero size and cannot be physically clicked.");
 
         Window.GetWindow(element)?.Activate();
+        ScrollIntoView(element);
 
         var centre = element.PointToScreen(new Point(size.Width / 2.0, size.Height / 2.0));
         var x = (int)Math.Round(centre.X);
@@ -133,9 +145,32 @@ internal sealed class ControlInteractor
         if (!NativeMethods.SetCursorPos(x, y))
             throw new InvalidOperationException($"SetCursorPos({x},{y}) failed — the point may be off-screen.");
 
-        NativeMethods.MouseLeftClick();
+        switch (clickType)
+        {
+            case "double":
+                NativeMethods.MouseLeftClick();
+                NativeMethods.MouseLeftClick();
+                return new InteractionOutcome("Physical.DoubleClick", $"OS mouse double-click at screen ({x},{y})");
+            case "right":
+                NativeMethods.MouseRightClick();
+                return new InteractionOutcome("Physical.RightClick", $"OS mouse right-click at screen ({x},{y})");
+            default:
+                NativeMethods.MouseLeftClick();
+                return new InteractionOutcome("Physical", $"OS mouse click at screen ({x},{y})");
+        }
+    }
 
-        return new InteractionOutcome("Physical", $"OS mouse click at screen ({x},{y})");
+    /// <summary>
+    /// Scrolls the element into its ScrollViewer's viewport (if any) and forces a
+    /// layout pass, so PointToScreen returns on-screen coordinates.
+    /// </summary>
+    private static void ScrollIntoView(UIElement element)
+    {
+        if (element is FrameworkElement fe)
+        {
+            fe.BringIntoView();
+            fe.UpdateLayout();
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -165,19 +200,20 @@ internal sealed class ControlInteractor
             if (value.IsReadOnly)
                 throw new InvalidOperationException("Element value is read-only and cannot be set.");
             value.SetValue(text);
-            return new InteractionOutcome("ValueProvider.SetValue", $"text length: {text.Length}");
+            return new InteractionOutcome("ValueProvider.SetValue", ReadBackDetail(value.Value, text));
         }
 
         // Direct-property fallbacks for the common cases that lack a pattern.
         if (element is TextBox tb)
         {
             tb.Text = text;
-            return new InteractionOutcome("DirectProperty.Text", $"text length: {text.Length}");
+            return new InteractionOutcome("DirectProperty.Text", ReadBackDetail(tb.Text, text));
         }
         if (element is PasswordBox pb)
         {
             pb.Password = text;
-            return new InteractionOutcome("DirectProperty.Password", $"length: {text.Length}");
+            // Never echo passwords back.
+            return new InteractionOutcome("DirectProperty.Password", $"length now: {pb.Password.Length}");
         }
 
         // Last resort: reflect for a settable string `Text` property (covers many
@@ -186,12 +222,26 @@ internal sealed class ControlInteractor
         if (prop != null && prop.CanWrite && prop.PropertyType == typeof(string))
         {
             prop.SetValue(element, text);
-            return new InteractionOutcome("Reflected.Text", $"text length: {text.Length}");
+            return new InteractionOutcome("Reflected.Text", ReadBackDetail(prop.GetValue(element) as string, text));
         }
 
         throw new InvalidOperationException(
             $"Element type '{element.GetType().Name}' has no IValueProvider and no settable string 'Text' property. " +
             "Try physical=true to type via OS keyboard input.");
+    }
+
+    /// <summary>
+    /// Builds a detail string reporting the element's value after the write, so the
+    /// caller can verify the outcome without an extra round-trip. Flags a mismatch
+    /// (e.g. input validation or coercion changed the value).
+    /// </summary>
+    private static string ReadBackDetail(string? actual, string requested)
+    {
+        actual ??= string.Empty;
+        var shown = actual.Length > 80 ? actual.Substring(0, 80) + "…" : actual;
+        return actual == requested
+            ? $"value now: '{shown}'"
+            : $"value now: '{shown}' (differs from requested text — the control may coerce or validate input)";
     }
 
     private static InteractionOutcome PhysicalSetText(UIElement element, string text)
@@ -215,6 +265,111 @@ internal sealed class ControlInteractor
         }
 
         return new InteractionOutcome("Physical", $"typed {text.Length} char(s) after Ctrl+A/Delete");
+    }
+
+    // ---------------------------------------------------------------------
+    // Select item (ComboBox / ListBox / TabControl / any Selector)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Selects an item in a Selector-derived control (ComboBox, ListBox, ListView,
+    /// TabControl, ...) by visible text or by index. Works on virtualized items too,
+    /// because it drives the Items collection rather than item containers (which do
+    /// not exist in the visual tree until realized).
+    /// </summary>
+    public InteractionOutcome SelectItem(UIElement element, string? itemText, int? index)
+    {
+        EnsureInteractable(element, "used for selection");
+
+        if (element is not Selector selector)
+            throw new InvalidOperationException(
+                $"Element type '{element.GetType().Name}' is not a Selector (ComboBox, ListBox, ListView, TabControl, ...). " +
+                "Use wpf_click_element for buttons/checkboxes or wpf_set_text for editable text.");
+
+        if (index is null && string.IsNullOrEmpty(itemText))
+            throw new ArgumentException("Provide item_text or index to choose the item to select.");
+
+        var count = selector.Items.Count;
+        if (count == 0)
+            throw new InvalidOperationException("The control has no items to select.");
+
+        if (index is int i)
+        {
+            if (i < 0 || i >= count)
+                throw new ArgumentOutOfRangeException(nameof(index), $"index {i} is out of range; the control has {count} item(s).");
+            selector.SelectedIndex = i;
+            return new InteractionOutcome(
+                "Selector.SelectedIndex",
+                $"selected index {i}: '{DescribeItem(selector, i)}'");
+        }
+
+        for (int j = 0; j < count; j++)
+        {
+            var text = DescribeItem(selector, j);
+            if (text.IndexOf(itemText, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                selector.SelectedIndex = j;
+                return new InteractionOutcome(
+                    "Selector.SelectedIndex",
+                    $"selected index {j}: '{text}' (matched '{itemText}')");
+            }
+        }
+
+        var preview = string.Join(", ", Enumerable.Range(0, Math.Min(count, 10))
+            .Select(j => $"'{DescribeItem(selector, j)}'"));
+        throw new InvalidOperationException(
+            $"No item matching '{itemText}' among {count} item(s). " +
+            $"First items: [{preview}{(count > 10 ? ", …" : "")}]");
+    }
+
+    /// <summary>
+    /// Human-readable text for the item at <paramref name="index"/> — what the user
+    /// sees in the dropdown/list. Tries, in order: container Content, DisplayMemberPath,
+    /// an overridden ToString(), the realized item container's visible text (covers
+    /// ItemTemplate over data objects), and common display properties.
+    /// </summary>
+    private static string DescribeItem(Selector selector, int index)
+    {
+        var item = selector.Items[index];
+        if (item == null) return "(null)";
+
+        if (item is ContentControl cc && cc.Content != null)
+            return cc.Content.ToString() ?? cc.GetType().Name;
+
+        if (!string.IsNullOrEmpty(selector.DisplayMemberPath))
+        {
+            var prop = item.GetType().GetProperty(selector.DisplayMemberPath, BindingFlags.Public | BindingFlags.Instance);
+            if (prop != null)
+                return prop.GetValue(item)?.ToString() ?? "(null)";
+        }
+
+        // An overridden ToString() is authoritative; the default one (type name) is not.
+        var str = item.ToString();
+        var isDefaultToString = str == item.GetType().FullName || str == item.GetType().Name;
+        if (!string.IsNullOrEmpty(str) && !isDefaultToString)
+            return str!;
+
+        // ItemTemplate case: read the visible text from the realized container.
+        if (selector.ItemContainerGenerator.ContainerFromIndex(index) is DependencyObject container)
+        {
+            var text = TreeWalker.GetSearchableText(container);
+            if (!string.IsNullOrWhiteSpace(text))
+                return text!.Length > 100 ? text.Substring(0, 100) + "…" : text;
+        }
+
+        // Virtualized (no container yet): fall back to common display properties.
+        foreach (var name in new[] { "Name", "Title", "Text", "DisplayName", "Header", "Description" })
+        {
+            var prop = item.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (prop != null && prop.PropertyType == typeof(string))
+            {
+                var value = prop.GetValue(item) as string;
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value!;
+            }
+        }
+
+        return str ?? item.GetType().Name;
     }
 
     // ---------------------------------------------------------------------
@@ -271,6 +426,7 @@ internal sealed class ControlInteractor
     private static bool FocusForKeyboardInput(UIElement element)
     {
         Window.GetWindow(element)?.Activate();
+        ScrollIntoView(element);
         var focused = element.Focus();
         Keyboard.Focus(element);
         return focused;
@@ -283,8 +439,10 @@ internal sealed class ControlInteractor
     private static class NativeMethods
     {
         // -- Mouse -------------------------------------------------------
-        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-        private const uint MOUSEEVENTF_LEFTUP   = 0x0004;
+        private const uint MOUSEEVENTF_LEFTDOWN  = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP    = 0x0004;
+        private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+        private const uint MOUSEEVENTF_RIGHTUP   = 0x0010;
 
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -297,6 +455,12 @@ internal sealed class ControlInteractor
         {
             mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, IntPtr.Zero);
             mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, IntPtr.Zero);
+        }
+
+        public static void MouseRightClick()
+        {
+            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, IntPtr.Zero);
+            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, IntPtr.Zero);
         }
 
         // -- Keyboard ----------------------------------------------------

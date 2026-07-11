@@ -1,5 +1,60 @@
 # Release Notes
 
+## v0.7.0 — Element queries, item selection, screen capture + critical IPC fix (2026-07-12)
+
+This release makes the tool surface actually usable by an AI agent end-to-end: a **critical serialization bug** meant most tool parameters never reached the Inspector, and on top of the fix comes a **query engine** for finding controls, **item selection** for dropdowns/lists, **right/double click**, and **screen-mode screenshots** that can see popups and menus.
+
+### Fixed — the big one
+
+`IpcSerializer.SerializeRequest` serialized the request payload by its **declared** base type (`IpcRequest`), so System.Text.Json dropped every derived-class property. Everything a request carried — search filters, element handles, text, key combos — was silently discarded:
+
+- `find` ignored all filters and always returned the first 50 elements of the tree (~20 KB of noise per call);
+- **every handle-based operation failed**: `props`, `layout`, `bindings`, `click`, `set-text`, `send-keys`, ... all returned "ElementHandle required";
+- only parameterless calls (window screenshot, default tree) appeared to work — which is why the pipeline looked alive in demos.
+
+One-line fix (`data = (object)request`) + round-trip regression tests so it can't come back.
+
+### What's new
+
+#### Element query engine — find the control in one shot
+
+`wpf_find_elements` / `find` now takes AND-combinable filters: **`text`** (visible text content — button captions even when nested in templates, TextBlock text, window titles, `AutomationProperties.Name`, tooltips), **`property_filter`** (property → value substring; in the contract since v0.1, implemented now), **`visible_only`** (prunes collapsed/hidden subtrees). Results include `text`, `automationId`, `isVisible`, `isEnabled` and `screenBounds` (physical pixels), so the agent picks the right control without extra property dumps — e.g. `find --type Button --text Save --visible-only`.
+
+#### `wpf_select_item` / `select-item` — 21st tool
+
+Select an item in a ComboBox / ListBox / ListView / TabControl by **visible text or index**. Drives `Items` + `SelectedIndex` rather than clicking containers, so it works with **virtualized items** (which don't exist in the visual tree until their popup opens) and raises proper selection events. Resolves item text through containers, `DisplayMemberPath`, overridden `ToString()`, realized `ItemTemplate` content and common display properties; a failed match lists the available items in the error so the agent can self-correct.
+
+#### Right / double click
+
+`wpf_click_element` / `click` accepts `click_type` = `single` (default) | `double` | `right`. Double and right clicks are OS-level physical clicks; right-click opens context menus. Physical clicks (and keyboard focus) now **auto-scroll the element into view** first.
+
+#### Screen-mode screenshots — see the popups
+
+`wpf_capture_screenshot(mode='screen')` / `screenshot --mode screen` captures the actual on-screen pixels via GDI BitBlt with `CAPTUREBLT`. Unlike the default `render` mode (RenderTargetBitmap, re-renders off-screen), it **includes open Popups, ComboBox dropdowns, context menus and tooltips** — completing the "right-click → screenshot → read the menu" loop. `render` remains the default and still works when the window is covered.
+
+#### Set-text read-back
+
+`wpf_set_text` / `set-text` responses now report the value read back after the write (`value now: '...'`) and flag when the control coerced or validated the input. Passwords report length only.
+
+### Robustness
+
+- Element handle cache switched to **weak references** — the Inspector no longer pins removed UI subtrees in memory, and handle resolution is O(1).
+- **Consistent, actionable stale-handle errors** across all handle-based operations: what expired, why, and how to recover.
+
+### Tool count
+
+**21** (17 read-only + 4 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`).
+
+### Testing
+
+57 unit tests pass (9 new). Full pipeline verified live against the sample app: text query → select-item → right click → screen-mode screenshot → set-text with read-back.
+
+### Asset
+
+`WpfVisualTreeMcp-v0.7.0-win-x64.zip` — framework-dependent publish of the Server/CLI (.NET 8 Desktop Runtime required), including the native bootstrappers and the x86 InjectorHelper under `native/`.
+
+---
+
 ## v0.6.0 — Cross-architecture auto-injection (2026-05-24)
 
 This release removes the **v0.5.0 known limitation**: a 64-bit server can now auto-inject into 32-bit WPF targets (and the converse, with the symmetric helper). The mechanism is a new tiny architecture-matching helper exe that performs the `CreateRemoteThread` + `LoadLibraryW` step in matching bitness, spawned on demand by the server.

@@ -61,7 +61,31 @@ public class FoundElement
     public string Handle { get; set; } = string.Empty;
     public string TypeName { get; set; } = string.Empty;
     public string? Name { get; set; }
+
+    /// <summary>Visible text content (own text or aggregated from shallow descendants), truncated.</summary>
+    public string? Text { get; set; }
+
+    /// <summary>AutomationProperties.AutomationId, when set.</summary>
+    public string? AutomationId { get; set; }
+
+    public bool? IsVisible { get; set; }
+    public bool? IsEnabled { get; set; }
+
+    /// <summary>On-screen bounding rect in physical (device) pixels; null when the element is not rendered.</summary>
+    public ScreenBounds? ScreenBounds { get; set; }
+
     public string Path { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Screen-space rectangle in physical (device) pixels.
+/// </summary>
+public class ScreenBounds
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
 }
 
 /// <summary>

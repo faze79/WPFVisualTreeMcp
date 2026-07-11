@@ -21,14 +21,14 @@ public static class CliRunner
     {
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
-        "styles", "watch-property", "highlight", "click", "set-text", "send-keys",
-        "layout", "export", "screenshot",
+        "styles", "watch-property", "highlight", "click", "select-item", "set-text",
+        "send-keys", "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "auto-inject", "compact", "verbose", "physical", "help", "h",
+        "auto-inject", "compact", "verbose", "physical", "visible-only", "help", "h",
     };
 
     private static string Exe =>
@@ -118,7 +118,9 @@ public static class CliRunner
                         cli.GetStringOrNull("root"),
                         cli.GetStringOrNull("type"),
                         cli.GetStringOrNull("name"),
+                        cli.GetStringOrNull("text"),
                         ParseFilter(cli.GetStringOrNull("filter")),
+                        cli.Flags.Contains("visible-only"),
                         cli.GetInt("max", 50));
                     WriteJson(result, cli);
                     break;
@@ -129,9 +131,13 @@ public static class CliRunner
                     await AttachAsync(processManager, cli, false);
                     var type = cli.GetStringOrNull("type");
                     var name = cli.GetStringOrNull("name");
-                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name))
-                        throw new ArgumentException("find-deep requires --type or --name to bound the search.");
-                    WriteJson(await bridge.FindElementsDeepAsync(cli.GetStringOrNull("root"), type, name), cli);
+                    var text = cli.GetStringOrNull("text");
+                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text))
+                        throw new ArgumentException("find-deep requires --type, --name or --text to bound the search.");
+                    WriteJson(await bridge.FindElementsDeepAsync(
+                        cli.GetStringOrNull("root"), type, name, text,
+                        ParseFilter(cli.GetStringOrNull("filter")),
+                        cli.Flags.Contains("visible-only")), cli);
                     break;
                 }
 
@@ -215,7 +221,27 @@ public static class CliRunner
                 {
                     await AttachAsync(processManager, cli, false);
                     var result = await bridge.ClickElementAsync(
-                        cli.GetRequired("handle"), cli.Flags.Contains("physical"));
+                        cli.GetRequired("handle"),
+                        cli.Flags.Contains("physical"),
+                        cli.GetStringOrNull("click-type"));
+                    WriteJson(new
+                    {
+                        success = true,
+                        method = result.Method,
+                        elementType = result.ElementType,
+                        detail = result.Detail,
+                    }, cli);
+                    break;
+                }
+
+                case "select-item":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var itemText = cli.GetStringOrNull("item-text");
+                    var index = cli.GetIntOrNull("index");
+                    if (string.IsNullOrEmpty(itemText) && index is null)
+                        throw new ArgumentException("select-item requires --item-text or --index.");
+                    var result = await bridge.SelectItemAsync(cli.GetRequired("handle"), itemText, index);
                     WriteJson(new
                     {
                         success = true,
@@ -301,7 +327,10 @@ public static class CliRunner
                     await AttachAsync(processManager, cli, false);
                     var maxW = Math.Clamp(cli.GetInt("max-width", 1920), 1, 3840);
                     var maxH = Math.Clamp(cli.GetInt("max-height", 1080), 1, 2160);
-                    var shot = await bridge.CaptureScreenshotAsync(cli.GetStringOrNull("handle"), maxW, maxH);
+                    var shotMode = cli.GetString("mode", "render").ToLowerInvariant();
+                    if (shotMode != "render" && shotMode != "screen")
+                        throw new ArgumentException("--mode must be 'render' or 'screen'.");
+                    var shot = await bridge.CaptureScreenshotAsync(cli.GetStringOrNull("handle"), maxW, maxH, shotMode);
                     if (string.IsNullOrEmpty(shot.ImageBase64))
                         throw new InvalidOperationException("Screenshot capture returned no image data.");
 
@@ -399,8 +428,8 @@ COMMANDS
   attach        --pid|--process [--auto-inject]
   tree          --pid [--root H] [--depth N]
   props         --pid --handle H
-  find          --pid [--type T] [--name N] [--root H] [--max N] [--filter JSON]
-  find-deep     --pid (--type T | --name N) [--root H]
+  find          --pid [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]
+  find-deep     --pid (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]
   bindings      --pid --handle H
   binding-errors        --pid
   clear-binding-errors  --pid
@@ -409,12 +438,13 @@ COMMANDS
   styles        --pid --handle H
   watch-property        --pid --handle H --property P
   highlight     --pid --handle H [--duration MS]
-  click         --pid --handle H [--physical]      (changes app state)
+  click         --pid --handle H [--physical] [--click-type single|double|right]  (changes app state)
+  select-item   --pid --handle H (--item-text S | --index N)  (changes app state)
   set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
   send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
-  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N]
+  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
 
 Element handles (elem_XXXXXXXX) come from 'tree' / 'find' and stay valid while
 the target app keeps running.
@@ -439,11 +469,18 @@ TYPICAL WORKFLOW
             "tree" => "tree --pid <id> [--root <handle>] [--depth <1-100>]\n"
                     + "  Dump the visual tree. --root zooms into a subtree; --depth defaults to 25.",
             "props" => "props --pid <id> --handle <handle>\n  List the dependency properties of an element.",
-            "find" => "find --pid <id> [--type T] [--name N] [--root H] [--max N] [--filter JSON]\n"
-                    + "  Search elements (up to --max, default 50). --filter is a JSON object of\n"
-                    + "  property=value pairs, e.g. --filter '{\"Text\":\"OK\"}'.",
-            "find-deep" => "find-deep --pid <id> (--type T | --name N) [--root H]\n"
-                         + "  Unbounded search; requires --type or --name.",
+            "find" => "find --pid <id> [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]\n"
+                    + "  Search elements (up to --max, default 50). Filters combine with AND:\n"
+                    + "  --type: type name (partial match, e.g. Button)\n"
+                    + "  --text: visible text content (button caption, TextBlock text, window\n"
+                    + "          title, tooltip; case-insensitive substring)\n"
+                    + "  --name: x:Name substring\n"
+                    + "  --visible-only: exclude collapsed/hidden elements\n"
+                    + "  --filter: JSON object of property=value pairs, e.g. '{\"IsEnabled\":\"True\"}'\n"
+                    + "  Results include text, automationId, isVisible/isEnabled and screenBounds.\n"
+                    + "  Example: find --pid 1234 --type Button --text Save --visible-only",
+            "find-deep" => "find-deep --pid <id> (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]\n"
+                         + "  Unbounded search; requires --type, --name or --text. Same filters as 'find'.",
             "bindings" => "bindings --pid <id> --handle <handle>\n  Show data bindings and their status for an element.",
             "binding-errors" => "binding-errors --pid <id>\n  List binding errors captured since the app started.",
             "clear-binding-errors" => "clear-binding-errors --pid <id>\n  Reset the captured binding-error list.",
@@ -456,11 +493,20 @@ TYPICAL WORKFLOW
                               + "  Register a property watch in the Inspector.",
             "highlight" => "highlight --pid <id> --handle <handle> [--duration <ms>]\n"
                          + "  Flash an element in the running app. --duration defaults to 2000.",
-            "click" => "click --pid <id> --handle <handle> [--physical]\n"
+            "click" => "click --pid <id> --handle <handle> [--physical] [--click-type single|double|right]\n"
                      + "  Click an element. Default: UI Automation invoke (buttons, checkboxes,\n"
                      + "  menu items, tabs, list items, expanders) — no cursor movement.\n"
-                     + "  --physical: real OS mouse click at the element (moves the cursor and\n"
-                     + "  brings the window forward). This command CHANGES application state.",
+                     + "  --physical: real OS mouse click at the element (moves the cursor,\n"
+                     + "  brings the window forward, auto-scrolls the element into view).\n"
+                     + "  --click-type double/right: always physical; right opens context menus\n"
+                     + "  (capture them with: screenshot --mode screen).\n"
+                     + "  This command CHANGES application state.",
+            "select-item" => "select-item --pid <id> --handle <handle> (--item-text <text> | --index <n>)\n"
+                           + "  Select an item in a ComboBox/ListBox/ListView/TabControl by visible\n"
+                           + "  text (case-insensitive substring) or zero-based index. Works with\n"
+                           + "  virtualized items and raises proper selection events — prefer this\n"
+                           + "  over clicking dropdown items. On failure the error lists available\n"
+                           + "  items. This command CHANGES application state.",
             "set-text" => "set-text --pid <id> --handle <handle> --text <value> [--physical]\n"
                         + "  Replace the text/value of an element (TextBox, ComboBox, ...).\n"
                         + "  Default: UI Automation IValueProvider.SetValue, with a\n"
@@ -476,10 +522,15 @@ TYPICAL WORKFLOW
                          + "  Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'F5', 'Alt+F4', 'Win+R'.\n"
                          + "  This command CHANGES application state.",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
+            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
+                          + "  Capture the window (or one element) as PNG and print the file path.\n"
+                          + "  --mode render (default): off-screen re-render; works when covered,\n"
+                          + "  but cannot see open popups/dropdowns/context menus.\n"
+                          + "  --mode screen: capture the actual screen pixels (includes popups,\n"
+                          + "  ComboBox dropdowns, context menus, tooltips); the window must be\n"
+                          + "  visible on screen.",
             "export" => "export --pid <id> [--handle <handle>] [--format json|xaml] [--out <file>]\n"
                       + "  Export the tree. Writes to --out if given, otherwise prints content inline.",
-            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N]\n"
-                          + "  Capture the window (or an element) to a PNG file and print its path.",
             _ => null,
         };
 

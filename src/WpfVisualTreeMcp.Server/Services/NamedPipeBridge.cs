@@ -70,7 +70,8 @@ public class NamedPipeBridge : IIpcBridge
         return ParseElementPropertiesResponse(response, elementHandle);
     }
 
-    public async Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50)
+    public async Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text, Dictionary<string, string>? propertyFilter, bool visibleOnly = false, int maxResults = 50)
     {
         var session = EnsureConnected();
 
@@ -79,7 +80,9 @@ public class NamedPipeBridge : IIpcBridge
             RootHandle = rootHandle,
             TypeName = typeName,
             ElementName = elementName,
+            Text = text,
             PropertyFilter = propertyFilter,
+            VisibleOnly = visibleOnly,
             MaxResults = maxResults
         };
 
@@ -94,7 +97,8 @@ public class NamedPipeBridge : IIpcBridge
         return ParseFindElementsResponse(response);
     }
 
-    public async Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName)
+    public async Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text = null, Dictionary<string, string>? propertyFilter = null, bool visibleOnly = false)
     {
         var session = EnsureConnected();
 
@@ -102,7 +106,10 @@ public class NamedPipeBridge : IIpcBridge
         {
             RootHandle = rootHandle,
             TypeName = typeName,
-            ElementName = elementName
+            ElementName = elementName,
+            Text = text,
+            PropertyFilter = propertyFilter,
+            VisibleOnly = visibleOnly
         };
 
         var response = await SendRequestAsync<FindElementsDeepRequest, FindElementsDeepResponse>(
@@ -280,7 +287,7 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
-    public async Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight)
+    public async Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render")
     {
         var session = EnsureConnected();
 
@@ -288,7 +295,8 @@ public class NamedPipeBridge : IIpcBridge
         {
             ElementHandle = elementHandle,
             MaxWidth = maxWidth,
-            MaxHeight = maxHeight
+            MaxHeight = maxHeight,
+            Mode = mode
         };
 
         var response = await SendRequestAsync<CaptureScreenshotRequest, CaptureScreenshotResponse>(
@@ -348,14 +356,15 @@ public class NamedPipeBridge : IIpcBridge
         }
     }
 
-    public async Task<ClickResult> ClickElementAsync(string elementHandle, bool physical)
+    public async Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null)
     {
         var session = EnsureConnected();
 
         var request = new ClickElementRequest
         {
             ElementHandle = elementHandle,
-            Physical = physical
+            Physical = physical,
+            ClickType = clickType
         };
 
         var response = await SendRequestAsync<ClickElementRequest, ClickElementResponse>(
@@ -367,6 +376,33 @@ public class NamedPipeBridge : IIpcBridge
         }
 
         return new ClickResult
+        {
+            Method = response.Method ?? "Unknown",
+            ElementType = response.ElementType,
+            Detail = response.Detail
+        };
+    }
+
+    public async Task<SelectItemResult> SelectItemAsync(string elementHandle, string? itemText, int? index)
+    {
+        var session = EnsureConnected();
+
+        var request = new SelectItemRequest
+        {
+            ElementHandle = elementHandle,
+            ItemText = itemText,
+            Index = index
+        };
+
+        var response = await SendRequestAsync<SelectItemRequest, SelectItemResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to select item");
+        }
+
+        return new SelectItemResult
         {
             Method = response.Method ?? "Unknown",
             ElementType = response.ElementType,
@@ -639,13 +675,7 @@ public class NamedPipeBridge : IIpcBridge
             {
                 foreach (var elem in elementsArray.EnumerateArray())
                 {
-                    result.Elements.Add(new FoundElement
-                    {
-                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
-                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
-                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
-                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
-                    });
+                    result.Elements.Add(ParseFoundElement(elem));
                 }
             }
             else
@@ -653,13 +683,7 @@ public class NamedPipeBridge : IIpcBridge
                 // Old format: plain array (backward compatibility)
                 foreach (var elem in root.EnumerateArray())
                 {
-                    result.Elements.Add(new FoundElement
-                    {
-                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
-                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
-                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
-                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
-                    });
+                    result.Elements.Add(ParseFoundElement(elem));
                 }
             }
         }
@@ -669,6 +693,44 @@ public class NamedPipeBridge : IIpcBridge
         }
 
         return result;
+    }
+
+    private static FoundElement ParseFoundElement(JsonElement elem)
+    {
+        var found = new FoundElement
+        {
+            Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
+            TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
+            Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
+            Text = elem.TryGetProperty("text", out var txt) ? txt.GetString() : null,
+            AutomationId = elem.TryGetProperty("automationId", out var aid) ? aid.GetString() : null,
+            Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
+        };
+
+        if (elem.TryGetProperty("isVisible", out var vis) &&
+            (vis.ValueKind == JsonValueKind.True || vis.ValueKind == JsonValueKind.False))
+        {
+            found.IsVisible = vis.GetBoolean();
+        }
+
+        if (elem.TryGetProperty("isEnabled", out var en) &&
+            (en.ValueKind == JsonValueKind.True || en.ValueKind == JsonValueKind.False))
+        {
+            found.IsEnabled = en.GetBoolean();
+        }
+
+        if (elem.TryGetProperty("screenBounds", out var b) && b.ValueKind == JsonValueKind.Object)
+        {
+            found.ScreenBounds = new ScreenBounds
+            {
+                X = b.TryGetProperty("x", out var x) ? x.GetInt32() : 0,
+                Y = b.TryGetProperty("y", out var y) ? y.GetInt32() : 0,
+                Width = b.TryGetProperty("width", out var w) ? w.GetInt32() : 0,
+                Height = b.TryGetProperty("height", out var hh) ? hh.GetInt32() : 0
+            };
+        }
+
+        return found;
     }
 
     private FindElementsResult ParseFindElementsDeepResponse(FindElementsDeepResponse response)
@@ -694,13 +756,7 @@ public class NamedPipeBridge : IIpcBridge
             {
                 foreach (var elem in elementsArray.EnumerateArray())
                 {
-                    result.Elements.Add(new FoundElement
-                    {
-                        Handle = elem.TryGetProperty("handle", out var h) ? h.GetString() ?? "" : "",
-                        TypeName = elem.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
-                        Name = elem.TryGetProperty("name", out var n) ? n.GetString() : null,
-                        Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
-                    });
+                    result.Elements.Add(ParseFoundElement(elem));
                 }
             }
         }

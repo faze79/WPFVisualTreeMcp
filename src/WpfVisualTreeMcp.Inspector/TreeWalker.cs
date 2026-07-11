@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -10,14 +14,42 @@ using System.Windows.Media;
 namespace WpfVisualTreeMcp.Inspector;
 
 /// <summary>
+/// Search criteria for finding elements in the visual tree.
+/// All specified filters must match (AND semantics).
+/// </summary>
+public class FindCriteria
+{
+    /// <summary>Type name, matched case-insensitively (substring of full name or exact short name).</summary>
+    public string? TypeName { get; set; }
+
+    /// <summary>x:Name, matched as case-insensitive substring.</summary>
+    public string? ElementName { get; set; }
+
+    /// <summary>
+    /// Visible text content, matched as case-insensitive substring against the element's own text,
+    /// text aggregated from shallow descendants (e.g. the TextBlock inside a Button),
+    /// AutomationProperties.Name, ToolTip and Window.Title.
+    /// </summary>
+    public string? Text { get; set; }
+
+    /// <summary>Property name → expected value (case-insensitive substring match on the value's ToString()).</summary>
+    public Dictionary<string, string>? PropertyFilter { get; set; }
+
+    /// <summary>When true, only elements that are currently visible on screen are returned.</summary>
+    public bool VisibleOnly { get; set; }
+}
+
+/// <summary>
 /// Walks the visual tree and logical tree of WPF elements.
 /// </summary>
 public class TreeWalker
 {
-    private readonly Dictionary<DependencyObject, string> _handleCache = new();
+    // Weak handle cache: must not keep detached elements (and their subtrees) alive.
+    private readonly ConditionalWeakTable<DependencyObject, string> _handleCache = new();
+    private readonly Dictionary<string, WeakReference<DependencyObject>> _handleLookup = new();
     private int _handleCounter;
 
-    public int HandleCacheCount => _handleCache.Count;
+    public int HandleCacheCount => _handleLookup.Count;
 
     /// <summary>
     /// Walks the visual tree starting from the specified root element.
@@ -187,15 +219,17 @@ public class TreeWalker
 
     /// <summary>
     /// Resolves an element handle to the actual DependencyObject.
+    /// Returns null when the handle was never issued or the element has been garbage-collected.
     /// </summary>
     public DependencyObject? ResolveHandle(string handle)
     {
-        foreach (var kvp in _handleCache)
+        if (_handleLookup.TryGetValue(handle, out var weakRef))
         {
-            if (kvp.Value == handle)
+            if (weakRef.TryGetTarget(out var element))
             {
-                return kvp.Key;
+                return element;
             }
+            _handleLookup.Remove(handle);
         }
         return null;
     }
@@ -208,7 +242,8 @@ public class TreeWalker
         }
 
         handle = $"elem_{_handleCounter++:X8}";
-        _handleCache[element] = handle;
+        _handleCache.Add(element, handle);
+        _handleLookup[handle] = new WeakReference<DependencyObject>(element);
         return handle;
     }
 
@@ -229,18 +264,17 @@ public class TreeWalker
     /// Finds elements matching the specified criteria.
     /// </summary>
     /// <param name="root">The root element to search from.</param>
-    /// <param name="typeName">Optional type name to match.</param>
-    /// <param name="elementName">Optional element name to match.</param>
+    /// <param name="criteria">Search criteria (type, name, text, property values, visibility).</param>
     /// <param name="maxResults">Maximum number of results to return (default: 50, max: 10000).</param>
     /// <returns>JSON array of matching elements.</returns>
-    public string FindElements(DependencyObject root, string? typeName, string? elementName, int maxResults = 50)
+    public string FindElements(DependencyObject root, FindCriteria criteria, int maxResults = 50)
     {
         // Clamp maxResults to reasonable limit to prevent memory issues
         if (maxResults > 10000) maxResults = 10000;
         if (maxResults < 1) maxResults = 1;
 
         var results = new List<string>();
-        FindElementsRecursive(root, typeName, elementName, results, maxResults);
+        FindElementsRecursive(root, criteria, results, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("{\"elements\":[");
@@ -258,16 +292,15 @@ public class TreeWalker
     /// WARNING: This can return a large number of results. Use with caution.
     /// </summary>
     /// <param name="root">The root element to search from.</param>
-    /// <param name="typeName">Optional type name to match.</param>
-    /// <param name="elementName">Optional element name to match.</param>
+    /// <param name="criteria">Search criteria (type, name, text, property values, visibility).</param>
     /// <returns>JSON array of matching elements.</returns>
-    public string FindElementsDeep(DependencyObject root, string? typeName, string? elementName, int maxResults = 100000)
+    public string FindElementsDeep(DependencyObject root, FindCriteria criteria, int maxResults = 100000)
     {
         if (maxResults > 100000) maxResults = 100000;
         if (maxResults < 1) maxResults = 1;
 
         var results = new List<string>();
-        FindElementsDeepRecursive(root, typeName, elementName, results, maxResults);
+        FindElementsRecursive(root, criteria, results, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("{\"elements\":[");
@@ -280,96 +313,24 @@ public class TreeWalker
         return sb.ToString();
     }
 
-    private void FindElementsDeepRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results, int maxResults)
+    private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results, int maxResults)
     {
-        if (results.Count >= maxResults) return;
-        var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
-        var shortTypeName = element.GetType().Name;
-        var name = GetElementName(element);
-
-        bool matches = true;
-
-        if (!string.IsNullOrEmpty(typeName))
-        {
-            matches = fullTypeName.IndexOf(typeName, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      shortTypeName.Equals(typeName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (matches && !string.IsNullOrEmpty(elementName))
-        {
-            matches = name != null && name.IndexOf(elementName, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        if (matches)
-        {
-            var handle = GetOrCreateHandle(element);
-            var path = GetElementPath(element);
-
-            var sb = new StringBuilder();
-            sb.Append("{");
-            sb.Append($"\"handle\":\"{handle}\"");
-            sb.Append($",\"typeName\":\"{EscapeJson(fullTypeName)}\"");
-            if (!string.IsNullOrEmpty(name))
-            {
-                sb.Append($",\"name\":\"{EscapeJson(name)}\"");
-            }
-            sb.Append($",\"path\":\"{EscapeJson(path)}\"");
-            sb.Append("}");
-            results.Add(sb.ToString());
-        }
-
-        // Continue traversing all children (including adorners and popup content)
-        foreach (var child in GetAllVisualChildren(element))
-        {
-            if (results.Count >= maxResults) return;
-            FindElementsDeepRecursive(child, typeName, elementName, results, maxResults);
-        }
-    }
-
-    private void FindElementsRecursive(DependencyObject element, string? typeName, string? elementName, List<string> results, int maxResults)
-    {
-        // Stop if we've reached the maximum number of results
         if (results.Count >= maxResults)
         {
             return;
         }
 
-        var fullTypeName = element.GetType().FullName ?? element.GetType().Name;
-        var shortTypeName = element.GetType().Name;
-        var name = GetElementName(element);
-
-        bool matches = true;
-
-        if (!string.IsNullOrEmpty(typeName))
+        // IsVisible propagates to descendants, so an invisible subtree can be pruned entirely.
+        // Popup is exempt: the Popup element itself never renders, but its child tree does when open.
+        if (criteria.VisibleOnly && element is UIElement ui && !ui.IsVisible && element is not Popup)
         {
-            // Use IndexOf for .NET Framework 4.8 compatibility (no Contains with StringComparison)
-            matches = fullTypeName.IndexOf(typeName, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                      shortTypeName.Equals(typeName, StringComparison.OrdinalIgnoreCase);
+            return;
         }
 
-        if (matches && !string.IsNullOrEmpty(elementName))
+        if (MatchesCriteria(element, criteria))
         {
-            matches = name != null && name.IndexOf(elementName, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
+            results.Add(SerializeFoundElement(element));
 
-        if (matches)
-        {
-            var handle = GetOrCreateHandle(element);
-            var path = GetElementPath(element);
-
-            var sb = new StringBuilder();
-            sb.Append("{");
-            sb.Append($"\"handle\":\"{handle}\"");
-            sb.Append($",\"typeName\":\"{EscapeJson(fullTypeName)}\"");
-            if (!string.IsNullOrEmpty(name))
-            {
-                sb.Append($",\"name\":\"{EscapeJson(name)}\"");
-            }
-            sb.Append($",\"path\":\"{EscapeJson(path)}\"");
-            sb.Append("}");
-            results.Add(sb.ToString());
-
-            // Stop if we've reached the maximum after adding this result
             if (results.Count >= maxResults)
             {
                 return;
@@ -378,14 +339,238 @@ public class TreeWalker
 
         foreach (var child in GetAllVisualChildren(element))
         {
-            FindElementsRecursive(child, typeName, elementName, results, maxResults);
+            FindElementsRecursive(child, criteria, results, maxResults);
 
-            // Stop if we've reached the maximum during child traversal
             if (results.Count >= maxResults)
             {
                 return;
             }
         }
+    }
+
+    private static bool MatchesCriteria(DependencyObject element, FindCriteria criteria)
+    {
+        var type = element.GetType();
+
+        if (!string.IsNullOrEmpty(criteria.TypeName))
+        {
+            var fullTypeName = type.FullName ?? type.Name;
+            // Use IndexOf for .NET Framework 4.8 compatibility (no Contains with StringComparison)
+            var typeMatches = fullTypeName.IndexOf(criteria.TypeName, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                              type.Name.Equals(criteria.TypeName, StringComparison.OrdinalIgnoreCase);
+            if (!typeMatches) return false;
+        }
+
+        if (!string.IsNullOrEmpty(criteria.ElementName))
+        {
+            var name = GetElementName(element);
+            if (name == null || name.IndexOf(criteria.ElementName, StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+        }
+
+        if (criteria.VisibleOnly && element is UIElement ui && !ui.IsVisible)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(criteria.Text))
+        {
+            var searchable = GetSearchableText(element);
+            if (searchable == null || searchable.IndexOf(criteria.Text, StringComparison.OrdinalIgnoreCase) < 0)
+                return false;
+        }
+
+        if (criteria.PropertyFilter != null && criteria.PropertyFilter.Count > 0)
+        {
+            foreach (var kvp in criteria.PropertyFilter)
+            {
+                if (!PropertyValueMatches(element, kvp.Key, kvp.Value))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool PropertyValueMatches(DependencyObject element, string propertyName, string expectedValue)
+    {
+        try
+        {
+            var prop = element.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (prop == null || !prop.CanRead) return false;
+
+            var value = prop.GetValue(element)?.ToString();
+            if (value == null) return string.IsNullOrEmpty(expectedValue);
+
+            return value.IndexOf(expectedValue, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private string SerializeFoundElement(DependencyObject element)
+    {
+        var type = element.GetType();
+        var handle = GetOrCreateHandle(element);
+        var name = GetElementName(element);
+        var text = GetSearchableText(element);
+        var path = GetElementPath(element);
+
+        var sb = new StringBuilder();
+        sb.Append("{");
+        sb.Append($"\"handle\":\"{handle}\"");
+        sb.Append($",\"typeName\":\"{EscapeJson(type.FullName ?? type.Name)}\"");
+
+        if (!string.IsNullOrEmpty(name))
+        {
+            sb.Append($",\"name\":\"{EscapeJson(name)}\"");
+        }
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            sb.Append($",\"text\":\"{EscapeJson(Truncate(text!, 120))}\"");
+        }
+
+        var automationId = GetAutomationId(element);
+        if (!string.IsNullOrEmpty(automationId))
+        {
+            sb.Append($",\"automationId\":\"{EscapeJson(automationId)}\"");
+        }
+
+        if (element is UIElement ui)
+        {
+            sb.Append($",\"isVisible\":{ui.IsVisible.ToString().ToLower()}");
+            sb.Append($",\"isEnabled\":{ui.IsEnabled.ToString().ToLower()}");
+
+            var bounds = GetScreenBoundsJson(ui);
+            if (bounds != null)
+            {
+                sb.Append($",\"screenBounds\":{bounds}");
+            }
+        }
+
+        sb.Append($",\"path\":\"{EscapeJson(path)}\"");
+        sb.Append("}");
+        return sb.ToString();
+    }
+
+    private static string? GetAutomationId(DependencyObject element)
+    {
+        try
+        {
+            var id = AutomationProperties.GetAutomationId(element);
+            return string.IsNullOrEmpty(id) ? null : id;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Screen-space bounding rect of a visible element, in physical (device) pixels —
+    /// the same coordinate space used by the OS mouse, so it is directly usable for physical clicks.
+    /// </summary>
+    private static string? GetScreenBoundsJson(UIElement element)
+    {
+        try
+        {
+            if (!element.IsVisible || PresentationSource.FromVisual(element) == null)
+                return null;
+
+            var topLeft = element.PointToScreen(new Point(0, 0));
+            var bottomRight = element.PointToScreen(new Point(element.RenderSize.Width, element.RenderSize.Height));
+
+            return $"{{\"x\":{(int)topLeft.X},\"y\":{(int)topLeft.Y}," +
+                   $"\"width\":{(int)(bottomRight.X - topLeft.X)},\"height\":{(int)(bottomRight.Y - topLeft.Y)}}}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the human-visible text associated with an element: its own text, or text
+    /// aggregated from shallow descendants (e.g. the TextBlock inside a Button's template),
+    /// plus AutomationProperties.Name, ToolTip and Window.Title.
+    /// Internal so ControlInteractor can describe item containers the same way.
+    /// </summary>
+    internal static string? GetSearchableText(DependencyObject element)
+    {
+        var parts = new List<string>();
+
+        var own = GetOwnText(element);
+        if (!string.IsNullOrWhiteSpace(own))
+        {
+            parts.Add(own!.Trim());
+        }
+        else
+        {
+            // No direct text: aggregate from shallow descendants (covers Button > TextBlock etc.)
+            CollectDescendantText(element, parts, depth: 0, maxDepth: 4, maxParts: 5);
+        }
+
+        try
+        {
+            var autoName = AutomationProperties.GetName(element);
+            if (!string.IsNullOrWhiteSpace(autoName) && !parts.Contains(autoName))
+                parts.Add(autoName);
+        }
+        catch { /* attached property not readable on all elements */ }
+
+        if (element is FrameworkElement fe && fe.ToolTip is string tooltip && !string.IsNullOrWhiteSpace(tooltip))
+        {
+            parts.Add(tooltip);
+        }
+
+        return parts.Count == 0 ? null : string.Join(" ", parts.Distinct());
+    }
+
+    private static string? GetOwnText(DependencyObject element)
+    {
+        return element switch
+        {
+            Window w => w.Title,
+            TextBlock tb => tb.Text,
+            AccessText at => at.Text,
+            TextBox tb => tb.Text,
+            Run run => run.Text,
+            HeaderedContentControl hcc when hcc.Header is string h => h,
+            HeaderedItemsControl hic when hic.Header is string h => h,
+            ContentControl cc when cc.Content is string s => s,
+            _ => null
+        };
+    }
+
+    private static void CollectDescendantText(DependencyObject element, List<string> parts, int depth, int maxDepth, int maxParts)
+    {
+        if (depth >= maxDepth || parts.Count >= maxParts) return;
+
+        foreach (var child in GetAllVisualChildren(element))
+        {
+            if (parts.Count >= maxParts) return;
+
+            var text = GetOwnText(child);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                parts.Add(text!.Trim());
+            }
+            else
+            {
+                CollectDescendantText(child, parts, depth + 1, maxDepth, maxParts);
+            }
+        }
+    }
+
+    private static string Truncate(string text, int maxLength)
+    {
+        if (text.Length <= maxLength) return text;
+        return text.Substring(0, maxLength) + "…";
     }
 
     /// <summary>

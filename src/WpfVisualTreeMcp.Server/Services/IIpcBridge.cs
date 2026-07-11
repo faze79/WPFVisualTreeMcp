@@ -18,15 +18,17 @@ public interface IIpcBridge
     Task<ElementPropertiesResult> GetElementPropertiesAsync(string elementHandle);
 
     /// <summary>
-    /// Finds elements matching the specified criteria.
+    /// Finds elements matching the specified criteria (type, name, visible text, property values, visibility).
     /// </summary>
-    Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName, Dictionary<string, string>? propertyFilter, int maxResults = 50);
+    Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text, Dictionary<string, string>? propertyFilter, bool visibleOnly = false, int maxResults = 50);
 
     /// <summary>
     /// Finds ALL elements matching the specified criteria without limit (deep search).
     /// WARNING: This can return a large number of results. Use with caution.
     /// </summary>
-    Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName);
+    Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text = null, Dictionary<string, string>? propertyFilter = null, bool visibleOnly = false);
 
     /// <summary>
     /// Gets bindings for an element.
@@ -70,8 +72,11 @@ public interface IIpcBridge
 
     /// <summary>
     /// Captures a screenshot of the target window or element.
+    /// <paramref name="mode"/> "render" (default) re-renders the visual off-screen;
+    /// "screen" captures the on-screen pixels via GDI, including open Popups,
+    /// ComboBox dropdowns, context menus and tooltips.
     /// </summary>
-    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight);
+    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render");
 
     /// <summary>
     /// Gets the DataContext chain for an element.
@@ -86,8 +91,16 @@ public interface IIpcBridge
     /// <summary>
     /// Clicks an element. Uses UI Automation by default; when <paramref name="physical"/>
     /// is true, performs a real OS mouse click at the element's screen position.
+    /// <paramref name="clickType"/>: "single" (default), "double" or "right" —
+    /// double/right always use the physical path.
     /// </summary>
-    Task<ClickResult> ClickElementAsync(string elementHandle, bool physical);
+    Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null);
+
+    /// <summary>
+    /// Selects an item in a Selector control (ComboBox, ListBox, ListView, TabControl)
+    /// by visible text or zero-based index. Works with virtualized items.
+    /// </summary>
+    Task<SelectItemResult> SelectItemAsync(string elementHandle, string? itemText, int? index);
 
     /// <summary>
     /// Sets the text/value of an element. Uses UI Automation IValueProvider by default,
