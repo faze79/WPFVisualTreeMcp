@@ -28,15 +28,29 @@ Then run the **"Publish to MCP Registry"** workflow (Actions tab → Run workflo
 It authenticates with GitHub OIDC — no secrets, no tokens: publishing under
 `io.github.faze79/*` is authorized simply by the workflow running in a repo owned by faze79.
 
-## 2. NuGet.org
+## 2. NuGet.org (trusted publishing / OIDC — no API key)
 
-The release workflow packs and pushes automatically, but needs a repo secret:
+The release workflow publishes via **NuGet trusted publishing**: GitHub Actions gets a
+short-lived token over OIDC, so there is no long-lived API key to store or rotate. Works
+for a brand-new package (the first push creates `WpfVisualTreeMcp` on nuget.org), and the
+repo is public so there is no 7-day activation window.
 
-1. Create an API key at <https://www.nuget.org/account/apikeys> (scope: push new packages
-   and package versions, glob `WpfVisualTreeMcp*`).
-2. Add it as the repo secret **`NUGET_API_KEY`** (Settings → Secrets and variables → Actions).
-3. Push a `v*` tag — the workflow packs, pushes to nuget.org and attaches the `.nupkg`
-   to the GitHub release. Without the secret the push step is skipped with a notice.
+One-time setup (all on nuget.org / GitHub settings — the agent can't do these):
+
+1. **Create the trusted-publishing policy** at
+   <https://www.nuget.org/account/trustedpublishing> → **Add**:
+   - Package owner: your nuget.org account
+   - Package ID: `WpfVisualTreeMcp` (an exact ID that doesn't exist yet is fine — the "glob"
+     field can be left as the exact ID)
+   - Repository owner: `faze79`
+   - Repository: `WPFVisualTreeMcp`
+   - Workflow file: `release.yml`
+   - Environment: *(leave blank — the workflow uses no `environment:`)*
+2. **Add the repo secret** `NUGET_USER` = your nuget.org **profile name** (not email),
+   at Settings → Secrets and variables → Actions.
+3. Push a `v*` tag — the workflow packs, does `NuGet/login@v1` (OIDC), pushes to nuget.org
+   and attaches the `.nupkg` to the GitHub release. Until `NUGET_USER` is set the push step
+   is skipped with a notice, so tagging still produces the GitHub release.
 
 Users then install with `dotnet tool install -g WpfVisualTreeMcp` (gives the `wpfinspect`
 command) or run the MCP server with `dnx WpfVisualTreeMcp`.

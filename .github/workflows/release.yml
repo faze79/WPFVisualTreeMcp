@@ -14,7 +14,11 @@ jobs:
   release:
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: write    # create the GitHub release
+      id-token: write    # NuGet trusted publishing (OIDC) - no API key secret needed
+    env:
+      # secrets can't be referenced directly in step-level if: - surface presence as a plain string
+      HAS_NUGET_USER: ${{ secrets.NUGET_USER != '' }}
 
     steps:
     - name: Checkout
@@ -50,16 +54,25 @@ jobs:
     - name: Pack NuGet package
       run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
 
+    # Trusted publishing (OIDC): requires a policy at nuget.org/account/trustedpublishing
+    # for repo faze79/WPFVisualTreeMcp, workflow release.yml, package WpfVisualTreeMcp,
+    # plus a repo secret NUGET_USER = the nuget.org profile name. Skipped with a notice
+    # until NUGET_USER is set, so tagging still produces the GitHub release meanwhile.
+    - name: NuGet login (OIDC)
+      id: nuget_login
+      if: env.HAS_NUGET_USER == 'true'
+      uses: NuGet/login@v1
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
     - name: Push to NuGet.org
+      if: env.HAS_NUGET_USER == 'true'
+      run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+    - name: NuGet publish skipped
+      if: env.HAS_NUGET_USER != 'true'
       shell: pwsh
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      run: |
-        if (-not $env:NUGET_API_KEY) {
-          Write-Host "NUGET_API_KEY secret not set - skipping NuGet publish."
-          exit 0
-        }
-        dotnet nuget push ./artifacts/*.nupkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: Write-Host "NUGET_USER secret not set - skipping NuGet publish (see docs/PROMOTION.md)."
 
     - name: Extract version notes
       id: notes
