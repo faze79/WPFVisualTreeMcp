@@ -61,8 +61,10 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    # Server transitively references the WPF (net8.0-windows) Inspector, so a
+    # restore/format on Linux needs Windows targeting enabled.
     - name: Restore dependencies
-      run: dotnet restore src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj
+      run: dotnet restore src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -p:EnableWindowsTargeting=true
 
     - name: Check formatting
       run: dotnet format src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --verify-no-changes --verbosity diagnostic

@@ -175,6 +175,11 @@ public class BindingAnalyzer
     {
         if (_errorListener != null) return;
 
+        // Without Refresh(), WPF ignores runtime listener/switch changes unless
+        // tracing was already enabled via app.config or the registry — the
+        // listener would attach but never receive a single event.
+        PresentationTraceSources.Refresh();
+
         _errorListener = new BindingErrorTraceListener(_capturedErrors, _errorLock, MaxCapturedErrors);
         PresentationTraceSources.DataBindingSource.Listeners.Add(_errorListener);
         PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Warning;

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-12
+
+### Fixed
+
+- **Binding errors were never captured.** `PresentationTraceSources.Refresh()` was
+  never called, so WPF ignored the listener the Inspector attaches at runtime
+  (`DataBindingSource` only honours runtime listener/switch changes after a
+  Refresh, unless tracing was enabled via app.config or the registry).
+  `wpf_get_binding_errors` therefore always returned an empty list, even with a
+  broken binding on screen — the project's headline diagnostic feature was inert.
+- **`wpf_get_binding_errors` dropped the errors it did have.** The server parsed the
+  Inspector's `{"errors":[...],"count":N}` payload as a bare JSON array, silently
+  yielding `errors: []` while reporting a non-zero `count`. The Inspector's own
+  `count` was also computed with an array-item counter that overcounts objects.
+
+### Added
+
+- **NuGet packaging**: the server ships as a .NET tool (`dotnet tool install -g
+  WpfVisualTreeMcp` → `wpfinspect` command) and as an **MCP server package**
+  (`PackageType: McpServer`, runnable via `dnx WpfVisualTreeMcp`), with the native
+  bootstrappers and the x86 injector helper bundled in the package.
+- `.mcp/server.json` manifest for registry.modelcontextprotocol.io, plus a manual
+  **Publish to MCP Registry** workflow (GitHub OIDC, no secrets).
+- Release workflow now packs and pushes the NuGet package (needs `NUGET_API_KEY`)
+  and attaches the `.nupkg` to the GitHub release.
+- README: demo GIF, 60-second quickstart, and a comparison table against Snoop,
+  FlaUI/WinAppDriver and generic computer-use agents.
+
+### Changed
+
+- CI fixes (both failures pre-dated this release): the Linux `code-quality` job now
+  restores with `EnableWindowsTargeting`, and the release workflow publishes the
+  multi-targeted Inspector with an explicit `--framework`.
+
 ## [0.7.0] - 2026-07-12
 
 ### Fixed

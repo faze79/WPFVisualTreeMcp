@@ -41,11 +41,25 @@ jobs:
       run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish/server
 
     - name: Publish Inspector DLL
-      run: dotnet publish src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --output ./publish/inspector
+      run: dotnet publish src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --framework net8.0-windows --output ./publish/inspector
 
     - name: Create release archive
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
+
+    - name: Pack NuGet package
+      run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
+
+    - name: Push to NuGet.org
+      shell: pwsh
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        if (-not $env:NUGET_API_KEY) {
+          Write-Host "NUGET_API_KEY secret not set - skipping NuGet publish."
+          exit 0
+        }
+        dotnet nuget push ./artifacts/*.nupkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
 
     - name: Extract version notes
       id: notes
@@ -68,6 +82,7 @@ jobs:
         body_path: release-notes.md
         files: |
           ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
+          ./artifacts/*.nupkg
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
       env:

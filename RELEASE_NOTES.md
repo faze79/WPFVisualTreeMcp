@@ -1,5 +1,30 @@
 # Release Notes
 
+## v0.7.1 — Binding-error capture actually works, plus NuGet/MCP-registry distribution (2026-07-12)
+
+### Fixed: binding errors were never captured
+
+`wpf_get_binding_errors` always came back empty — even with a broken binding visibly failing on screen. Two independent bugs stacked on top of each other:
+
+1. The Inspector attaches a `TraceListener` to `PresentationTraceSources.DataBindingSource` at runtime, but **never called `PresentationTraceSources.Refresh()`**. Without it, WPF ignores listener and switch-level changes made after startup (unless tracing was already enabled via app.config or the registry), so the listener sat there and never received a single event.
+2. Even when errors *were* captured, the server parsed the Inspector's `{"errors":[...],"count":N}` payload as a bare JSON array, yielding `errors: []` alongside a non-zero `count`.
+
+The project's headline diagnostic capability — "let the AI read the app's binding errors" — was inert until now. Verified live: a deliberately misspelled binding path in the sample app is now reported with element, property, path and the full WPF message.
+
+### Added: install from NuGet
+
+- **`dotnet tool install -g WpfVisualTreeMcp`** → the `wpfinspect` command.
+- The package is also an **MCP server package** (`PackageType: McpServer`), runnable via **`dnx WpfVisualTreeMcp`** and discoverable in MCP client catalogs. The native bootstrappers and the x86 injector helper are bundled inside the package, so auto-injection works out of the box.
+- `.mcp/server.json` manifest + a manual **Publish to MCP Registry** workflow (GitHub OIDC) for registry.modelcontextprotocol.io.
+- The release workflow now packs the NuGet package, pushes it to nuget.org (with the `NUGET_API_KEY` secret) and attaches the `.nupkg` to the release.
+
+### Also
+
+- README rewritten around the actual value: demo GIF, 60-second quickstart, and a comparison against Snoop, FlaUI/WinAppDriver and generic computer-use agents.
+- CI fixes (both failures pre-dated this release): Linux `code-quality` job restores with `EnableWindowsTargeting`; the release workflow publishes the multi-targeted Inspector with an explicit `--framework`.
+
+---
+
 ## v0.7.0 — Element queries, item selection, screen capture + critical IPC fix (2026-07-12)
 
 This release makes the tool surface actually usable by an AI agent end-to-end: a **critical serialization bug** meant most tool parameters never reached the Inspector, and on top of the fix comes a **query engine** for finding controls, **item selection** for dropdowns/lists, **right/double click**, and **screen-mode screenshots** that can see popups and menus.

@@ -484,7 +484,9 @@ public class InspectorService : IDisposable
         return new GetBindingErrorsResponse
         {
             ErrorsJson = errorsJson,
-            Count = CountJsonArrayItems(errorsJson)
+            // The analyzer JSON is {"errors":[...],"count":N} — read its count field;
+            // CountJsonArrayItems is for arrays and overcounts on objects.
+            Count = ParseJsonCount(errorsJson)
         };
     }
 

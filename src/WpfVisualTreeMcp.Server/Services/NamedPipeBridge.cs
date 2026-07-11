@@ -827,7 +827,12 @@ public class NamedPipeBridge : IIpcBridge
         try
         {
             using var doc = JsonDocument.Parse(response.ErrorsJson);
-            foreach (var error in doc.RootElement.EnumerateArray())
+            // Inspector format: {"errors":[...],"count":N}; plain array kept for compatibility.
+            var errorsArray = doc.RootElement.ValueKind == JsonValueKind.Object &&
+                              doc.RootElement.TryGetProperty("errors", out var e)
+                ? e
+                : doc.RootElement;
+            foreach (var error in errorsArray.EnumerateArray())
             {
                 result.Errors.Add(new BindingError
                 {

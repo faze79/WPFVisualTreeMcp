@@ -1,0 +1,36 @@
+name: Publish to MCP Registry
+
+# Publishes src/WpfVisualTreeMcp.Server/.mcp/server.json to the official MCP
+# registry (registry.modelcontextprotocol.io). Run manually AFTER the NuGet
+# package version referenced in server.json is live on nuget.org — the registry
+# validates that the package exists and embeds a matching .mcp/server.json.
+#
+# Auth is GitHub OIDC: publishing to the io.github.faze79/* namespace is
+# authorized by this workflow running in a repo owned by faze79. No secrets needed.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz" | tar xz mcp-publisher
+
+      - name: Stage server.json
+        run: cp src/WpfVisualTreeMcp.Server/.mcp/server.json server.json
+
+      - name: Login to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish
+        run: ./mcp-publisher publish

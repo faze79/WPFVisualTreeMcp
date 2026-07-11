@@ -6,9 +6,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
 
-> MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time
+> **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI, exposed over the Model Context Protocol — visual tree, data bindings, screenshots, clicks, text input and keyboard, against any running WPF process, no source changes needed.
 
-> **📢 Latest Updates:** See [RELEASE_NOTES.md](RELEASE_NOTES.md) for recent improvements including screenshot capture, DLL auto-injection, AdornerLayer/Popup traversal, and IPC deadlock fixes.
+![Demo: an AI agent drives a WPF app and finds a binding bug](docs/assets/demo.gif)
+
+*An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
+
+## Quickstart (60 seconds)
+
+1. Download and extract the [latest release](https://github.com/faze79/WPFVisualTreeMcp/releases) zip (requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)).
+2. Register it in your MCP client — for Claude Code, add to `.mcp.json`:
+   ```json
+   {
+     "mcpServers": {
+       "wpf-visual-tree": {
+         "command": "C:/path/to/WpfVisualTreeMcp.Server.exe",
+         "args": []
+       }
+     }
+   }
+   ```
+3. Ask your agent: *"Look at my running WPF app and tell me why the Save button is disabled."*
+
+Prefer the terminal? The same exe is a full CLI: `WpfVisualTreeMcp.Server.exe help`.
 
 ## Overview
 
@@ -61,7 +81,21 @@ Useful when the MCP server isn't connected, for scripting, and for verifying
 the pipeline manually. Run `WpfVisualTreeMcp.Server.exe help` for the full
 command list. Output is JSON on stdout; diagnostics go to stderr.
 
-## Quick Start
+## How it compares
+
+| | **WpfVisualTreeMcp** | [Snoop](https://github.com/snoopwpf/snoopwpf) | [FlaUI](https://github.com/FlaUI/FlaUI) / WinAppDriver | Generic computer-use (screenshot + mouse) |
+|---|---|---|---|---|
+| Consumer | **AI agents (MCP) + humans (CLI)** | Humans (GUI) | Test code (C#) | AI agents |
+| Visual tree, dependency properties | ✅ | ✅ | ❌ (UIA view only) | ❌ |
+| Data bindings, binding errors, DataContext | ✅ | ✅ | ❌ | ❌ |
+| Find controls by visible text / properties | ✅ | manual | partial (UIA) | pixel guessing |
+| Click / type / select / shortcuts | ✅ | ❌ | ✅ | ✅ (blind) |
+| Element screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
+| Works without target source changes | ✅ (auto-injection) | ✅ | ✅ | ✅ |
+
+In short: UIA-based tools see what accessibility exposes, and computer-use agents see pixels. This project gives the agent **the same insider view a WPF developer has in Snoop** — plus the hands to act on it, over a protocol every AI coding tool speaks.
+
+## Installation
 
 ### Prerequisites
 
@@ -71,26 +105,33 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 
 ### Installation
 
-#### Option 1: Download Release (Recommended)
+#### Option 1: .NET tool / NuGet (Recommended)
+
+```bash
+dotnet tool install -g WpfVisualTreeMcp     # installs the `wpfinspect` command
+```
+
+The package is also published as an **MCP server package** (`PackageType: McpServer`),
+so MCP clients that support NuGet-hosted servers can launch it directly:
+
+```bash
+dnx WpfVisualTreeMcp                        # runs the MCP stdio server
+```
+
+#### Option 2: Download Release
 
 Download the latest release from [GitHub Releases](https://github.com/faze79/WpfVisualTreeMcp/releases):
 
 1. Download `WpfVisualTreeMcp-vX.X.X-win-x64.zip`
 2. Extract to a folder (e.g., `C:\Tools\WpfVisualTreeMcp`)
-3. The MCP server executable is at `server\WpfVisualTreeMcp.Server.exe`
+3. The MCP server executable is `WpfVisualTreeMcp.Server.exe`
 
-#### Option 2: Build from Source
+#### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/faze79/WpfVisualTreeMcp.git
 cd WpfVisualTreeMcp
 dotnet build -c Release
-```
-
-#### Option 3: .NET Tool (Coming Soon)
-
-```bash
-dotnet tool install -g WpfVisualTreeMcp
 ```
 
 ### Configuration
@@ -331,11 +372,22 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Architecture-matching `WpfInjectorHelper.exe` (32-bit .NET 8)
 - [x] Removes v0.5.0 known limitation; both x86 and x64 WPF apps drivable
 
-### Future Considerations
-- [ ] Symmetric x64 helper for x86-server-to-x64-target injection
+### Phase 6: Query engine & full driving ✅ *(v0.7.0)*
+- [x] Query elements by visible text, property values, visibility
+- [x] Enriched results: text, automation id, enabled/visible state, screen bounds
+- [x] `wpf_select_item` — select in ComboBox/ListBox/TabControl by text or index
+- [x] Double / right click; scroll-into-view before physical input
+- [x] Screen-mode screenshots (popups, dropdowns, context menus visible)
+- [x] Set-text read-back verification; weak element-handle cache
+- [x] Critical IPC serialization fix (request parameters were silently dropped)
+
+### Next up
+- [ ] `wpf_wait_for` — wait for an element/condition (robust agent loops without polling)
+- [ ] NuGet package, installable via `dnx` / `dotnet tool install` (MCP server package type)
+- [ ] Inspector-only NuGet package for self-hosted mode (reference instead of injection)
+- [ ] Streaming binding-error / property-change notifications to the MCP client
+- [ ] WinUI 3 support
 - [ ] Visual tree diff/comparison
-- [ ] Performance diagnostics
-- [ ] Visual tree modification capabilities
 
 ## Contributing
 

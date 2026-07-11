@@ -209,6 +209,18 @@ WpfVisualTreeMcp.Server.exe screenshot --pid 1234 --out app.png
 Run `WpfVisualTreeMcp.Server.exe help` for the full command list, or
 `<command> --help` for one command.
 
+## Release Checklist
+
+1. Bump `<Version>` in `src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj`
+2. Bump **both** `version` fields in `src/WpfVisualTreeMcp.Server/.mcp/server.json`
+   (registry manifest — must match the NuGet package version exactly)
+3. Update `CHANGELOG.md` and `RELEASE_NOTES.md`
+4. Commit, tag `vX.Y.Z`, push tag → `release.yml` builds the zip, creates the GitHub
+   release, packs the NuGet package and pushes it to nuget.org (needs the
+   `NUGET_API_KEY` repo secret; skipped with a notice if absent)
+5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
+   workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
+
 ## Test Framework
 
 - **xUnit** - Test runner

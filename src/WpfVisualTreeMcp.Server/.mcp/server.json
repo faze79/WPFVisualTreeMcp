@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.faze79/wpf-visual-tree",
+  "description": "Let AI agents see, debug and drive running WPF apps - visual tree, data bindings, screenshots, clicks and text input. Snoop + Playwright for AI.",
+  "repository": {
+    "url": "https://github.com/faze79/WPFVisualTreeMcp",
+    "source": "github"
+  },
+  "version": "0.7.1",
+  "packages": [
+    {
+      "registryType": "nuget",
+      "registryBaseUrl": "https://api.nuget.org",
+      "identifier": "WpfVisualTreeMcp",
+      "version": "0.7.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
