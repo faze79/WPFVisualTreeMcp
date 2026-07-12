@@ -20,9 +20,14 @@ dependency properties, bindings, DataContext — the way Snoop does, plus the ha
 Manifest lives at `src/WpfVisualTreeMcp.Server/.mcp/server.json`
 (namespace `io.github.faze79/wpf-visual-tree`).
 
-**Prerequisite:** the NuGet package version referenced in the manifest must already be
-live on nuget.org — the registry validates that the package exists and embeds a matching
-`.mcp/server.json`.
+**Prerequisites:**
+1. The NuGet package version referenced in the manifest must already be **live on
+   nuget.org** — the registry validates that the package exists.
+2. The published package's README must contain the ownership token
+   `<!-- mcp-name: io.github.faze79/wpf-visual-tree -->` (already in `README.md`, which
+   ships in the package via `PackageReadmeFile`). The registry reads it to confirm the
+   NuGet package belongs to this server name. Keep the token's server name in sync with
+   `server.json` `name`.
 
 Then run the **"Publish to MCP Registry"** workflow (Actions tab → Run workflow).
 It authenticates with GitHub OIDC — no secrets, no tokens: publishing under
