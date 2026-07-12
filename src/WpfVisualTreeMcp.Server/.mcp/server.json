@@ -10,7 +10,7 @@
   "packages": [
     {
       "registryType": "nuget",
-      "registryBaseUrl": "https://api.nuget.org",
+      "registryBaseUrl": "https://api.nuget.org/v3/index.json",
       "identifier": "WpfVisualTreeMcp",
       "version": "0.7.1",
       "transport": {
