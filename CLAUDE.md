@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (21 tools)
+    ├─ WpfTools (22 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -56,8 +56,8 @@ Target WPF Application (.NET Framework)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 21 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (21 commands) |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 22 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (22 commands) |
 | Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks, text input, and keyboard shortcuts (UI Automation + SendInput physical fallback) |
 | Injector Helper | `src/WpfVisualTreeMcp.InjectorHelper/Program.cs` | 32-bit .NET 8 helper exe spawned by `ProcessInjector` for cross-arch injection (v0.6.0) |
 | IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
@@ -74,6 +74,13 @@ Target WPF Application (.NET Framework)
 - WPF apps are single-threaded (STA). All visual tree operations must run on the UI Dispatcher thread.
 - Inspector wraps Dispatcher.Invoke in `Task.Run()` to avoid blocking the IPC thread.
 - 10-second timeout for UI operations.
+- `IpcServer` accepts **concurrent** pipe connections (each client handled on its own task);
+  requests still serialize on the UI Dispatcher, so a long `wpf_wait_for` no longer blocks
+  other commands.
+- `wpf_wait_for` polls on the background thread (short `Dispatcher.Invoke` per check +
+  `Task.Delay` between) — it is handled in `HandleRequestAsync` *before* the blocking
+  Dispatcher.Invoke path, so the UI thread stays free and the awaited condition can change.
+  Its timeout is clamped to 25s to stay under the 30s IPC request timeout.
 
 ## Important Implementation Notes
 

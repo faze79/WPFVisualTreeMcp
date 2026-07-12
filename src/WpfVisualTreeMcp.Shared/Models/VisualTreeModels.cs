@@ -78,6 +78,23 @@ public class FoundElement
 }
 
 /// <summary>
+/// Result of a wait-for-element poll.
+/// </summary>
+public class WaitForResult
+{
+    /// <summary>True when the condition was met before the timeout elapsed.</summary>
+    public bool Matched { get; set; }
+
+    /// <summary>Handle of the matched element (appear/enabled conditions); null otherwise.</summary>
+    public string? MatchedHandle { get; set; }
+
+    public string? ElementType { get; set; }
+
+    /// <summary>How long the wait actually took, in milliseconds.</summary>
+    public int WaitedMs { get; set; }
+}
+
+/// <summary>
 /// Screen-space rectangle in physical (device) pixels.
 /// </summary>
 public class ScreenBounds

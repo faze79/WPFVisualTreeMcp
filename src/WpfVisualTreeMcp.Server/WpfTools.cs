@@ -236,6 +236,33 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Wait until an element matching the criteria satisfies a condition, polling in the target app so you don't have to sleep-and-retry. Identify the element with type_name, element_name and/or text (same matching as wpf_find_elements). condition: 'visible' (default — element exists and is on screen), 'exists' (in the tree even if not visible), 'enabled' (visible and IsEnabled=true), 'hidden' (no matching visible element — e.g. a spinner disappeared). Returns matched (bool), waited_ms, and matched_handle/element_type when found. Use after a click that triggers async work (dialog opens, spinner clears, button enables) before the next step. timeout_ms default 10000 (max 25000); poll_interval_ms default 250.")]
+    public async Task<object> WpfWaitForElement(
+        string? type_name = null,
+        string? element_name = null,
+        string? text = null,
+        string condition = "visible",
+        int timeout_ms = 10000,
+        int poll_interval_ms = 250,
+        string? root_handle = null)
+    {
+        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
+        {
+            throw new ArgumentException("At least type_name, element_name or text is required to identify the element to wait for.");
+        }
+
+        var result = await _ipcBridge.WaitForElementAsync(
+            root_handle, type_name, element_name, text, condition, timeout_ms, poll_interval_ms);
+        return new
+        {
+            matched = result.Matched,
+            waited_ms = result.WaitedMs,
+            matched_handle = result.MatchedHandle,
+            element_type = result.ElementType
+        };
+    }
+
+    [McpServerTool]
     [Description("Get layout information (ActualWidth, ActualHeight, Margin, etc.)")]
     public async Task<object> WpfGetLayoutInfo(string element_handle)
     {

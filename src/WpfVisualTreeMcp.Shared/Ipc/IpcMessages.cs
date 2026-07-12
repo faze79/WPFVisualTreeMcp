@@ -94,6 +94,34 @@ public class FindElementsDeepResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// Wait For Element (poll until a condition holds)
+public class WaitForElementRequest : IpcRequest
+{
+    public override string RequestType => "WaitForElement";
+    public string? RootHandle { get; set; }
+    public string? TypeName { get; set; }
+    public string? ElementName { get; set; }
+    public string? Text { get; set; }
+
+    /// <summary>"visible" (default), "exists", "enabled", or "hidden".</summary>
+    public string Condition { get; set; } = "visible";
+
+    public int TimeoutMs { get; set; } = 10000;
+    public int PollIntervalMs { get; set; } = 250;
+}
+
+public class WaitForElementResponse : IpcResponse
+{
+    /// <summary>True when the condition was met before the timeout.</summary>
+    public bool Matched { get; set; }
+
+    /// <summary>Handle of the matched element (for appear/enabled conditions); null otherwise.</summary>
+    public string? MatchedHandle { get; set; }
+
+    public string? ElementType { get; set; }
+    public int WaitedMs { get; set; }
+}
+
 // Layout Info
 public class GetLayoutInfoRequest : IpcRequest
 {

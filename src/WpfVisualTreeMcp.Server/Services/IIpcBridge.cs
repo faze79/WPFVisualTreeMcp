@@ -66,6 +66,13 @@ public interface IIpcBridge
     Task<LayoutInfoResult> GetLayoutInfoAsync(string elementHandle);
 
     /// <summary>
+    /// Polls until an element matching the criteria satisfies the condition
+    /// ("visible", "exists", "enabled", or "hidden") or the timeout elapses.
+    /// </summary>
+    Task<WaitForResult> WaitForElementAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text, string condition, int timeoutMs, int pollIntervalMs);
+
+    /// <summary>
     /// Exports the visual tree in the specified format.
     /// </summary>
     Task<ExportResult> ExportTreeAsync(string? elementHandle, string format);

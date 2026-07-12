@@ -22,7 +22,7 @@ public static class CliRunner
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "select-item", "set-text",
-        "send-keys", "layout", "export", "screenshot",
+        "send-keys", "wait-for", "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -285,6 +285,22 @@ public static class CliRunner
                     break;
                 }
 
+                case "wait-for":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var type = cli.GetStringOrNull("type");
+                    var name = cli.GetStringOrNull("name");
+                    var text = cli.GetStringOrNull("text");
+                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text))
+                        throw new ArgumentException("wait-for requires --type, --name or --text to identify the element.");
+                    WriteJson(await bridge.WaitForElementAsync(
+                        cli.GetStringOrNull("root"), type, name, text,
+                        cli.GetString("condition", "visible"),
+                        cli.GetInt("timeout", 10000),
+                        cli.GetInt("poll", 250)), cli);
+                    break;
+                }
+
                 case "layout":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -442,6 +458,7 @@ COMMANDS
   select-item   --pid --handle H (--item-text S | --index N)  (changes app state)
   set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
   send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
+  wait-for      --pid (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout MS] [--poll MS]
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
@@ -521,6 +538,15 @@ TYPICAL WORKFLOW
                          + "        Delete, Insert, Home, End, PageUp, PageDown, Up/Down/Left/Right.\n"
                          + "  Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'F5', 'Alt+F4', 'Win+R'.\n"
                          + "  This command CHANGES application state.",
+            "wait-for" => "wait-for --pid <id> (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout <ms>] [--poll <ms>]\n"
+                        + "  Poll in the target app until an element matching the criteria satisfies\n"
+                        + "  the condition, instead of sleep-and-retry. Conditions:\n"
+                        + "    visible (default) - element exists and is on screen\n"
+                        + "    exists            - in the tree even if not visible\n"
+                        + "    enabled           - visible and IsEnabled=true\n"
+                        + "    hidden            - no matching visible element (e.g. a spinner cleared)\n"
+                        + "  --timeout defaults to 10000 (max 25000); --poll defaults to 250.\n"
+                        + "  Returns matched (bool), waitedMs, and matchedHandle/elementType when found.",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
                           + "  Capture the window (or one element) as PNG and print the file path.\n"

@@ -60,15 +60,21 @@ public class IpcServer : IDisposable
         {
             try
             {
-                using var pipeServer = new NamedPipeServerStream(
+                var pipeServer = new NamedPipeServerStream(
                     _pipeName,
                     PipeDirection.InOut,
-                    1,
+                    NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous);
 
                 await pipeServer.WaitForConnectionAsync(cancellationToken);
-                await HandleClientAsync(pipeServer, cancellationToken);
+
+                // Handle this client on its own task and immediately loop to accept the
+                // next connection. Without this, a long-running request (e.g. WaitForElement
+                // polling for up to 25s) would hold the single pipe instance and block every
+                // other command. Requests still serialize on the UI Dispatcher, so this only
+                // parallelises the pipe read loops, not the actual tree access.
+                _ = HandleClientAsync(pipeServer, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -84,6 +90,8 @@ public class IpcServer : IDisposable
 
     private async Task HandleClientAsync(NamedPipeServerStream pipeServer, CancellationToken cancellationToken)
     {
+        // Owned by this task now (no using in the accept loop), so dispose it here.
+        using var _ = pipeServer;
         try
         {
             DebugLog("HandleClientAsync: Client connected");

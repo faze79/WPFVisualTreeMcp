@@ -1,5 +1,34 @@
 # Release Notes
 
+## v0.8.0 — Wait for UI conditions, and concurrent IPC (2026-07-12)
+
+Agent loops that drive a WPF app keep hitting the same wall: you click something, and the next step races the app's async work — the dialog hasn't opened yet, the spinner hasn't cleared, the button isn't enabled. Until now the only answer was sleep-and-retry from the agent side. This release adds a proper wait.
+
+### `wpf_wait_for` / `wait-for` — the 22nd tool
+
+Wait until an element matching `type_name` / `element_name` / `text` satisfies a condition, polling **inside the target app**:
+
+- `visible` (default) — element exists and is on screen
+- `exists` — in the tree even if not visible
+- `enabled` — visible and `IsEnabled=true`
+- `hidden` — no matching visible element (a spinner cleared, a dialog closed)
+
+Returns `matched`, `waited_ms`, and the matched handle/type. Drop it between a trigger and the next action:
+
+```
+wait-for --pid 1234 --type Button --text Save --condition enabled --timeout 8000
+```
+
+### Concurrent IPC connections
+
+Making the wait useful surfaced a limitation: the named-pipe server handled **one client at a time**, so a long `wpf_wait_for` poll would have blocked every other command. The server now accepts connections concurrently (each on its own task); requests still serialize on the WPF UI Dispatcher, so tree access stays safe. A nice consequence: the state change a wait is waiting for can arrive over a *second* connection — which is exactly how it was verified live (waiting for Submit to enable, then typing the username over a separate connection; the wait returned the instant the button lit up).
+
+### Why polling doesn't freeze the UI
+
+`wpf_wait_for` is handled before the blocking `Dispatcher.Invoke` path: it runs a short Invoke per check and `Task.Delay`s between checks on a background thread, so the UI thread stays free and the awaited condition can actually change. The timeout is clamped to 25s to stay under the 30s IPC request timeout.
+
+---
+
 ## v0.7.1 — Binding-error capture actually works, plus NuGet/MCP-registry distribution (2026-07-12)
 
 ### Fixed: binding errors were never captured

@@ -85,6 +85,8 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 
 ## How it compares
 
+**vs. the general tool categories:**
+
 | | **WpfVisualTreeMcp** | [Snoop](https://github.com/snoopwpf/snoopwpf) | [FlaUI](https://github.com/FlaUI/FlaUI) / WinAppDriver | Generic computer-use (screenshot + mouse) |
 |---|---|---|---|---|
 | Consumer | **AI agents (MCP) + humans (CLI)** | Humans (GUI) | Test code (C#) | AI agents |
@@ -92,10 +94,24 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 | Data bindings, binding errors, DataContext | ✅ | ✅ | ❌ | ❌ |
 | Find controls by visible text / properties | ✅ | manual | partial (UIA) | pixel guessing |
 | Click / type / select / shortcuts | ✅ | ❌ | ✅ | ✅ (blind) |
+| Wait for UI conditions (no sleep loops) | ✅ | ❌ | ✅ | ❌ |
 | Element screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
 | Works without target source changes | ✅ (auto-injection) | ✅ | ✅ | ✅ |
 
-In short: UIA-based tools see what accessibility exposes, and computer-use agents see pixels. This project gives the agent **the same insider view a WPF developer has in Snoop** — plus the hands to act on it, over a protocol every AI coding tool speaks.
+**vs. other WPF MCP servers.** Most WPF MCP servers are built on **UI Automation** (FlaUI): they read the *accessibility* tree, and can only reach WPF internals — bindings, DataContext, ViewModel state — if you **install their in-process probe into the app you want to inspect**. This server takes the Snoop route instead: it **injects at runtime**, so it reads the *real* visual tree and diagnoses binding errors and DataContext **with zero changes to the target app** — nothing to add to your build, nothing to ship into production.
+
+| | **WpfVisualTreeMcp** | UIA-based servers (FlaUI) | Other injection-based servers |
+|---|---|---|---|
+| Sees the real visual tree (not just the UIA view) | ✅ injection | ❌ accessibility tree | ✅ |
+| Binding errors + DataContext **without a probe in the target** | ✅ | ❌ (needs in-process probe) | partial |
+| Interaction surface | click (UIA + physical, double/right), set-text w/ read-back, send-keys, **select-item (virtualized)** | click / type / select | usually invoke-only |
+| Wait for element conditions | ✅ `wpf_wait_for` | ✅ | ❌ |
+| Popup / dropdown / context-menu screenshots | ✅ screen mode | partial | screenshot only |
+| Cross-architecture injection (x64 ⇄ x86) | ✅ | n/a | ❌ |
+| Dual-mode: MCP server **and** one-shot CLI | ✅ | ❌ | ❌ |
+| Distribution | NuGet (`dnx`/tool) + official MCP registry | varies | varies |
+
+In short: UIA-based tools see what accessibility exposes, and computer-use agents see pixels. This project gives the agent **the same insider view a WPF developer has in Snoop — with no probe to install in the target app** — plus the widest set of hands to act on it, over a protocol every AI coding tool speaks.
 
 ## Installation
 
@@ -329,6 +345,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_highlight_element` | Visually highlight an element |
 | `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
 | `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
+| `wpf_wait_for` | **Wait** until an element is visible/exists/enabled/hidden, polling in the target app — no sleep-and-retry loops. |
 | `wpf_set_text` | **Set text/value** of a TextBox/ComboBox/PasswordBox — UI Automation `IValueProvider.SetValue` by default, `physical=true` to type via OS keyboard input. *State-changing.* |
 | `wpf_send_keys` | **Send a keyboard shortcut** (`Ctrl+S`, `Alt+F4`, `F5`, `Enter`, ...) to an element or the focused window. *State-changing.* |
 | `wpf_get_layout_info` | Get layout information |
@@ -383,9 +400,15 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Set-text read-back verification; weak element-handle cache
 - [x] Critical IPC serialization fix (request parameters were silently dropped)
 
+### Phase 7: Distribution & agent ergonomics ✅ *(v0.7.1 / v0.8.0)*
+- [x] NuGet package, installable via `dnx` / `dotnet tool install` (MCP server package type)
+- [x] Published to nuget.org (trusted publishing / OIDC) and the official MCP registry
+- [x] Binding-error capture fixed (was never wired up), IPC parameter-drop fix
+- [x] `wpf_wait_for` — wait for an element/condition, no sleep-and-retry loops
+- [x] Concurrent IPC connections (a long wait no longer blocks other commands)
+
 ### Next up
-- [ ] `wpf_wait_for` — wait for an element/condition (robust agent loops without polling)
-- [ ] NuGet package, installable via `dnx` / `dotnet tool install` (MCP server package type)
+- [ ] `wpf_record` → `wpf_export_test` — record a driven workflow, export an xUnit + driver test
 - [ ] Inspector-only NuGet package for self-hosted mode (reference instead of injection)
 - [ ] Streaming binding-error / property-change notifications to the MCP client
 - [ ] WinUI 3 support
@@ -451,7 +474,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 21 tools auto-discovered via `[McpServerTool]` attributes (17 read-only inspection + 4 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`)
+- **Tools**: 22 tools auto-discovered via `[McpServerTool]` attributes (18 read-only inspection incl. `wpf_wait_for` + 4 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

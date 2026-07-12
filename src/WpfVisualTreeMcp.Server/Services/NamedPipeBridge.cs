@@ -261,6 +261,39 @@ public class NamedPipeBridge : IIpcBridge
         return ParseLayoutInfoResponse(response, elementHandle);
     }
 
+    public async Task<WaitForResult> WaitForElementAsync(string? rootHandle, string? typeName, string? elementName,
+        string? text, string condition, int timeoutMs, int pollIntervalMs)
+    {
+        var session = EnsureConnected();
+
+        var request = new WaitForElementRequest
+        {
+            RootHandle = rootHandle,
+            TypeName = typeName,
+            ElementName = elementName,
+            Text = text,
+            Condition = condition,
+            TimeoutMs = timeoutMs,
+            PollIntervalMs = pollIntervalMs
+        };
+
+        var response = await SendRequestAsync<WaitForElementRequest, WaitForElementResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to wait for element");
+        }
+
+        return new WaitForResult
+        {
+            Matched = response.Matched,
+            MatchedHandle = response.MatchedHandle,
+            ElementType = response.ElementType,
+            WaitedMs = response.WaitedMs
+        };
+    }
+
     public async Task<ExportResult> ExportTreeAsync(string? elementHandle, string format)
     {
         var session = EnsureConnected();

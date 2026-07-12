@@ -313,6 +313,42 @@ public class TreeWalker
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Returns the first element (across all open windows) matching the criteria, as a
+    /// (handle, typeName) pair, or null when none matches. Used by the wait/poll loop —
+    /// cheaper than building a full result list when only existence matters.
+    /// </summary>
+    public (string Handle, string TypeName)? FindFirstMatch(FindCriteria criteria)
+    {
+        foreach (var root in GetAllSearchRoots())
+        {
+            var hit = FindFirstMatchRecursive(root, criteria);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
+    private (string Handle, string TypeName)? FindFirstMatchRecursive(DependencyObject element, FindCriteria criteria)
+    {
+        if (criteria.VisibleOnly && element is UIElement ui && !ui.IsVisible && element is not Popup)
+        {
+            return null;
+        }
+
+        if (MatchesCriteria(element, criteria))
+        {
+            var type = element.GetType();
+            return (GetOrCreateHandle(element), type.FullName ?? type.Name);
+        }
+
+        foreach (var child in GetAllVisualChildren(element))
+        {
+            var hit = FindFirstMatchRecursive(child, criteria);
+            if (hit != null) return hit;
+        }
+        return null;
+    }
+
     private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results, int maxResults)
     {
         if (results.Count >= maxResults)

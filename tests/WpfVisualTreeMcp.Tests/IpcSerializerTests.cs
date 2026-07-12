@@ -113,6 +113,30 @@ public class IpcSerializerTests
     }
 
     [Fact]
+    public void SerializeRequest_RoundTripsWaitForElementRequest()
+    {
+        var request = new WaitForElementRequest
+        {
+            TypeName = "ProgressBar",
+            Text = "Loading",
+            Condition = "hidden",
+            TimeoutMs = 8000,
+            PollIntervalMs = 200
+        };
+
+        var json = IpcSerializer.SerializeRequest(request);
+        var envelope = IpcSerializer.DeserializeRequest(json);
+
+        envelope!.Value.type.Should().Be("WaitForElement");
+        var back = IpcSerializer.DeserializeRequestData<WaitForElementRequest>(envelope.Value.data);
+        back!.TypeName.Should().Be("ProgressBar");
+        back.Text.Should().Be("Loading");
+        back.Condition.Should().Be("hidden");
+        back.TimeoutMs.Should().Be(8000);
+        back.PollIntervalMs.Should().Be(200);
+    }
+
+    [Fact]
     public void SerializeRequest_RoundTripsSetTextRequest()
     {
         var request = new SetTextRequest

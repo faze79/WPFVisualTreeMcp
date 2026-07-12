@@ -168,6 +168,15 @@ public class InspectorService : IDisposable
                 return new GetVisualTreeResponse { Success = false, Error = "Application.Current is null" };
             }
 
+            // WaitForElement polls over time: it must NOT run inside a single blocking
+            // Dispatcher.Invoke (that would freeze the UI so the condition can never
+            // change, and blow the 10s Invoke timeout). Handle it with a background
+            // loop that does a short Invoke per check and yields the UI thread between.
+            if (requestType == "WaitForElement")
+            {
+                return await HandleWaitForElementAsync(data);
+            }
+
             // Use Task.Run to avoid blocking the named pipe thread
             var result = await Task.Run(() =>
             {
@@ -555,6 +564,87 @@ public class InspectorService : IDisposable
 
         _highlighter.Highlight(element, request.DurationMs);
         return new HighlightElementResponse { RequestId = request.RequestId };
+    }
+
+    private async Task<IpcResponse> HandleWaitForElementAsync(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<WaitForElementRequest>(data);
+        if (request == null)
+        {
+            return new WaitForElementResponse { Success = false, Error = "Invalid WaitForElement request" };
+        }
+
+        var condition = (request.Condition ?? "visible").ToLowerInvariant();
+        if (condition != "visible" && condition != "exists" && condition != "enabled" && condition != "hidden")
+        {
+            return new WaitForElementResponse
+            {
+                Success = false,
+                Error = $"Unknown condition '{request.Condition}'. Expected: visible, exists, enabled, or hidden."
+            };
+        }
+
+        if (string.IsNullOrEmpty(request.TypeName) && string.IsNullOrEmpty(request.ElementName) && string.IsNullOrEmpty(request.Text))
+        {
+            return new WaitForElementResponse
+            {
+                Success = false,
+                Error = "At least type_name, element_name or text is required to identify the element to wait for."
+            };
+        }
+
+        // Keep under the IPC request timeout (30s) with headroom.
+        var timeoutMs = Math.Max(0, Math.Min(request.TimeoutMs, 25000));
+        var pollMs = Math.Max(50, request.PollIntervalMs);
+
+        // "enabled" reuses the property-filter machinery; all appear-conditions want visibility.
+        var criteria = new FindCriteria
+        {
+            TypeName = request.TypeName,
+            ElementName = request.ElementName,
+            Text = request.Text,
+            VisibleOnly = condition != "exists",
+            PropertyFilter = condition == "enabled"
+                ? new Dictionary<string, string> { ["IsEnabled"] = "True" }
+                : null
+        };
+
+        var start = DateTime.UtcNow;
+        while (true)
+        {
+            var hit = Application.Current.Dispatcher.Invoke(
+                () => _treeWalker.FindFirstMatch(criteria),
+                System.Windows.Threading.DispatcherPriority.Normal,
+                System.Threading.CancellationToken.None,
+                TimeSpan.FromSeconds(10));
+
+            var satisfied = condition == "hidden" ? hit == null : hit != null;
+            var elapsed = (int)(DateTime.UtcNow - start).TotalMilliseconds;
+
+            if (satisfied)
+            {
+                return new WaitForElementResponse
+                {
+                    RequestId = request.RequestId,
+                    Matched = true,
+                    MatchedHandle = hit?.Handle,
+                    ElementType = hit?.TypeName,
+                    WaitedMs = elapsed
+                };
+            }
+
+            if (elapsed >= timeoutMs)
+            {
+                return new WaitForElementResponse
+                {
+                    RequestId = request.RequestId,
+                    Matched = false,
+                    WaitedMs = elapsed
+                };
+            }
+
+            await Task.Delay(pollMs);
+        }
     }
 
     private IpcResponse HandleGetLayoutInfo(JsonElement data)

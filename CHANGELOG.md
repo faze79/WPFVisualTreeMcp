@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-12
+
+### Added
+
+- **`wpf_wait_for` / `wait-for`** (22nd tool) — wait until an element matching
+  type/name/text satisfies a condition (`visible`, `exists`, `enabled`, `hidden`),
+  polling inside the target app instead of sleep-and-retry from the agent. Returns
+  `matched`, `waited_ms` and the matched handle/type. Use after an action that triggers
+  async work (a dialog opens, a spinner clears, a button enables) before the next step.
+  `timeout_ms` default 10000 (max 25000), `poll_interval_ms` default 250.
+
+### Changed
+
+- **`IpcServer` now accepts concurrent pipe connections.** Previously the pipe served
+  one client at a time, so a long-running request (like a `wpf_wait_for` poll) blocked
+  every other command. Each client is now handled on its own task; requests still
+  serialize on the UI Dispatcher, so tree access stays safe. This also means the state
+  change a `wpf_wait_for` is waiting on can arrive over a second connection.
+
+### Notes
+
+- `wpf_wait_for` is dispatched before the blocking `Dispatcher.Invoke` path and polls on
+  the background thread (short Invoke per check + `Task.Delay` between), so the UI thread
+  stays free and the awaited condition can actually change. Verified live against the
+  sample app: waiting for the Submit button to become enabled returns as soon as the
+  username is typed over a separate connection.
+
 ## [0.7.1] - 2026-07-12
 
 ### Fixed

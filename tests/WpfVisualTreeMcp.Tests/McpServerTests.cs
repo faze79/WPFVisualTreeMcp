@@ -273,6 +273,42 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfWaitForElement_PassesCriteriaAndCondition()
+    {
+        // Arrange
+        var expected = new WaitForResult
+        {
+            Matched = true,
+            MatchedHandle = "elem_00000005",
+            ElementType = "System.Windows.Controls.Button",
+            WaitedMs = 480
+        };
+        _ipcBridgeMock
+            .Setup(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100))
+            .ReturnsAsync(expected);
+
+        // Act
+        var result = await _tools.WpfWaitForElement(
+            type_name: "Button", text: "Save", condition: "enabled", timeout_ms: 5000, poll_interval_ms: 100);
+
+        // Assert
+        result.Should().BeEquivalentTo(new
+        {
+            matched = true,
+            waited_ms = 480,
+            matched_handle = "elem_00000005",
+            element_type = "System.Windows.Controls.Button"
+        });
+        _ipcBridgeMock.Verify(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfWaitForElement_WithoutCriteria_ThrowsArgumentException()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfWaitForElement());
+    }
+
+    [Fact]
     public async Task WpfGetBindings_WithValidHandle_ReturnsBindings()
     {
         // Arrange
