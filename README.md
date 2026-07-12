@@ -408,11 +408,20 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Concurrent IPC connections (a long wait no longer blocks other commands)
 
 ### Next up
+
+Top of the list: **live property editing** — `wpf_set_property` to change a dependency
+property at runtime (with revert) and `wpf_diff` to measure the before/after effect, so an
+agent can tell in seconds whether a planned UI change actually works.
+
+- [ ] `wpf_set_property` / `wpf_revert_*` — live-edit a dependency property, then undo
+- [ ] `wpf_diff` — before/after snapshot to verify a change's effect
 - [ ] `wpf_record` → `wpf_export_test` — record a driven workflow, export an xUnit + driver test
 - [ ] Inspector-only NuGet package for self-hosted mode (reference instead of injection)
 - [ ] Streaming binding-error / property-change notifications to the MCP client
 - [ ] WinUI 3 support
-- [ ] Visual tree diff/comparison
+
+**See [docs/ROADMAP.md](docs/ROADMAP.md) for the full prioritized plan** (rationale,
+design notes, effort, and suggested sequencing).
 
 ## Contributing
 
