@@ -1,5 +1,7 @@
 # WpfVisualTreeMcp
 
+<!-- mcp-name: io.github.faze79/wpf-visual-tree -->
+
 [![Build](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml/badge.svg)](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/faze79/WpfVisualTreeMcp)](https://github.com/faze79/WpfVisualTreeMcp/releases)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)

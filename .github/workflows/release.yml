@@ -67,7 +67,11 @@ jobs:
 
     - name: Push to NuGet.org
       if: env.HAS_NUGET_USER == 'true'
-      run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      shell: pwsh
+      # pwsh does not expand the *.nupkg glob into the dotnet arg - resolve it explicitly
+      run: |
+        $pkg = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
+        dotnet nuget push $pkg.FullName --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
     - name: NuGet publish skipped
       if: env.HAS_NUGET_USER != 'true'
