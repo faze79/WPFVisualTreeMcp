@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-13
+
+### Added
+
+- **`wpf_set_property` / `set-property`** (23rd tool) — live-edit any dependency property
+  on an element at runtime, to test whether a planned UI change is effective without a
+  rebuild. The string value is converted to the property's type via its `TypeConverter`
+  (covers `Thickness`, `Brush`, `Visibility`, `GridLength`, `Color`, enums, `double`, ...);
+  `{null}` sets null. Returns the coerced value read back and what previously held the
+  property (`Binding` / `Local` / `Unset`). Read-only properties are rejected with a clear
+  error.
+- **`wpf_revert_property` / `revert-property`** (24th tool) — undo live edits: the most
+  recent one, a filtered one (`element_handle` / `property_name`), or `all=true` for the
+  whole experiment. Restores the exact prior state — including a **binding** that was
+  overwritten (not just the last value), a local value, or clears to style/inherited/default
+  when there was none. Backed by a per-session undo stack.
+
+### Notes
+
+- Setting a data-bound property replaces the binding with a local value (usually what you
+  want for a quick test); `wpf_revert_property` puts the binding back. Verified live against
+  the sample app: `Margin` and `Background` edits are visible in a screenshot, and
+  overwriting a bound `Text` reports `previousSource: "Binding"` with the binding restored on
+  revert.
+- Pairs with `wpf_capture_screenshot` to see the effect. The planned `wpf_diff` (roadmap)
+  will add automatic before/after measurement.
+
 ## [0.8.0] - 2026-07-12
 
 ### Added

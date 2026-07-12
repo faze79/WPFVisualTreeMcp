@@ -261,6 +261,62 @@ public class NamedPipeBridge : IIpcBridge
         return ParseLayoutInfoResponse(response, elementHandle);
     }
 
+    public async Task<SetPropertyResult> SetPropertyAsync(string elementHandle, string propertyName, string value)
+    {
+        var session = EnsureConnected();
+
+        var request = new SetPropertyRequest
+        {
+            ElementHandle = elementHandle,
+            PropertyName = propertyName,
+            Value = value
+        };
+
+        var response = await SendRequestAsync<SetPropertyRequest, SetPropertyResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to set property");
+        }
+
+        return new SetPropertyResult
+        {
+            ElementType = response.ElementType,
+            AppliedValue = response.AppliedValue,
+            ValueType = response.ValueType,
+            PreviousSource = response.PreviousSource
+        };
+    }
+
+    public async Task<RevertPropertyResult> RevertPropertyAsync(bool all, string? elementHandle, string? propertyName)
+    {
+        var session = EnsureConnected();
+
+        var request = new RevertPropertyRequest
+        {
+            All = all,
+            ElementHandle = elementHandle,
+            PropertyName = propertyName
+        };
+
+        var response = await SendRequestAsync<RevertPropertyRequest, RevertPropertyResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to revert property");
+        }
+
+        return new RevertPropertyResult
+        {
+            RevertedCount = response.RevertedCount,
+            RevertedHandle = response.RevertedHandle,
+            RevertedProperty = response.RevertedProperty,
+            PendingCount = response.PendingCount
+        };
+    }
+
     public async Task<WaitForResult> WaitForElementAsync(string? rootHandle, string? typeName, string? elementName,
         string? text, string condition, int timeoutMs, int pollIntervalMs)
     {

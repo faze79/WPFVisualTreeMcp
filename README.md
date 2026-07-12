@@ -342,6 +342,8 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_resources` | Enumerate resource dictionaries |
 | `wpf_get_styles` | Get applied styles and templates |
 | `wpf_watch_property` | Monitor a property for changes |
+| `wpf_set_property` | **Live-edit** a dependency property at runtime (type-converted), to test a change without rebuilding. *State-changing, reversible.* |
+| `wpf_revert_property` | Undo `wpf_set_property` edits (one, filtered, or all) — restores the prior binding/value/default. |
 | `wpf_highlight_element` | Visually highlight an element |
 | `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
 | `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
@@ -409,11 +411,10 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 
 ### Next up
 
-Top of the list: **live property editing** — `wpf_set_property` to change a dependency
-property at runtime (with revert) and `wpf_diff` to measure the before/after effect, so an
-agent can tell in seconds whether a planned UI change actually works.
+Live property editing shipped in v0.9.0 (`wpf_set_property` + `wpf_revert_property`).
+Next: `wpf_diff` to measure the before/after effect automatically.
 
-- [ ] `wpf_set_property` / `wpf_revert_*` — live-edit a dependency property, then undo
+- [x] `wpf_set_property` / `wpf_revert_property` — live-edit a dependency property, then undo *(v0.9.0)*
 - [ ] `wpf_diff` — before/after snapshot to verify a change's effect
 - [ ] `wpf_record` → `wpf_export_test` — record a driven workflow, export an xUnit + driver test
 - [ ] Inspector-only NuGet package for self-hosted mode (reference instead of injection)
@@ -483,7 +484,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 22 tools auto-discovered via `[McpServerTool]` attributes (18 read-only inspection incl. `wpf_wait_for` + 4 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`)
+- **Tools**: 24 tools auto-discovered via `[McpServerTool]` attributes (18 read-only inspection incl. `wpf_wait_for` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

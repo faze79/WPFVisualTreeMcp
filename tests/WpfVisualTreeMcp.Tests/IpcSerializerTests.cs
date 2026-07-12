@@ -113,6 +113,23 @@ public class IpcSerializerTests
     }
 
     [Fact]
+    public void SerializeRequest_RoundTripsSetAndRevertPropertyRequests()
+    {
+        var set = new SetPropertyRequest { ElementHandle = "elem_9", PropertyName = "Visibility", Value = "Collapsed" };
+        var setBack = IpcSerializer.DeserializeRequestData<SetPropertyRequest>(
+            IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(set))!.Value.data);
+        setBack!.ElementHandle.Should().Be("elem_9");
+        setBack.PropertyName.Should().Be("Visibility");
+        setBack.Value.Should().Be("Collapsed");
+
+        var revert = new RevertPropertyRequest { All = true };
+        var revertEnvelope = IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(revert));
+        revertEnvelope!.Value.type.Should().Be("RevertProperty");
+        var revertBack = IpcSerializer.DeserializeRequestData<RevertPropertyRequest>(revertEnvelope.Value.data);
+        revertBack!.All.Should().BeTrue();
+    }
+
+    [Fact]
     public void SerializeRequest_RoundTripsWaitForElementRequest()
     {
         var request = new WaitForElementRequest

@@ -10,7 +10,7 @@
 
     <!-- Package metadata -->
     <PackageId>WpfVisualTreeMcp</PackageId>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <Authors>faze79</Authors>
     <Description>MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time</Description>
     <PackageTags>mcp;wpf;visual-tree;debugging;dotnet;ai-agents</PackageTags>

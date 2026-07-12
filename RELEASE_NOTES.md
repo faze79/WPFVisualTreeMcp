@@ -1,5 +1,42 @@
 # Release Notes
 
+## v0.9.0 — Live property editing (2026-07-13)
+
+"Will this change actually work?" — the question you'd normally answer by editing XAML, rebuilding, and relaunching. This release lets an agent answer it in seconds, on the running app.
+
+### `wpf_set_property` — live-edit a dependency property
+
+Change any dependency property at runtime. The string value is converted to the property's type via its `TypeConverter`, so the common cases just work:
+
+```
+set-property --pid 1234 --handle elem_00 --property Margin     --value '20,0,20,0'
+set-property --pid 1234 --handle elem_00 --property Visibility  --value Collapsed
+set-property --pid 1234 --handle elem_00 --property Background  --value Red        # or '#FF0000'
+set-property --pid 1234 --handle elem_00 --property Width       --value 300
+```
+
+It returns the coerced value read back and what previously held the property (`Binding` / `Local` / `Unset`). Pair it with `wpf_capture_screenshot` to *see* the effect. This is the Snoop / VS "Live Property Explorer" experience, exposed to an AI agent — and, as with the rest of this project, it needs **no probe installed in the target app**.
+
+### `wpf_revert_property` — undo, exactly
+
+Every edit is reversible. Revert the most recent one, a filtered one, or `--all`:
+
+```
+revert-property --pid 1234 --all
+```
+
+The revert restores the *exact* prior state — and that includes a **binding** you overwrote. Overwrite a data-bound `Text` with a test value, look at the result, then revert and the binding is back (not just the previous string). Backed by a per-session undo stack.
+
+### Verified live
+
+Against the sample app: `Margin` and `Background` edits on the layout root shift and recolor the UI visibly in a screenshot; overwriting the bound Status `Text` reports `previousSource: "Binding"`, and `revert --all` restores the margin, the background, and the binding in one call.
+
+### What's next
+
+`wpf_diff` — a before/after snapshot so the agent can *measure* the effect of a change automatically, not just look at it. See [docs/ROADMAP.md](docs/ROADMAP.md).
+
+---
+
 ## v0.8.0 — Wait for UI conditions, and concurrent IPC (2026-07-12)
 
 Agent loops that drive a WPF app keep hitting the same wall: you click something, and the next step races the app's async work — the dialog hasn't opened yet, the spinner hasn't cleared, the button isn't enabled. Until now the only answer was sleep-and-retry from the agent side. This release adds a proper wait.

@@ -29,7 +29,7 @@ The headline theme. Today the agent can **read** properties (`wpf_get_element_pr
 with a way to *measure* the effect, lets an agent answer "will this change work?" in
 seconds instead of an edit-rebuild-relaunch cycle.
 
-### 1a. `wpf_set_property` — live property editing 💡 (M)
+### 1a. `wpf_set_property` — live property editing ✅ *(v0.9.0)*
 
 Set an arbitrary dependency property on an element at runtime, with a revert path.
 
@@ -49,9 +49,11 @@ maintainer's proposal and the single most-requested capability for a live inspec
 - Reject read-only DPs (`DependencyPropertyKey`) with a clear error; report the coerced
   value read back (like `set-text`'s read-back) so the agent sees what actually landed.
 
-**Revert:** `wpf_revert_property` restores the saved local value, or `ClearValue(dp)` when
-there was none (falls back to style/inherited/default). Keep a per-session stack of
-`(handle, property, previousLocalValue)` so `wpf_revert_all` can undo a whole experiment.
+**Revert (shipped):** `wpf_revert_property` restores the saved binding, the saved local
+value, or `ClearValue(dp)` when there was none (falls back to style/inherited/default).
+A per-session undo stack lets you revert the most recent edit, a filtered one, or `all=true`
+to undo a whole experiment. Verified live: overwriting a data-bound `Text` reports
+`previousSource: "Binding"` and revert restores the binding.
 
 **Risks:** state-changing and can visibly break the app; mitigated by revert and by
 marking it clearly STATE-CHANGING. Some types have no string converter — return a helpful
@@ -154,10 +156,9 @@ desktop work is going. Large because the visual-tree/injection specifics differ.
 
 ## Suggested sequencing
 
-1. **`wpf_set_property` + `wpf_revert_*`** (1a) — the maintainer's theme; highest value,
-   self-contained, unlocks the "tweak" loop.
-2. **`wpf_diff`** (1b) — the measure half; makes 1a's effect verifiable. Ship together as a
-   "live tweak & measure" release.
+1. ~~**`wpf_set_property` + `wpf_revert_*`** (1a)~~ — ✅ shipped in v0.9.0.
+2. **`wpf_diff`** (1b) — **next.** The measure half; makes 1a's effect verifiable. With this,
+   the "change → measure → is it effective?" loop is fully automated.
 3. **`wpf_evaluate_binding`** (1c) and **`wpf_report`** (2b) — cheap diagnostics wins.
 4. **`wpf_record` → `wpf_export_test`** (2a) — the big competitive play; batch actions
    (backlog) as a prerequisite.

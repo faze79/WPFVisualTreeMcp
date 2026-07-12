@@ -66,6 +66,18 @@ public interface IIpcBridge
     Task<LayoutInfoResult> GetLayoutInfoAsync(string elementHandle);
 
     /// <summary>
+    /// Live-edits a dependency property on an element (converting the string value to the
+    /// property's type), recording an undo entry. STATE-CHANGING.
+    /// </summary>
+    Task<SetPropertyResult> SetPropertyAsync(string elementHandle, string propertyName, string value);
+
+    /// <summary>
+    /// Reverts live property edits: the most recent match (optionally filtered by handle
+    /// and/or property) or, when <paramref name="all"/> is true, every pending edit.
+    /// </summary>
+    Task<RevertPropertyResult> RevertPropertyAsync(bool all, string? elementHandle, string? propertyName);
+
+    /// <summary>
     /// Polls until an element matching the criteria satisfies the condition
     /// ("visible", "exists", "enabled", or "hidden") or the timeout elapses.
     /// </summary>

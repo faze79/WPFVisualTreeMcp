@@ -16,6 +16,7 @@ public class InspectorService : IDisposable
     private readonly IpcServer _ipcServer;
     private readonly TreeWalker _treeWalker;
     private readonly PropertyReader _propertyReader;
+    private readonly PropertyWriter _propertyWriter;
     private readonly BindingAnalyzer _bindingAnalyzer;
     private readonly ElementHighlighter _highlighter;
     private readonly PropertyWatcher _propertyWatcher;
@@ -120,6 +121,7 @@ public class InspectorService : IDisposable
     {
         _treeWalker = new TreeWalker();
         _propertyReader = new PropertyReader();
+        _propertyWriter = new PropertyWriter();
         _bindingAnalyzer = new BindingAnalyzer();
         _highlighter = new ElementHighlighter();
         _propertyWatcher = new PropertyWatcher();
@@ -237,6 +239,8 @@ public class InspectorService : IDisposable
             "CaptureScreenshot" => HandleCaptureScreenshot(data),
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
+            "SetProperty" => HandleSetProperty(data),
+            "RevertProperty" => HandleRevertProperty(data),
             "ClickElement" => HandleClickElement(data),
             "SelectItem" => HandleSelectItem(data),
             "SetText" => HandleSetText(data),
@@ -564,6 +568,93 @@ public class InspectorService : IDisposable
 
         _highlighter.Highlight(element, request.DurationMs);
         return new HighlightElementResponse { RequestId = request.RequestId };
+    }
+
+    private IpcResponse HandleSetProperty(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<SetPropertyRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new SetPropertyResponse { Success = false, Error = "ElementHandle required" };
+        }
+        if (string.IsNullOrEmpty(request.PropertyName))
+        {
+            return new SetPropertyResponse { Success = false, Error = "PropertyName required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (element == null)
+        {
+            return new SetPropertyResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+
+        try
+        {
+            var outcome = _propertyWriter.SetProperty(element, request.ElementHandle!, request.PropertyName, request.Value ?? string.Empty);
+            DebugLog($"SetProperty: {element.GetType().Name}.{request.PropertyName} = {outcome.AppliedValue} (was {outcome.PreviousSource})");
+            return new SetPropertyResponse
+            {
+                RequestId = request.RequestId,
+                ElementType = element.GetType().Name,
+                AppliedValue = outcome.AppliedValue,
+                ValueType = outcome.ValueType,
+                PreviousSource = outcome.PreviousSource
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"SetProperty failed: {ex.Message}");
+            return new SetPropertyResponse { Success = false, Error = ex.Message };
+        }
+    }
+
+    private IpcResponse HandleRevertProperty(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<RevertPropertyRequest>(data);
+        if (request == null)
+        {
+            return new RevertPropertyResponse { Success = false, Error = "Invalid RevertProperty request" };
+        }
+
+        try
+        {
+            if (request.All)
+            {
+                var count = _propertyWriter.RevertAll();
+                DebugLog($"RevertProperty: reverted all ({count})");
+                return new RevertPropertyResponse
+                {
+                    RequestId = request.RequestId,
+                    RevertedCount = count,
+                    PendingCount = _propertyWriter.PendingCount
+                };
+            }
+
+            var reverted = _propertyWriter.RevertLast(request.ElementHandle, request.PropertyName);
+            if (reverted == null)
+            {
+                return new RevertPropertyResponse
+                {
+                    Success = false,
+                    Error = "No matching live-edited property to revert."
+                };
+            }
+
+            DebugLog($"RevertProperty: reverted {reverted.Value.Handle}.{reverted.Value.Property}");
+            return new RevertPropertyResponse
+            {
+                RequestId = request.RequestId,
+                RevertedCount = 1,
+                RevertedHandle = reverted.Value.Handle,
+                RevertedProperty = reverted.Value.Property,
+                PendingCount = _propertyWriter.PendingCount
+            };
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"RevertProperty failed: {ex.Message}");
+            return new RevertPropertyResponse { Success = false, Error = ex.Message };
+        }
     }
 
     private async Task<IpcResponse> HandleWaitForElementAsync(JsonElement data)

@@ -263,6 +263,45 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Live-edit a dependency property on an element at runtime, to test whether a planned UI change is effective without rebuilding. The value is a string converted to the property's type: e.g. property_name='Margin' value='20,0,20,0', property_name='Visibility' value='Collapsed', property_name='Background' value='Red' (or '#FF0000'), property_name='Width' value='300', value='{null}' for null. Returns the coerced value read back and what previously held the property (Binding/Local/Unset). Setting a data-bound property replaces the binding with a local value; wpf_revert_property restores it. Pair with wpf_capture_screenshot to see the effect, then revert. STATE-CHANGING (reversible via wpf_revert_property).")]
+    public async Task<object> WpfSetProperty(string element_handle, string property_name, string value)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+        if (string.IsNullOrEmpty(property_name))
+        {
+            throw new ArgumentException("property_name is required");
+        }
+
+        var result = await _ipcBridge.SetPropertyAsync(element_handle, property_name, value ?? string.Empty);
+        return new
+        {
+            success = true,
+            element_type = result.ElementType,
+            applied_value = result.AppliedValue,
+            value_type = result.ValueType,
+            previous_source = result.PreviousSource
+        };
+    }
+
+    [McpServerTool]
+    [Description("Undo live property edits made with wpf_set_property. By default reverts the most recent edit; pass element_handle and/or property_name to target a specific one, or all=true to undo every pending edit. Restores whatever held the property before (a binding, a local value, or nothing — falling back to style/inherited/default). Returns how many were reverted and how many edits remain pending.")]
+    public async Task<object> WpfRevertProperty(string? element_handle = null, string? property_name = null, bool all = false)
+    {
+        var result = await _ipcBridge.RevertPropertyAsync(all, element_handle, property_name);
+        return new
+        {
+            success = true,
+            reverted_count = result.RevertedCount,
+            reverted_handle = result.RevertedHandle,
+            reverted_property = result.RevertedProperty,
+            pending_count = result.PendingCount
+        };
+    }
+
+    [McpServerTool]
     [Description("Get layout information (ActualWidth, ActualHeight, Margin, etc.)")]
     public async Task<object> WpfGetLayoutInfo(string element_handle)
     {

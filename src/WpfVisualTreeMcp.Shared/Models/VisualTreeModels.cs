@@ -78,6 +78,34 @@ public class FoundElement
 }
 
 /// <summary>
+/// Result of a live property edit.
+/// </summary>
+public class SetPropertyResult
+{
+    public string? ElementType { get; set; }
+
+    /// <summary>The value read back after the write (the coerced result).</summary>
+    public string? AppliedValue { get; set; }
+    public string? ValueType { get; set; }
+
+    /// <summary>What held the property before: "Binding", "Local", or "Unset".</summary>
+    public string? PreviousSource { get; set; }
+}
+
+/// <summary>
+/// Result of reverting one or all live property edits.
+/// </summary>
+public class RevertPropertyResult
+{
+    public int RevertedCount { get; set; }
+    public string? RevertedHandle { get; set; }
+    public string? RevertedProperty { get; set; }
+
+    /// <summary>Live edits still pending after this revert.</summary>
+    public int PendingCount { get; set; }
+}
+
+/// <summary>
 /// Result of a wait-for-element poll.
 /// </summary>
 public class WaitForResult

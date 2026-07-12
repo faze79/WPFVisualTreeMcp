@@ -273,6 +273,58 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfSetProperty_PassesHandlePropertyValue()
+    {
+        var expected = new SetPropertyResult
+        {
+            ElementType = "Button",
+            AppliedValue = "(20,0,20,0)",
+            ValueType = "System.Windows.Thickness",
+            PreviousSource = "Unset"
+        };
+        _ipcBridgeMock
+            .Setup(x => x.SetPropertyAsync("elem_1", "Margin", "20,0,20,0"))
+            .ReturnsAsync(expected);
+
+        var result = await _tools.WpfSetProperty("elem_1", "Margin", "20,0,20,0");
+
+        result.Should().BeEquivalentTo(new
+        {
+            success = true,
+            element_type = "Button",
+            applied_value = "(20,0,20,0)",
+            value_type = "System.Windows.Thickness",
+            previous_source = "Unset"
+        });
+        _ipcBridgeMock.Verify(x => x.SetPropertyAsync("elem_1", "Margin", "20,0,20,0"), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfSetProperty_WithEmptyHandle_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfSetProperty("", "Margin", "0"));
+    }
+
+    [Fact]
+    public async Task WpfRevertProperty_All_PassesFlag()
+    {
+        _ipcBridgeMock
+            .Setup(x => x.RevertPropertyAsync(true, null, null))
+            .ReturnsAsync(new RevertPropertyResult { RevertedCount = 3, PendingCount = 0 });
+
+        var result = await _tools.WpfRevertProperty(all: true);
+
+        result.Should().BeEquivalentTo(new
+        {
+            success = true,
+            reverted_count = 3,
+            reverted_handle = (string?)null,
+            reverted_property = (string?)null,
+            pending_count = 0
+        });
+    }
+
+    [Fact]
     public async Task WpfWaitForElement_PassesCriteriaAndCondition()
     {
         // Arrange

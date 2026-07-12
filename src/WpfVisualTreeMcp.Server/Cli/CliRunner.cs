@@ -22,13 +22,13 @@ public static class CliRunner
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "select-item", "set-text",
-        "send-keys", "wait-for", "layout", "export", "screenshot",
+        "send-keys", "wait-for", "set-property", "revert-property", "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "auto-inject", "compact", "verbose", "physical", "visible-only", "help", "h",
+        "auto-inject", "compact", "verbose", "physical", "visible-only", "all", "help", "h",
     };
 
     private static string Exe =>
@@ -301,6 +301,42 @@ public static class CliRunner
                     break;
                 }
 
+                case "set-property":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.SetPropertyAsync(
+                        cli.GetRequired("handle"),
+                        cli.GetRequired("property"),
+                        cli.GetString("value", ""));
+                    WriteJson(new
+                    {
+                        success = true,
+                        elementType = result.ElementType,
+                        appliedValue = result.AppliedValue,
+                        valueType = result.ValueType,
+                        previousSource = result.PreviousSource,
+                    }, cli);
+                    break;
+                }
+
+                case "revert-property":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.RevertPropertyAsync(
+                        cli.Flags.Contains("all"),
+                        cli.GetStringOrNull("handle"),
+                        cli.GetStringOrNull("property"));
+                    WriteJson(new
+                    {
+                        success = true,
+                        revertedCount = result.RevertedCount,
+                        revertedHandle = result.RevertedHandle,
+                        revertedProperty = result.RevertedProperty,
+                        pendingCount = result.PendingCount,
+                    }, cli);
+                    break;
+                }
+
                 case "layout":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -459,6 +495,8 @@ COMMANDS
   set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
   send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
   wait-for      --pid (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout MS] [--poll MS]
+  set-property  --pid --handle H --property P --value V                    (changes app state, reversible)
+  revert-property --pid (--all | [--handle H] [--property P])              (undo set-property edits)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
@@ -547,6 +585,22 @@ TYPICAL WORKFLOW
                         + "    hidden            - no matching visible element (e.g. a spinner cleared)\n"
                         + "  --timeout defaults to 10000 (max 25000); --poll defaults to 250.\n"
                         + "  Returns matched (bool), waitedMs, and matchedHandle/elementType when found.",
+            "set-property" => "set-property --pid <id> --handle <handle> --property <name> --value <value>\n"
+                            + "  Live-edit a dependency property to test a UI change without rebuilding.\n"
+                            + "  The value is converted to the property's type:\n"
+                            + "    --property Margin --value '20,0,20,0'   (Thickness)\n"
+                            + "    --property Visibility --value Collapsed\n"
+                            + "    --property Background --value Red        (or '#FF0000')\n"
+                            + "    --property Width --value 300\n"
+                            + "    --value '{null}'                        (null)\n"
+                            + "  Returns the coerced value read back and what previously held the\n"
+                            + "  property (Binding/Local/Unset). Setting a bound property replaces the\n"
+                            + "  binding with a local value; revert-property restores it. Pair with\n"
+                            + "  'screenshot' to see the effect. CHANGES app state (reversible).",
+            "revert-property" => "revert-property --pid <id> (--all | [--handle <handle>] [--property <name>])\n"
+                               + "  Undo set-property edits. Default: revert the most recent edit.\n"
+                               + "  --handle/--property target a specific one; --all reverts everything.\n"
+                               + "  Restores the prior binding, local value, or default.",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
                           + "  Capture the window (or one element) as PNG and print the file path.\n"

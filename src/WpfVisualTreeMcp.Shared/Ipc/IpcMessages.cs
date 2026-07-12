@@ -94,6 +94,54 @@ public class FindElementsDeepResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// Set Property (live-edit a dependency property)
+public class SetPropertyRequest : IpcRequest
+{
+    public override string RequestType => "SetProperty";
+    public string ElementHandle { get; set; } = string.Empty;
+    public string PropertyName { get; set; } = string.Empty;
+
+    /// <summary>Value as a string, converted to the property's type (e.g. "10,0,10,0", "Red", "Collapsed", "{null}").</summary>
+    public string Value { get; set; } = string.Empty;
+}
+
+public class SetPropertyResponse : IpcResponse
+{
+    public string? ElementType { get; set; }
+
+    /// <summary>The value read back after the write (the coerced result).</summary>
+    public string? AppliedValue { get; set; }
+    public string? ValueType { get; set; }
+
+    /// <summary>What held the property before: "Binding", "Local", or "Unset".</summary>
+    public string? PreviousSource { get; set; }
+}
+
+// Revert Property (undo one or all live edits)
+public class RevertPropertyRequest : IpcRequest
+{
+    public override string RequestType => "RevertProperty";
+
+    /// <summary>When true, revert every pending live edit. Otherwise revert the most recent match.</summary>
+    public bool All { get; set; }
+
+    /// <summary>Optional filter for the single-revert case.</summary>
+    public string? ElementHandle { get; set; }
+    public string? PropertyName { get; set; }
+}
+
+public class RevertPropertyResponse : IpcResponse
+{
+    /// <summary>How many changes were reverted (0 or 1 for single, N for all).</summary>
+    public int RevertedCount { get; set; }
+
+    public string? RevertedHandle { get; set; }
+    public string? RevertedProperty { get; set; }
+
+    /// <summary>Live edits still pending after this revert.</summary>
+    public int PendingCount { get; set; }
+}
+
 // Wait For Element (poll until a condition holds)
 public class WaitForElementRequest : IpcRequest
 {
