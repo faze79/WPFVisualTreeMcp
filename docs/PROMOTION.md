@@ -78,8 +78,21 @@ PR title: `Add WPFVisualTreeMcp (WPF desktop app inspection & automation)`
 ## 4. Other directories (5-minute submission forms each)
 
 - **mcp.so** — <https://mcp.so/submit>
-- **Glama** — <https://glama.ai/mcp/servers> (auto-indexes public GitHub repos with an MCP
-  server; a score badge can then be added to the README)
+- **Glama** — <https://glama.ai/mcp/servers> — **also gates the awesome-mcp-servers PR**
+  (its maintainer runs Glama; PR #9934 can't merge until the server is listed with a
+  quality score). Submission needs a Glama account (Google/GitHub/Discord sign-in).
+  The check builds a Docker image and verifies the server starts and answers `tools/list`
+  — it does NOT need the app to actually inject (that's Windows-only). This repo ships a
+  [`Dockerfile`](../Dockerfile) that installs the published NuGet tool and runs it as the
+  stdio MCP server, which is all the check needs.
+  1. Sign in at <https://glama.ai/mcp/servers> → **Add Server** → point it at
+     `github.com/faze79/WPFVisualTreeMcp`.
+  2. When prompted, use the repo's `Dockerfile` (the check only needs start + introspection).
+  3. Once it passes and a score is assigned, add the badge to the awesome-mcp-servers entry:
+     ```markdown
+     [![faze79/WPFVisualTreeMcp MCP server](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/badges/score.svg)](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp)
+     ```
+     (Confirm the exact `owner/repo` path Glama assigns; it's normally the GitHub `owner/repo`.)
 - **PulseMCP** — <https://www.pulsemcp.com/submit>
 - **Smithery** — <https://smithery.ai/new> (needs a `smithery.yaml`; note this server is
   Windows-only and stdio-based, so hosted deployment doesn't apply — list as local-only)
