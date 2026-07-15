@@ -40,6 +40,21 @@ public class FindCriteria
 }
 
 /// <summary>
+/// One element's captured state within a snapshot: identity plus a curated set of
+/// properties that typically change when a UI is modified.
+/// </summary>
+public class SnapshotNode
+{
+    public string Handle { get; set; } = string.Empty;
+    public string TypeName { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>Property name → stringified value.</summary>
+    public Dictionary<string, string> Properties { get; set; } = new();
+}
+
+/// <summary>
 /// Walks the visual tree and logical tree of WPF elements.
 /// </summary>
 public class TreeWalker
@@ -311,6 +326,96 @@ public class TreeWalker
         }
         sb.Append($"],\"count\":{results.Count},\"truncated\":{(results.Count >= maxResults).ToString().ToLower()}}}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Captures a snapshot of the subtree rooted at <paramref name="root"/> as a map of
+    /// element handle → curated state. Handles are stable per element, so two snapshots
+    /// can be diffed by handle: same handle in both = compare properties; handle only in
+    /// the later one = added; only in the earlier one = removed.
+    /// </summary>
+    public Dictionary<string, SnapshotNode> CaptureSnapshot(DependencyObject root, int maxDepth)
+    {
+        var nodes = new Dictionary<string, SnapshotNode>();
+        CaptureSnapshotRecursive(root, 0, maxDepth, nodes);
+        return nodes;
+    }
+
+    private void CaptureSnapshotRecursive(DependencyObject element, int depth, int maxDepth, Dictionary<string, SnapshotNode> nodes)
+    {
+        var handle = GetOrCreateHandle(element);
+        var type = element.GetType();
+        nodes[handle] = new SnapshotNode
+        {
+            Handle = handle,
+            TypeName = type.FullName ?? type.Name,
+            Name = GetElementName(element),
+            Path = GetElementPath(element),
+            Properties = GetSnapshotProperties(element)
+        };
+
+        if (depth >= maxDepth) return;
+        foreach (var child in GetAllVisualChildren(element))
+        {
+            CaptureSnapshotRecursive(child, depth + 1, maxDepth, nodes);
+        }
+    }
+
+    /// <summary>
+    /// The curated property set captured per element — the things that visibly change
+    /// when you tweak a UI: geometry, visibility, alignment, brushes and text.
+    /// </summary>
+    private static Dictionary<string, string> GetSnapshotProperties(DependencyObject element)
+    {
+        var p = new Dictionary<string, string>();
+
+        if (element is UIElement ui)
+        {
+            p["IsVisible"] = ui.IsVisible.ToString();
+            p["IsEnabled"] = ui.IsEnabled.ToString();
+            p["Visibility"] = ui.Visibility.ToString();
+            p["Opacity"] = ui.Opacity.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        if (element is FrameworkElement fe)
+        {
+            p["ActualWidth"] = fe.ActualWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            p["ActualHeight"] = fe.ActualHeight.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            var m = fe.Margin;
+            p["Margin"] = $"{m.Left},{m.Top},{m.Right},{m.Bottom}";
+            p["HorizontalAlignment"] = fe.HorizontalAlignment.ToString();
+            p["VerticalAlignment"] = fe.VerticalAlignment.ToString();
+        }
+
+        switch (element)
+        {
+            case Control c:
+                p["Background"] = c.Background?.ToString() ?? "(null)";
+                p["Foreground"] = c.Foreground?.ToString() ?? "(null)";
+                var pad = c.Padding;
+                p["Padding"] = $"{pad.Left},{pad.Top},{pad.Right},{pad.Bottom}";
+                break;
+            case Panel panel:
+                p["Background"] = panel.Background?.ToString() ?? "(null)";
+                break;
+            case Border border:
+                p["Background"] = border.Background?.ToString() ?? "(null)";
+                p["BorderBrush"] = border.BorderBrush?.ToString() ?? "(null)";
+                break;
+            case TextBlock tb:
+                p["Text"] = tb.Text ?? "";
+                p["Foreground"] = tb.Foreground?.ToString() ?? "(null)";
+                break;
+        }
+
+        // Own text (button caption, textbox value, ...) if any, for content-change detection.
+        var own = GetOwnText(element);
+        if (!string.IsNullOrEmpty(own) && !p.ContainsKey("Text"))
+        {
+            p["Text"] = own!;
+        }
+
+        return p;
     }
 
     /// <summary>

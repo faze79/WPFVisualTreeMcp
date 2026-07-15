@@ -1,5 +1,32 @@
 # Release Notes
 
+## v0.10.0 — Snapshot & diff: measure a change's effect (2026-07-15)
+
+v0.9.0 let an agent *make* a live UI change. This release lets it *measure* the effect — closing the "change → is it effective?" loop.
+
+### `wpf_snapshot` + `wpf_diff`
+
+Capture the state of an element subtree, make a change, capture it again, and diff:
+
+```
+snapshot --pid 1234 --handle elem_00 --label before
+set-property --pid 1234 --handle elem_00 --property Margin --value '40,40,40,40'
+snapshot --pid 1234 --handle elem_00 --label after
+diff --pid 1234 --before before --after after
+```
+
+The diff reports, for every element that changed, the exact properties (`from` → `to`), plus anything added or removed. Snapshots are keyed by **element handle**, which is stable per element, so the same control lines up across the two captures.
+
+Captured per element: visibility, `IsEnabled`, `Opacity`, `ActualWidth`/`Height`, `Margin`/`Padding`, alignment, `Background`/`Foreground`/`BorderBrush`, and text.
+
+### Why it's more than "look at a screenshot"
+
+A screenshot shows *that* something looks different; the diff shows *exactly what*. Verified live against the sample app: editing the layout root's `Margin` and `Background` reports the direct change **and the cascade** — 13 descendant elements show their `ActualWidth`/`ActualHeight` shrinking by 80px (40 per side) as the new margin reflows the subtree. That knock-on effect is precisely what you want to see when deciding whether a tweak did what you intended.
+
+Both tools are read-only. This completes the live-tweak loop started in v0.9.0.
+
+---
+
 ## v0.9.0 — Live property editing (2026-07-13)
 
 "Will this change actually work?" — the question you'd normally answer by editing XAML, rebuilding, and relaunching. This release lets an agent answer it in seconds, on the running app.

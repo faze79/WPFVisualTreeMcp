@@ -263,6 +263,37 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Capture a snapshot of an element's subtree (layout metrics, visibility, alignment, brushes, text) and store it under a label, to diff later with wpf_diff. Workflow: wpf_snapshot(label='before') → make a change (e.g. wpf_set_property) → wpf_snapshot(label='after') → wpf_diff('before','after') to see exactly what moved. element_handle sets the subtree root (omit for the whole main window); max_depth default 25. Returns the label and how many elements were captured.")]
+    public async Task<object> WpfSnapshot(string? element_handle = null, string? label = null, int max_depth = 25)
+    {
+        var result = await _ipcBridge.SnapshotAsync(element_handle, label, max_depth);
+        return new { success = true, label = result.Label, element_count = result.ElementCount };
+    }
+
+    [McpServerTool]
+    [Description("Diff two snapshots captured with wpf_snapshot, to measure the effect of a change. Returns a summary (counts) plus, for each element that changed, the exact properties that changed (from → to), keyed by stable element handle; plus elements added or removed between the two snapshots. Use this to verify a planned UI tweak did what you expected (e.g. Margin 0,0,0,0 → 40,40,40,40; Visibility Collapsed → Visible; a child appeared).")]
+    public async Task<object> WpfDiff(string before, string after)
+    {
+        if (string.IsNullOrEmpty(before) || string.IsNullOrEmpty(after))
+        {
+            throw new ArgumentException("Both 'before' and 'after' snapshot labels are required.");
+        }
+
+        var result = await _ipcBridge.DiffAsync(before, after);
+        object diff = string.IsNullOrEmpty(result.Json)
+            ? new { }
+            : JsonSerializer.Deserialize<JsonElement>(result.Json!);
+        return new
+        {
+            success = true,
+            changed_count = result.ChangedCount,
+            added_count = result.AddedCount,
+            removed_count = result.RemovedCount,
+            diff
+        };
+    }
+
+    [McpServerTool]
     [Description("Live-edit a dependency property on an element at runtime, to test whether a planned UI change is effective without rebuilding. The value is a string converted to the property's type: e.g. property_name='Margin' value='20,0,20,0', property_name='Visibility' value='Collapsed', property_name='Background' value='Red' (or '#FF0000'), property_name='Width' value='300', value='{null}' for null. Returns the coerced value read back and what previously held the property (Binding/Local/Unset). Setting a data-bound property replaces the binding with a local value; wpf_revert_property restores it. Pair with wpf_capture_screenshot to see the effect, then revert. STATE-CHANGING (reversible via wpf_revert_property).")]
     public async Task<object> WpfSetProperty(string element_handle, string property_name, string value)
     {

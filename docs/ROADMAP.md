@@ -61,7 +61,7 @@ error listing the property type. Setting a property that is data-bound replaces 
 with a local value (document this; it's usually what you want for a quick test, and revert
 restores the binding).
 
-### 1b. `wpf_diff` — before/after snapshot 💡 (M)
+### 1b. `wpf_snapshot` + `wpf_diff` — before/after snapshot ✅ *(v0.10.0)*
 
 Capture a compact snapshot of an element subtree (layout metrics, key render properties,
 visibility, bounds) and diff two snapshots.
@@ -157,8 +157,8 @@ desktop work is going. Large because the visual-tree/injection specifics differ.
 ## Suggested sequencing
 
 1. ~~**`wpf_set_property` + `wpf_revert_*`** (1a)~~ — ✅ shipped in v0.9.0.
-2. **`wpf_diff`** (1b) — **next.** The measure half; makes 1a's effect verifiable. With this,
-   the "change → measure → is it effective?" loop is fully automated.
+2. ~~**`wpf_snapshot` + `wpf_diff`** (1b)~~ — ✅ shipped in v0.10.0. The "change → measure →
+   is it effective?" loop is now fully automated (live-edit, then diff a before/after snapshot).
 3. **`wpf_evaluate_binding`** (1c) and **`wpf_report`** (2b) — cheap diagnostics wins.
 4. **`wpf_record` → `wpf_export_test`** (2a) — the big competitive play; batch actions
    (backlog) as a prerequisite.

@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-15
+
+### Added
+
+- **`wpf_snapshot` / `snapshot`** (25th tool) — capture an element subtree's curated state
+  (visibility, IsEnabled, Opacity, ActualWidth/Height, Margin/Padding, alignment,
+  Background/Foreground/BorderBrush, text) under a label, keyed by element handle.
+- **`wpf_diff` / `diff`** (26th tool) — diff two snapshots and report exactly what changed:
+  for each element, the properties that changed (`from` → `to`), plus elements added or
+  removed. Handles are stable per element, so the diff aligns the same element across the
+  two snapshots.
+
+Together they complete the "change → measure → is it effective?" loop: `wpf_snapshot`
+(before) → a change (e.g. `wpf_set_property`) → `wpf_snapshot` (after) → `wpf_diff`.
+Both tools are read-only.
+
+### Notes
+
+- Verified live: editing the layout root's `Margin` (0,0,0,0 → 40,40,40,40) and
+  `Background` shows the direct change **and** the cascade — 13 descendants report reduced
+  `ActualWidth`/`ActualHeight` (−80px = 40 per side), i.e. the diff surfaces the knock-on
+  effect of a change, not just the edited property.
+
 ## [0.9.0] - 2026-07-13
 
 ### Added

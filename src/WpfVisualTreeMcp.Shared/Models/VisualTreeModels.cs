@@ -78,6 +78,29 @@ public class FoundElement
 }
 
 /// <summary>
+/// Result of capturing a snapshot.
+/// </summary>
+public class SnapshotResult
+{
+    /// <summary>Label the snapshot was stored under (pass to wpf_diff).</summary>
+    public string Label { get; set; } = string.Empty;
+    public int ElementCount { get; set; }
+}
+
+/// <summary>
+/// Result of diffing two snapshots.
+/// </summary>
+public class DiffResult
+{
+    public int ChangedCount { get; set; }
+    public int AddedCount { get; set; }
+    public int RemovedCount { get; set; }
+
+    /// <summary>The full diff document (summary + changed/added/removed) as JSON.</summary>
+    public string? Json { get; set; }
+}
+
+/// <summary>
 /// Result of a live property edit.
 /// </summary>
 public class SetPropertyResult

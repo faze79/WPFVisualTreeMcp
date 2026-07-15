@@ -22,7 +22,8 @@ public static class CliRunner
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "select-item", "set-text",
-        "send-keys", "wait-for", "set-property", "revert-property", "layout", "export", "screenshot",
+        "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
+        "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -337,6 +338,29 @@ public static class CliRunner
                     break;
                 }
 
+                case "snapshot":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.SnapshotAsync(
+                        cli.GetStringOrNull("handle"),
+                        cli.GetStringOrNull("label"),
+                        Math.Clamp(cli.GetInt("depth", 25), 1, 100));
+                    WriteJson(new { success = true, label = result.Label, elementCount = result.ElementCount }, cli);
+                    break;
+                }
+
+                case "diff":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.DiffAsync(cli.GetRequired("before"), cli.GetRequired("after"));
+                    // Emit the diff document verbatim (it's already JSON), wrapped with counts.
+                    var doc = string.IsNullOrEmpty(result.Json)
+                        ? "{}"
+                        : result.Json!;
+                    Console.Out.WriteLine(doc);
+                    break;
+                }
+
                 case "layout":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -497,6 +521,8 @@ COMMANDS
   wait-for      --pid (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout MS] [--poll MS]
   set-property  --pid --handle H --property P --value V                    (changes app state, reversible)
   revert-property --pid (--all | [--handle H] [--property P])              (undo set-property edits)
+  snapshot      --pid [--handle H] [--label L] [--depth N]                 (capture state for diff)
+  diff          --pid --before L1 --after L2                               (compare two snapshots)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
@@ -601,6 +627,16 @@ TYPICAL WORKFLOW
                                + "  Undo set-property edits. Default: revert the most recent edit.\n"
                                + "  --handle/--property target a specific one; --all reverts everything.\n"
                                + "  Restores the prior binding, local value, or default.",
+            "snapshot" => "snapshot --pid <id> [--handle <handle>] [--label <name>] [--depth <1-100>]\n"
+                        + "  Capture a subtree's state (layout, visibility, alignment, brushes, text)\n"
+                        + "  under a label, to diff later. --handle sets the root (default: main\n"
+                        + "  window). --label auto-generated if omitted. Pairs with 'diff'.",
+            "diff" => "diff --pid <id> --before <label1> --after <label2>\n"
+                    + "  Compare two snapshots and report what changed: for each changed element,\n"
+                    + "  the exact properties (from → to), plus elements added/removed. Use to\n"
+                    + "  measure the effect of a change:\n"
+                    + "    snapshot --label before  ->  set-property ...  ->  snapshot --label after\n"
+                    + "    diff --before before --after after",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
                           + "  Capture the window (or one element) as PNG and print the file path.\n"

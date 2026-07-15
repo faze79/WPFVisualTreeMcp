@@ -94,6 +94,42 @@ public class FindElementsDeepResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// Snapshot (capture element subtree state for later diff)
+public class SnapshotRequest : IpcRequest
+{
+    public override string RequestType => "Snapshot";
+
+    /// <summary>Root of the subtree to snapshot. Omit for the whole main window.</summary>
+    public string? ElementHandle { get; set; }
+
+    /// <summary>Name to store the snapshot under (e.g. "before"). Auto-generated if omitted.</summary>
+    public string? Label { get; set; }
+
+    public int MaxDepth { get; set; } = 25;
+}
+
+public class SnapshotResponse : IpcResponse
+{
+    public string? Label { get; set; }
+    public int ElementCount { get; set; }
+}
+
+// Diff (compare two snapshots)
+public class DiffRequest : IpcRequest
+{
+    public override string RequestType => "Diff";
+    public string Before { get; set; } = string.Empty;
+    public string After { get; set; } = string.Empty;
+}
+
+public class DiffResponse : IpcResponse
+{
+    public string? DiffJson { get; set; }
+    public int ChangedCount { get; set; }
+    public int AddedCount { get; set; }
+    public int RemovedCount { get; set; }
+}
+
 // Set Property (live-edit a dependency property)
 public class SetPropertyRequest : IpcRequest
 {

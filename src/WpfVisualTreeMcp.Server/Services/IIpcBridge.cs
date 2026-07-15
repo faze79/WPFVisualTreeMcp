@@ -66,6 +66,17 @@ public interface IIpcBridge
     Task<LayoutInfoResult> GetLayoutInfoAsync(string elementHandle);
 
     /// <summary>
+    /// Captures a snapshot of an element subtree (or the main window), stored under a label
+    /// for a later diff.
+    /// </summary>
+    Task<SnapshotResult> SnapshotAsync(string? elementHandle, string? label, int maxDepth);
+
+    /// <summary>
+    /// Diffs two previously captured snapshots, returning changed/added/removed elements.
+    /// </summary>
+    Task<DiffResult> DiffAsync(string before, string after);
+
+    /// <summary>
     /// Live-edits a dependency property on an element (converting the string value to the
     /// property's type), recording an undo entry. STATE-CHANGING.
     /// </summary>

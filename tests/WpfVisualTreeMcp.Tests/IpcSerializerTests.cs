@@ -113,6 +113,24 @@ public class IpcSerializerTests
     }
 
     [Fact]
+    public void SerializeRequest_RoundTripsSnapshotAndDiffRequests()
+    {
+        var snap = new SnapshotRequest { ElementHandle = "elem_3", Label = "before", MaxDepth = 10 };
+        var snapBack = IpcSerializer.DeserializeRequestData<SnapshotRequest>(
+            IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(snap))!.Value.data);
+        snapBack!.ElementHandle.Should().Be("elem_3");
+        snapBack.Label.Should().Be("before");
+        snapBack.MaxDepth.Should().Be(10);
+
+        var diff = new DiffRequest { Before = "before", After = "after" };
+        var diffEnvelope = IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(diff));
+        diffEnvelope!.Value.type.Should().Be("Diff");
+        var diffBack = IpcSerializer.DeserializeRequestData<DiffRequest>(diffEnvelope.Value.data);
+        diffBack!.Before.Should().Be("before");
+        diffBack.After.Should().Be("after");
+    }
+
+    [Fact]
     public void SerializeRequest_RoundTripsSetAndRevertPropertyRequests()
     {
         var set = new SetPropertyRequest { ElementHandle = "elem_9", PropertyName = "Visibility", Value = "Collapsed" };

@@ -17,6 +17,8 @@ public class InspectorService : IDisposable
     private readonly TreeWalker _treeWalker;
     private readonly PropertyReader _propertyReader;
     private readonly PropertyWriter _propertyWriter;
+    private readonly Dictionary<string, Dictionary<string, SnapshotNode>> _snapshots = new();
+    private int _snapshotCounter;
     private readonly BindingAnalyzer _bindingAnalyzer;
     private readonly ElementHighlighter _highlighter;
     private readonly PropertyWatcher _propertyWatcher;
@@ -241,6 +243,8 @@ public class InspectorService : IDisposable
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "SetProperty" => HandleSetProperty(data),
             "RevertProperty" => HandleRevertProperty(data),
+            "Snapshot" => HandleSnapshot(data),
+            "Diff" => HandleDiff(data),
             "ClickElement" => HandleClickElement(data),
             "SelectItem" => HandleSelectItem(data),
             "SetText" => HandleSetText(data),
@@ -568,6 +572,168 @@ public class InspectorService : IDisposable
 
         _highlighter.Highlight(element, request.DurationMs);
         return new HighlightElementResponse { RequestId = request.RequestId };
+    }
+
+    private IpcResponse HandleSnapshot(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<SnapshotRequest>(data);
+
+        DependencyObject? root;
+        if (!string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            root = _treeWalker.ResolveHandle(request.ElementHandle!);
+            if (root == null)
+            {
+                return new SnapshotResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+            }
+        }
+        else
+        {
+            root = GetDefaultRoot();
+            if (root == null)
+            {
+                return new SnapshotResponse { Success = false, Error = "No root element found." };
+            }
+        }
+
+        var maxDepth = Math.Max(1, Math.Min(request?.MaxDepth ?? 25, 100));
+        var nodes = _treeWalker.CaptureSnapshot(root, maxDepth);
+
+        var label = string.IsNullOrWhiteSpace(request?.Label) ? $"snap_{_snapshotCounter++}" : request!.Label!;
+        _snapshots[label] = nodes;
+
+        return new SnapshotResponse
+        {
+            RequestId = request?.RequestId ?? "",
+            Label = label,
+            ElementCount = nodes.Count
+        };
+    }
+
+    private IpcResponse HandleDiff(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<DiffRequest>(data);
+        if (request == null || string.IsNullOrEmpty(request.Before) || string.IsNullOrEmpty(request.After))
+        {
+            return new DiffResponse { Success = false, Error = "Both 'before' and 'after' snapshot labels are required." };
+        }
+
+        if (!_snapshots.TryGetValue(request.Before, out var before))
+        {
+            return new DiffResponse { Success = false, Error = $"Snapshot '{request.Before}' not found. Capture it first with wpf_snapshot." };
+        }
+        if (!_snapshots.TryGetValue(request.After, out var after))
+        {
+            return new DiffResponse { Success = false, Error = $"Snapshot '{request.After}' not found. Capture it first with wpf_snapshot." };
+        }
+
+        var (json, changed, added, removed) = ComputeDiff(before, after);
+        return new DiffResponse
+        {
+            RequestId = request.RequestId,
+            DiffJson = json,
+            ChangedCount = changed,
+            AddedCount = added,
+            RemovedCount = removed
+        };
+    }
+
+    /// <summary>
+    /// Structural diff of two snapshots, keyed by element handle. Returns the JSON plus counts.
+    /// </summary>
+    private static (string Json, int Changed, int Added, int Removed) ComputeDiff(
+        Dictionary<string, SnapshotNode> before, Dictionary<string, SnapshotNode> after)
+    {
+        var changed = new System.Text.StringBuilder();
+        var added = new System.Text.StringBuilder();
+        var removed = new System.Text.StringBuilder();
+        int changedN = 0, addedN = 0, removedN = 0;
+
+        // Changed + removed: iterate 'before'.
+        foreach (var kvp in before)
+        {
+            if (after.TryGetValue(kvp.Key, out var afterNode))
+            {
+                var propChanges = DiffProperties(kvp.Value.Properties, afterNode.Properties);
+                if (propChanges.Count > 0)
+                {
+                    if (changedN++ > 0) changed.Append(",");
+                    changed.Append("{");
+                    changed.Append($"\"handle\":\"{kvp.Value.Handle}\"");
+                    changed.Append($",\"typeName\":\"{EscapeJson(afterNode.TypeName)}\"");
+                    if (!string.IsNullOrEmpty(afterNode.Name))
+                        changed.Append($",\"name\":\"{EscapeJson(afterNode.Name)}\"");
+                    changed.Append($",\"path\":\"{EscapeJson(afterNode.Path)}\"");
+                    changed.Append(",\"changes\":{");
+                    var first = true;
+                    foreach (var pc in propChanges)
+                    {
+                        if (!first) changed.Append(",");
+                        first = false;
+                        changed.Append($"\"{EscapeJson(pc.Key)}\":{{\"from\":\"{EscapeJson(pc.Value.From)}\",\"to\":\"{EscapeJson(pc.Value.To)}\"}}");
+                    }
+                    changed.Append("}}");
+                }
+            }
+            else
+            {
+                if (removedN++ > 0) removed.Append(",");
+                removed.Append(SerializeIdentity(kvp.Value));
+            }
+        }
+
+        // Added: in 'after' but not 'before'.
+        foreach (var kvp in after)
+        {
+            if (!before.ContainsKey(kvp.Key))
+            {
+                if (addedN++ > 0) added.Append(",");
+                added.Append(SerializeIdentity(kvp.Value));
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("{");
+        sb.Append($"\"summary\":{{\"changed\":{changedN},\"added\":{addedN},\"removed\":{removedN}}}");
+        sb.Append($",\"changed\":[{changed}]");
+        sb.Append($",\"added\":[{added}]");
+        sb.Append($",\"removed\":[{removed}]");
+        sb.Append("}");
+        return (sb.ToString(), changedN, addedN, removedN);
+    }
+
+    private static Dictionary<string, (string From, string To)> DiffProperties(
+        Dictionary<string, string> before, Dictionary<string, string> after)
+    {
+        var changes = new Dictionary<string, (string, string)>();
+        foreach (var kvp in after)
+        {
+            var oldVal = before.TryGetValue(kvp.Key, out var b) ? b : "(absent)";
+            if (oldVal != kvp.Value)
+            {
+                changes[kvp.Key] = (oldVal, kvp.Value);
+            }
+        }
+        return changes;
+    }
+
+    private static string SerializeIdentity(SnapshotNode node)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("{");
+        sb.Append($"\"handle\":\"{node.Handle}\"");
+        sb.Append($",\"typeName\":\"{EscapeJson(node.TypeName)}\"");
+        if (!string.IsNullOrEmpty(node.Name))
+            sb.Append($",\"name\":\"{EscapeJson(node.Name)}\"");
+        sb.Append($",\"path\":\"{EscapeJson(node.Path)}\"");
+        sb.Append("}");
+        return sb.ToString();
+    }
+
+    private static string EscapeJson(string? text)
+    {
+        if (text == null) return string.Empty;
+        return text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
     }
 
     private IpcResponse HandleSetProperty(JsonElement data)

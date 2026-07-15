@@ -261,6 +261,55 @@ public class NamedPipeBridge : IIpcBridge
         return ParseLayoutInfoResponse(response, elementHandle);
     }
 
+    public async Task<SnapshotResult> SnapshotAsync(string? elementHandle, string? label, int maxDepth)
+    {
+        var session = EnsureConnected();
+
+        var request = new SnapshotRequest
+        {
+            ElementHandle = elementHandle,
+            Label = label,
+            MaxDepth = maxDepth
+        };
+
+        var response = await SendRequestAsync<SnapshotRequest, SnapshotResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to capture snapshot");
+        }
+
+        return new SnapshotResult
+        {
+            Label = response.Label ?? "",
+            ElementCount = response.ElementCount
+        };
+    }
+
+    public async Task<DiffResult> DiffAsync(string before, string after)
+    {
+        var session = EnsureConnected();
+
+        var request = new DiffRequest { Before = before, After = after };
+
+        var response = await SendRequestAsync<DiffRequest, DiffResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to diff snapshots");
+        }
+
+        return new DiffResult
+        {
+            ChangedCount = response.ChangedCount,
+            AddedCount = response.AddedCount,
+            RemovedCount = response.RemovedCount,
+            Json = response.DiffJson
+        };
+    }
+
     public async Task<SetPropertyResult> SetPropertyAsync(string elementHandle, string propertyName, string value)
     {
         var session = EnsureConnected();

@@ -273,6 +273,48 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfSnapshot_PassesArgsAndReturnsLabel()
+    {
+        _ipcBridgeMock
+            .Setup(x => x.SnapshotAsync("elem_1", "before", 25))
+            .ReturnsAsync(new SnapshotResult { Label = "before", ElementCount = 42 });
+
+        var result = await _tools.WpfSnapshot(element_handle: "elem_1", label: "before");
+
+        result.Should().BeEquivalentTo(new { success = true, label = "before", element_count = 42 });
+        _ipcBridgeMock.Verify(x => x.SnapshotAsync("elem_1", "before", 25), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfDiff_ReturnsCountsAndParsedDiff()
+    {
+        _ipcBridgeMock
+            .Setup(x => x.DiffAsync("before", "after"))
+            .ReturnsAsync(new DiffResult
+            {
+                ChangedCount = 1,
+                AddedCount = 0,
+                RemovedCount = 0,
+                Json = "{\"summary\":{\"changed\":1,\"added\":0,\"removed\":0},\"changed\":[{\"handle\":\"elem_1\"}],\"added\":[],\"removed\":[]}"
+            });
+
+        var result = await _tools.WpfDiff("before", "after");
+
+        // changed_count etc. surfaced; diff is the parsed document
+        result.Should().BeAssignableTo<object>();
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        json.Should().Contain("\"changed_count\":1");
+        json.Should().Contain("\"summary\"");
+        json.Should().Contain("elem_1");
+    }
+
+    [Fact]
+    public async Task WpfDiff_WithMissingLabels_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfDiff("", "after"));
+    }
+
+    [Fact]
     public async Task WpfSetProperty_PassesHandlePropertyValue()
     {
         var expected = new SetPropertyResult
