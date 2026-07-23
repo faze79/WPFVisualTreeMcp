@@ -113,6 +113,17 @@ public class IpcSerializerTests
     }
 
     [Fact]
+    public void SerializeRequest_RoundTripsEvaluateBindingRequest()
+    {
+        var req = new EvaluateBindingRequest { ElementHandle = "elem_5", PropertyName = "Text" };
+        var envelope = IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(req));
+        envelope!.Value.type.Should().Be("EvaluateBinding");
+        var back = IpcSerializer.DeserializeRequestData<EvaluateBindingRequest>(envelope.Value.data);
+        back!.ElementHandle.Should().Be("elem_5");
+        back.PropertyName.Should().Be("Text");
+    }
+
+    [Fact]
     public void SerializeRequest_RoundTripsSnapshotAndDiffRequests()
     {
         var snap = new SnapshotRequest { ElementHandle = "elem_3", Label = "before", MaxDepth = 10 };

@@ -94,6 +94,19 @@ public class FindElementsDeepResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// Evaluate Binding (explain why a property has its value)
+public class EvaluateBindingRequest : IpcRequest
+{
+    public override string RequestType => "EvaluateBinding";
+    public string ElementHandle { get; set; } = string.Empty;
+    public string PropertyName { get; set; } = string.Empty;
+}
+
+public class EvaluateBindingResponse : IpcResponse
+{
+    public string? EvaluationJson { get; set; }
+}
+
 // Snapshot (capture element subtree state for later diff)
 public class SnapshotRequest : IpcRequest
 {

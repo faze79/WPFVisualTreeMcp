@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-24
+
+### Added
+
+- **`wpf_evaluate_binding` / `evaluate-binding`** (27th tool) — explain *why* a property has
+  its current value. Reports the value source (`Local`, `Style`, `Binding`, `Inherited`,
+  `Default`, ...), the effective value, and whether it's an expression/animated/coerced.
+  When the value comes from a binding, it resolves the binding path **hop-by-hop** against
+  the source (`DataContext` / `ElementName` / `RelativeSource` / `Source`), reporting each
+  segment's value and type and pinpointing exactly where a broken binding fails — a null
+  intermediate, or a property that doesn't exist on the DataContext type. Read-only.
+
+### Notes
+
+- The go-to answer for "why is X empty/wrong/disabled?". Complements `wpf_get_bindings`
+  (which lists bindings) by actually *evaluating* one. Verified live against the sample app:
+  the intentionally misspelled `Statsu` binding reports `status: PathError`,
+  `brokenAt: "Statsu"`, `"property 'Statsu' not found on type 'MainViewModel'"`; a working
+  `UserName` binding resolves hop-by-hop to its value; a non-bound property reports its
+  value source with no binding.
+
 ## [0.10.0] - 2026-07-15
 
 ### Added

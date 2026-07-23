@@ -76,7 +76,7 @@ serialize a normalized snapshot keyed by element path; diff is a structural comp
 producing added/removed/changed entries. Pairs naturally with a before/after
 `wpf_capture_screenshot(mode='screen')` for the visual side.
 
-### 1c. `wpf_evaluate_binding` / "why is this the value?" 💡 (M)
+### 1c. `wpf_evaluate_binding` / "why is this the value?" ✅ *(v0.11.0)*
 
 Given an element + property, explain where the value comes from (local, style, trigger,
 inherited, binding) and, for bindings, resolve the path against the current DataContext

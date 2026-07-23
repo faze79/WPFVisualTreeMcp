@@ -1,5 +1,42 @@
 # Release Notes
 
+## v0.11.0 — Why is this the value? (2026-07-24)
+
+The single most common question an AI agent gets about a WPF app is *"why is this empty / wrong / disabled?"*. This release answers it.
+
+### `wpf_evaluate_binding`
+
+Given an element and a property, it explains **why** the property has its current value:
+
+- the **value source** — `Local`, `Style`, `Binding`, `Inherited`, `Default`, a trigger, ... — plus whether it's an expression, animated, or coerced;
+- the **effective value** and its type;
+- and, when the value comes from a binding, a **hop-by-hop resolution of the binding path** against its source.
+
+That last part is the point. Instead of just telling you "there's a binding to `User.Address.City`", it walks the path against the live source and shows each step's value and type — so a broken binding tells you *exactly* where it broke: a null intermediate (`Address` is null, so `City` can't resolve), or a property that doesn't exist on the DataContext type (the classic typo).
+
+```
+evaluate-binding --pid 1234 --handle elem_00 --property Text
+```
+
+Verified live against the sample app's deliberately misspelled binding:
+
+```json
+"binding": {
+  "path": "Statsu", "status": "PathError", "sourceType": "SampleWpfApp.MainViewModel",
+  "resolution": {
+    "hops": [{ "segment": "Statsu", "found": false,
+               "reason": "property 'Statsu' not found on type 'MainViewModel'" }],
+    "brokenAt": "Statsu"
+  }
+}
+```
+
+A working binding resolves hop-by-hop to its value with `brokenAt: null`; a non-bound property reports its value source and `binding: null`. It resolves `DataContext`, `ElementName`, `RelativeSource` (Self / TemplatedParent / FindAncestor) and explicit `Source`, and handles indexers in the path. Read-only.
+
+This complements `wpf_get_bindings` (which *lists* bindings) by actually *evaluating* one, and rounds out the binding-diagnostics story that is this project's core differentiator.
+
+---
+
 ## v0.10.0 — Snapshot & diff: measure a change's effect (2026-07-15)
 
 v0.9.0 let an agent *make* a live UI change. This release lets it *measure* the effect — closing the "change → is it effective?" loop.

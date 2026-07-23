@@ -273,6 +273,30 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfEvaluateBinding_ReturnsParsedEvaluation()
+    {
+        _ipcBridgeMock
+            .Setup(x => x.EvaluateBindingAsync("elem_1", "Text"))
+            .ReturnsAsync(new EvaluateBindingResult
+            {
+                Json = "{\"property\":\"Text\",\"valueSource\":\"Local\",\"binding\":{\"path\":\"Statsu\",\"resolution\":{\"brokenAt\":\"Statsu\"}}}"
+            });
+
+        var result = await _tools.WpfEvaluateBinding("elem_1", "Text");
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        json.Should().Contain("\"valueSource\":\"Local\"");
+        json.Should().Contain("\"brokenAt\":\"Statsu\"");
+        _ipcBridgeMock.Verify(x => x.EvaluateBindingAsync("elem_1", "Text"), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfEvaluateBinding_WithEmptyHandle_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfEvaluateBinding("", "Text"));
+    }
+
+    [Fact]
     public async Task WpfSnapshot_PassesArgsAndReturnsLabel()
     {
         _ipcBridgeMock

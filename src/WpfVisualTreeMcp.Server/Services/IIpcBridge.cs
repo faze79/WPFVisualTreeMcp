@@ -66,6 +66,12 @@ public interface IIpcBridge
     Task<LayoutInfoResult> GetLayoutInfoAsync(string elementHandle);
 
     /// <summary>
+    /// Explains why a property has its current value: value source and, for bindings, the
+    /// hop-by-hop resolution of the path against the source (where it breaks).
+    /// </summary>
+    Task<EvaluateBindingResult> EvaluateBindingAsync(string elementHandle, string propertyName);
+
+    /// <summary>
     /// Captures a snapshot of an element subtree (or the main window), stored under a label
     /// for a later diff.
     /// </summary>

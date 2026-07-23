@@ -78,6 +78,14 @@ public class FoundElement
 }
 
 /// <summary>
+/// Result of evaluating why a property has its value (the full evaluation as JSON).
+/// </summary>
+public class EvaluateBindingResult
+{
+    public string? Json { get; set; }
+}
+
+/// <summary>
 /// Result of capturing a snapshot.
 /// </summary>
 public class SnapshotResult

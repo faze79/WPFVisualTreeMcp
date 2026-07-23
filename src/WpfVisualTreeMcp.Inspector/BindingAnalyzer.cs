@@ -120,6 +120,290 @@ public class BindingAnalyzer
     }
 
     /// <summary>
+    /// Explains why a property has its current value: the value source (Local, Style,
+    /// Binding, Inherited, Default, ...), the effective value, and — when the value comes
+    /// from a binding — the binding details plus a hop-by-hop resolution of the path
+    /// against the source, pinpointing exactly where a broken binding fails.
+    /// </summary>
+    public string EvaluateBinding(DependencyObject element, string propertyName)
+    {
+        var dp = ResolveDependencyProperty(element, propertyName);
+        if (dp == null)
+        {
+            return $"{{\"error\":\"'{EscapeJson(propertyName)}' is not a dependency property on {EscapeJson(element.GetType().Name)}.\"}}";
+        }
+
+        var sb = new StringBuilder();
+        sb.Append("{\"element\":");
+        sb.Append(GetElementInfo(element));
+        sb.Append($",\"property\":\"{EscapeJson(propertyName)}\"");
+
+        var source = DependencyPropertyHelper.GetValueSource(element, dp);
+        sb.Append($",\"valueSource\":\"{source.BaseValueSource}\"");
+        sb.Append($",\"isExpression\":{source.IsExpression.ToString().ToLowerInvariant()}");
+        sb.Append($",\"isAnimated\":{source.IsAnimated.ToString().ToLowerInvariant()}");
+        sb.Append($",\"isCoerced\":{source.IsCoerced.ToString().ToLowerInvariant()}");
+
+        var effective = element.GetValue(dp);
+        sb.Append($",\"effectiveValue\":\"{EscapeJson(FormatValueShort(effective))}\"");
+        sb.Append($",\"effectiveValueType\":\"{EscapeJson(effective?.GetType().FullName ?? "null")}\"");
+
+        var bindingExpr = BindingOperations.GetBindingExpression(element, dp);
+        if (bindingExpr?.ParentBinding != null)
+        {
+            AppendBindingEvaluation(sb, element, bindingExpr);
+        }
+        else
+        {
+            var multi = BindingOperations.GetMultiBindingExpression(element, dp);
+            if (multi != null)
+            {
+                sb.Append(",\"binding\":{\"kind\":\"MultiBinding\",\"note\":\"Use wpf_get_bindings for MultiBinding child details.\"}");
+            }
+            else
+            {
+                sb.Append(",\"binding\":null");
+                sb.Append($",\"explanation\":\"The value is not data-bound; it comes from {source.BaseValueSource}.\"");
+            }
+        }
+
+        sb.Append("}");
+        return sb.ToString();
+    }
+
+    private void AppendBindingEvaluation(StringBuilder sb, DependencyObject element, BindingExpression bindingExpr)
+    {
+        var binding = bindingExpr.ParentBinding;
+        sb.Append(",\"binding\":{");
+        sb.Append("\"kind\":\"Binding\"");
+
+        var path = binding.Path?.Path ?? "";
+        sb.Append($",\"path\":\"{EscapeJson(path)}\"");
+        sb.Append($",\"mode\":\"{binding.Mode}\"");
+        sb.Append($",\"status\":\"{bindingExpr.Status}\"");
+
+        if (binding.Converter != null)
+            sb.Append($",\"converter\":\"{EscapeJson(binding.Converter.GetType().Name)}\"");
+        if (binding.FallbackValue != null && binding.FallbackValue != DependencyProperty.UnsetValue)
+            sb.Append($",\"fallbackValue\":\"{EscapeJson(FormatValueShort(binding.FallbackValue))}\"");
+        if (binding.TargetNullValue != null && binding.TargetNullValue != DependencyProperty.UnsetValue)
+            sb.Append($",\"targetNullValue\":\"{EscapeJson(FormatValueShort(binding.TargetNullValue))}\"");
+
+        // Resolve the binding's source root and its kind.
+        var (root, sourceKind) = ResolveBindingSource(element, binding);
+        sb.Append($",\"sourceKind\":\"{sourceKind}\"");
+        sb.Append($",\"sourceType\":\"{EscapeJson(root?.GetType().FullName ?? "null")}\"");
+
+        // Validation error, if any.
+        if (bindingExpr.HasError && bindingExpr.ValidationError != null)
+        {
+            sb.Append($",\"hasError\":true,\"errorMessage\":\"{EscapeJson(bindingExpr.ValidationError.ErrorContent?.ToString() ?? "")}\"");
+        }
+        else
+        {
+            sb.Append($",\"hasError\":{bindingExpr.HasError.ToString().ToLowerInvariant()}");
+        }
+
+        // Hop-by-hop path resolution — the diagnostic core.
+        sb.Append(",\"resolution\":");
+        AppendPathResolution(sb, root, path);
+
+        sb.Append("}");
+    }
+
+    /// <summary>
+    /// Walks a dotted binding path against a source object, reporting each segment's value
+    /// and type, and where it breaks (null intermediate, or a property that doesn't exist).
+    /// </summary>
+    private void AppendPathResolution(StringBuilder sb, object? root, string path)
+    {
+        sb.Append("{");
+        sb.Append($"\"rootType\":\"{EscapeJson(root?.GetType().FullName ?? "null")}\"");
+        sb.Append(",\"hops\":[");
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            // Empty path binds directly to the source (e.g. {Binding} or {Binding Path=.}).
+            sb.Append("]");
+            sb.Append($",\"resolvedValue\":\"{EscapeJson(FormatValueShort(root))}\"");
+            sb.Append(",\"brokenAt\":null}");
+            return;
+        }
+
+        var segments = SplitPath(path);
+        object? current = root;
+        string? brokenAt = null;
+        var first = true;
+
+        foreach (var seg in segments)
+        {
+            if (!first) sb.Append(",");
+            first = false;
+
+            if (current == null)
+            {
+                sb.Append($"{{\"segment\":\"{EscapeJson(seg)}\",\"found\":false,\"reason\":\"the value before this segment is null, so '{EscapeJson(seg)}' cannot be resolved\"}}");
+                brokenAt = seg;
+                break;
+            }
+
+            var (ok, value, memberType, reason) = ReadSegment(current, seg);
+            sb.Append($"{{\"segment\":\"{EscapeJson(seg)}\",\"found\":{ok.ToString().ToLowerInvariant()}");
+            if (ok)
+            {
+                sb.Append($",\"valueType\":\"{EscapeJson(memberType)}\"");
+                sb.Append($",\"value\":\"{EscapeJson(FormatValueShort(value))}\"");
+                current = value;
+            }
+            else
+            {
+                sb.Append($",\"reason\":\"{EscapeJson(reason)}\"");
+                brokenAt = seg;
+                sb.Append("}");
+                break;
+            }
+            sb.Append("}");
+        }
+
+        sb.Append("]");
+        if (brokenAt == null)
+        {
+            sb.Append($",\"resolvedValue\":\"{EscapeJson(FormatValueShort(current))}\"");
+            sb.Append(",\"brokenAt\":null");
+        }
+        else
+        {
+            sb.Append(",\"resolvedValue\":null");
+            sb.Append($",\"brokenAt\":\"{EscapeJson(brokenAt)}\"");
+        }
+        sb.Append("}");
+    }
+
+    /// <summary>Reads one path segment (property or indexer) off <paramref name="obj"/>.</summary>
+    private static (bool ok, object? value, string memberType, string reason) ReadSegment(object obj, string segment)
+    {
+        var type = obj.GetType();
+
+        // Indexer form: "Items[2]" — split name and index.
+        var bracket = segment.IndexOf('[');
+        if (bracket >= 0 && segment.EndsWith("]"))
+        {
+            var name = segment.Substring(0, bracket);
+            var indexStr = segment.Substring(bracket + 1, segment.Length - bracket - 2);
+
+            object? collection = obj;
+            if (name.Length > 0)
+            {
+                var prop = type.GetProperty(name);
+                if (prop == null)
+                    return (false, null, "", $"property '{name}' not found on type '{type.Name}'");
+                collection = prop.GetValue(obj);
+                if (collection == null)
+                    return (false, null, "", $"'{name}' is null, cannot index into it");
+            }
+
+            if (int.TryParse(indexStr, out var idx) && collection is System.Collections.IList list)
+            {
+                if (idx < 0 || idx >= list.Count)
+                    return (false, null, "", $"index {idx} is out of range (count {list.Count})");
+                var item = list[idx];
+                return (true, item, item?.GetType().FullName ?? "null", "");
+            }
+            return (false, null, "", $"cannot resolve indexer '[{indexStr}]'");
+        }
+
+        var pi = type.GetProperty(segment);
+        if (pi == null)
+        {
+            return (false, null, "", $"property '{segment}' not found on type '{type.Name}'");
+        }
+        try
+        {
+            var val = pi.GetValue(obj);
+            return (true, val, val?.GetType().FullName ?? pi.PropertyType.FullName ?? "null", "");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, "", $"reading '{segment}' threw: {ex.GetType().Name}");
+        }
+    }
+
+    private static string[] SplitPath(string path)
+    {
+        // "." binds to the source itself; strip a leading "." and split on dots.
+        path = path.Trim().TrimStart('.');
+        if (path.Length == 0) return Array.Empty<string>();
+        return path.Split('.');
+    }
+
+    /// <summary>Resolves the object a binding reads from (Source / ElementName / RelativeSource / DataContext).</summary>
+    private static (object? root, string kind) ResolveBindingSource(DependencyObject element, Binding binding)
+    {
+        if (binding.Source != null)
+            return (binding.Source, "Source");
+
+        if (!string.IsNullOrEmpty(binding.ElementName))
+        {
+            if (element is FrameworkElement fe)
+            {
+                var named = fe.FindName(binding.ElementName);
+                return (named, "ElementName");
+            }
+            return (null, "ElementName");
+        }
+
+        if (binding.RelativeSource != null)
+        {
+            var rs = binding.RelativeSource;
+            switch (rs.Mode)
+            {
+                case RelativeSourceMode.Self:
+                    return (element, "RelativeSource.Self");
+                case RelativeSourceMode.TemplatedParent:
+                    return ((element as FrameworkElement)?.TemplatedParent, "RelativeSource.TemplatedParent");
+                case RelativeSourceMode.FindAncestor:
+                    return (FindAncestor(element, rs.AncestorType, Math.Max(1, rs.AncestorLevel)), "RelativeSource.FindAncestor");
+                default:
+                    return (null, $"RelativeSource.{rs.Mode}");
+            }
+        }
+
+        // Default: the element's DataContext.
+        return ((element as FrameworkElement)?.DataContext, "DataContext");
+    }
+
+    private static object? FindAncestor(DependencyObject element, Type? ancestorType, int level)
+    {
+        var current = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        while (current != null)
+        {
+            if (ancestorType == null || ancestorType.IsInstanceOfType(current))
+            {
+                if (--level <= 0) return current;
+            }
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private static string FormatValueShort(object? value)
+    {
+        if (value == null) return "null";
+        var str = value.ToString() ?? "";
+        return str.Length > 120 ? str.Substring(0, 120) + "…" : str;
+    }
+
+    private static DependencyProperty? ResolveDependencyProperty(DependencyObject element, string propertyName)
+    {
+        foreach (PropertyDescriptor pd in TypeDescriptor.GetProperties(element))
+        {
+            if (pd.Name == propertyName)
+                return DependencyPropertyDescriptor.FromProperty(pd)?.DependencyProperty;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Gets all binding errors captured from the application.
     /// </summary>
     public string GetBindingErrors()

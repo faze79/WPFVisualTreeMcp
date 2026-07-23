@@ -261,6 +261,27 @@ public class NamedPipeBridge : IIpcBridge
         return ParseLayoutInfoResponse(response, elementHandle);
     }
 
+    public async Task<EvaluateBindingResult> EvaluateBindingAsync(string elementHandle, string propertyName)
+    {
+        var session = EnsureConnected();
+
+        var request = new EvaluateBindingRequest
+        {
+            ElementHandle = elementHandle,
+            PropertyName = propertyName
+        };
+
+        var response = await SendRequestAsync<EvaluateBindingRequest, EvaluateBindingResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to evaluate binding");
+        }
+
+        return new EvaluateBindingResult { Json = response.EvaluationJson };
+    }
+
     public async Task<SnapshotResult> SnapshotAsync(string? elementHandle, string? label, int maxDepth)
     {
         var session = EnsureConnected();

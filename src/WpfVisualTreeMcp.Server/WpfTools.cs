@@ -263,6 +263,25 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Explain WHY a property has its current value — the go-to tool for 'why is X empty/wrong/disabled?'. Reports the value source (Local, Style, Binding, Inherited, Default, ...), the effective value, and whether it's animated/coerced. When the value comes from a binding, it also resolves the binding path hop-by-hop against the source (DataContext / ElementName / RelativeSource / Source) and reports each segment's value and type, pinpointing exactly where a broken binding fails (e.g. a null intermediate, or a misspelled property that doesn't exist on the DataContext type). Complements wpf_get_bindings (which lists bindings) by actually evaluating one.")]
+    public async Task<object> WpfEvaluateBinding(string element_handle, string property_name)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+        if (string.IsNullOrEmpty(property_name))
+        {
+            throw new ArgumentException("property_name is required");
+        }
+
+        var result = await _ipcBridge.EvaluateBindingAsync(element_handle, property_name);
+        return string.IsNullOrEmpty(result.Json)
+            ? (object)new { success = false }
+            : JsonSerializer.Deserialize<JsonElement>(result.Json!);
+    }
+
+    [McpServerTool]
     [Description("Capture a snapshot of an element's subtree (layout metrics, visibility, alignment, brushes, text) and store it under a label, to diff later with wpf_diff. Workflow: wpf_snapshot(label='before') → make a change (e.g. wpf_set_property) → wpf_snapshot(label='after') → wpf_diff('before','after') to see exactly what moved. element_handle sets the subtree root (omit for the whole main window); max_depth default 25. Returns the label and how many elements were captured.")]
     public async Task<object> WpfSnapshot(string? element_handle = null, string? label = null, int max_depth = 25)
     {

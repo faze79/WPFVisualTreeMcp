@@ -243,6 +243,7 @@ public class InspectorService : IDisposable
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "SetProperty" => HandleSetProperty(data),
             "RevertProperty" => HandleRevertProperty(data),
+            "EvaluateBinding" => HandleEvaluateBinding(data),
             "Snapshot" => HandleSnapshot(data),
             "Diff" => HandleDiff(data),
             "ClickElement" => HandleClickElement(data),
@@ -572,6 +573,32 @@ public class InspectorService : IDisposable
 
         _highlighter.Highlight(element, request.DurationMs);
         return new HighlightElementResponse { RequestId = request.RequestId };
+    }
+
+    private IpcResponse HandleEvaluateBinding(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<EvaluateBindingRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new EvaluateBindingResponse { Success = false, Error = "ElementHandle required" };
+        }
+        if (string.IsNullOrEmpty(request.PropertyName))
+        {
+            return new EvaluateBindingResponse { Success = false, Error = "PropertyName required" };
+        }
+
+        var element = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (element == null)
+        {
+            return new EvaluateBindingResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+
+        var json = _bindingAnalyzer.EvaluateBinding(element, request.PropertyName);
+        return new EvaluateBindingResponse
+        {
+            RequestId = request.RequestId,
+            EvaluationJson = json
+        };
     }
 
     private IpcResponse HandleSnapshot(JsonElement data)

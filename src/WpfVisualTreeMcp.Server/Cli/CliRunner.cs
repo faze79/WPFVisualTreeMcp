@@ -23,7 +23,7 @@ public static class CliRunner
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
-        "layout", "export", "screenshot",
+        "evaluate-binding", "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -338,6 +338,14 @@ public static class CliRunner
                     break;
                 }
 
+                case "evaluate-binding":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.EvaluateBindingAsync(cli.GetRequired("handle"), cli.GetRequired("property"));
+                    Console.Out.WriteLine(string.IsNullOrEmpty(result.Json) ? "{}" : result.Json!);
+                    break;
+                }
+
                 case "snapshot":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -523,6 +531,7 @@ COMMANDS
   revert-property --pid (--all | [--handle H] [--property P])              (undo set-property edits)
   snapshot      --pid [--handle H] [--label L] [--depth N]                 (capture state for diff)
   diff          --pid --before L1 --after L2                               (compare two snapshots)
+  evaluate-binding --pid --handle H --property P                           (why does this property have its value?)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
@@ -637,6 +646,12 @@ TYPICAL WORKFLOW
                     + "  measure the effect of a change:\n"
                     + "    snapshot --label before  ->  set-property ...  ->  snapshot --label after\n"
                     + "    diff --before before --after after",
+            "evaluate-binding" => "evaluate-binding --pid <id> --handle <handle> --property <name>\n"
+                                + "  Explain why a property has its value. Reports the value source\n"
+                                + "  (Local/Style/Binding/Inherited/Default) and, for bindings, resolves\n"
+                                + "  the path hop-by-hop against the source, showing each segment's value\n"
+                                + "  and exactly where a broken binding fails (null intermediate, or a\n"
+                                + "  property that doesn't exist on the DataContext type).",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
                           + "  Capture the window (or one element) as PNG and print the file path.\n"
