@@ -263,6 +263,21 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Explain an element's triggers and where a value comes from — for 'why doesn't this trigger fire?' and 'which style/setter set this value?'. Lists the element's Style triggers (walking BasedOn) AND its ControlTemplate triggers (where most visual-state triggers live, e.g. IsMouseOver/IsEnabled on a Button), each EVALUATED against the current state: the condition (property=expected), the property's CURRENT value, whether it matches, whether the trigger is active, and the setters it applies. This tells you a trigger isn't firing because its condition property currently holds a different value. Pass property_name to also attribute that property's effective value to its source: a specific style setter (which style, which setter) or an active trigger (which condition), or local/inherited/default.")]
+    public async Task<object> WpfExplainTriggers(string element_handle, string? property_name = null)
+    {
+        if (string.IsNullOrEmpty(element_handle))
+        {
+            throw new ArgumentException("element_handle is required");
+        }
+
+        var result = await _ipcBridge.ExplainTriggersAsync(element_handle, property_name);
+        return string.IsNullOrEmpty(result.Json)
+            ? (object)new { success = false }
+            : JsonSerializer.Deserialize<JsonElement>(result.Json!);
+    }
+
+    [McpServerTool]
     [Description("Explain WHY a property has its current value — the go-to tool for 'why is X empty/wrong/disabled?'. Reports the value source (Local, Style, Binding, Inherited, Default, ...), the effective value, and whether it's animated/coerced. When the value comes from a binding, it also resolves the binding path hop-by-hop against the source (DataContext / ElementName / RelativeSource / Source) and reports each segment's value and type, pinpointing exactly where a broken binding fails (e.g. a null intermediate, or a misspelled property that doesn't exist on the DataContext type). Complements wpf_get_bindings (which lists bindings) by actually evaluating one.")]
     public async Task<object> WpfEvaluateBinding(string element_handle, string property_name)
     {

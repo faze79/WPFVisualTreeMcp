@@ -113,6 +113,17 @@ public class IpcSerializerTests
     }
 
     [Fact]
+    public void SerializeRequest_RoundTripsExplainTriggersRequest()
+    {
+        var req = new ExplainTriggersRequest { ElementHandle = "elem_7", PropertyName = "Background" };
+        var envelope = IpcSerializer.DeserializeRequest(IpcSerializer.SerializeRequest(req));
+        envelope!.Value.type.Should().Be("ExplainTriggers");
+        var back = IpcSerializer.DeserializeRequestData<ExplainTriggersRequest>(envelope.Value.data);
+        back!.ElementHandle.Should().Be("elem_7");
+        back.PropertyName.Should().Be("Background");
+    }
+
+    [Fact]
     public void SerializeRequest_RoundTripsEvaluateBindingRequest()
     {
         var req = new EvaluateBindingRequest { ElementHandle = "elem_5", PropertyName = "Text" };

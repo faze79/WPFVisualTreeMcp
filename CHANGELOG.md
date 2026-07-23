@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-24
+
+### Added
+
+- **`wpf_explain_triggers` / `explain-triggers`** (28th tool) — evaluate an element's triggers
+  and attribute a value to its source. Lists the Style triggers (walking `BasedOn`) **and the
+  ControlTemplate triggers** (where most visual-state triggers live — `IsMouseOver`,
+  `IsEnabled`, `IsKeyboardFocused`, ...), each evaluated against the current state: the
+  condition (`property=expected`), the property's **current value**, whether it matches,
+  whether the trigger is **active**, and the **setters** it applies. Answers "why doesn't this
+  trigger fire?" — its condition property currently holds a different value. With
+  `property_name`, also **attributes** that property's effective value to the exact source: a
+  style setter (which style, which setter) or an active trigger (which condition), or
+  local/inherited/default. Handles `Trigger`, `MultiTrigger`, `DataTrigger` (best-effort
+  binding evaluation) and `EventTrigger`. Read-only.
+
+### Notes
+
+- The tool you reach for when you'd otherwise crack open the visual tree by hand to see why a
+  `Style`/`ControlTemplate` trigger isn't reacting, or where a value/binding really comes from.
+  Verified live: disabling a TextBox surfaces its template `IsEnabled=False` trigger as
+  `active: true` applying `Opacity=0.56`; a custom button's `Foreground` is attributed to the
+  exact style setter that set it.
+
 ## [0.11.0] - 2026-07-24
 
 ### Added

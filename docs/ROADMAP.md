@@ -145,8 +145,10 @@ desktop work is going. Large because the visual-tree/injection specifics differ.
   Useful for "what is this control?" and grounding screenshots to handles.
 - **Batch actions** (M) — run an ordered list of tool calls in one round-trip; cuts
   latency for multi-step flows and is a building block for `wpf_record`.
-- **Trigger / animation / template inspection** (M) — explain *why* a property has its
-  current value when a Style/ControlTemplate trigger or animation is driving it.
+- ~~**Trigger / template inspection**~~ — ✅ shipped as `wpf_explain_triggers` (v0.12.0):
+  evaluates Style + ControlTemplate triggers against the current state (active/inactive +
+  setters) and attributes a property value to its style setter / active trigger. (Animation
+  timelines still not covered.)
 - **`wpf_focus` / keyboard-navigation report** (S) — tab order and current focus, for
   accessibility and for reliable `send-keys` targeting.
 - **Structured error taxonomy** (S) — machine-readable error codes on IPC responses so

@@ -1,5 +1,34 @@
 # Release Notes
 
+## v0.12.0 — Trigger & style diagnostics (2026-07-24)
+
+If you've debugged WPF, you've done this by hand: crack open the visual tree, hunt through a `Style` or `ControlTemplate`, and try to work out why a trigger isn't reacting — or which setter, in which style or trigger, actually produced a value. This release does it for you.
+
+### `wpf_explain_triggers`
+
+Give it an element and it lists the triggers from its **Style** (following `BasedOn`) **and its `ControlTemplate`** — the latter being where most visual-state triggers actually live (`IsMouseOver`, `IsEnabled`, `IsKeyboardFocused`, ...). Crucially, it doesn't just list them, it **evaluates** each one against the live state:
+
+- the condition (`property = expected`),
+- the property's **current** value,
+- whether it **matches**,
+- whether the trigger is **active**,
+- and the **setters** it applies.
+
+So "why doesn't my trigger fire?" gets a direct answer: its condition property currently holds a different value than the trigger expects — and you can see both, side by side.
+
+Pass `property_name` and it also **attributes** that property's effective value to its exact source: a specific style setter (which style, which setter), an active trigger (which condition), or local / inherited / default.
+
+```
+explain-triggers --pid 1234 --handle elem_00                    # evaluate all triggers
+explain-triggers --pid 1234 --handle elem_00 --property Foreground   # + attribute this value
+```
+
+Verified live against the sample app: disable a TextBox and its ControlTemplate's `IsEnabled=False` trigger shows up as `active: true`, applying `Opacity=0.56` — i.e. "it looks greyed out because this template trigger is firing". And a custom button's `Foreground` is attributed to the precise style setter that set it.
+
+Handles `Trigger`, `MultiTrigger`, `DataTrigger` (best-effort binding evaluation) and `EventTrigger`. Read-only. Together with `wpf_evaluate_binding` (v0.11.0), the "why is it *this* value?" story now covers bindings, styles and triggers.
+
+---
+
 ## v0.11.0 — Why is this the value? (2026-07-24)
 
 The single most common question an AI agent gets about a WPF app is *"why is this empty / wrong / disabled?"*. This release answers it.

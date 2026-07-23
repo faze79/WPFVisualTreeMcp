@@ -273,6 +273,30 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfExplainTriggers_ReturnsParsedResultAndPassesProperty()
+    {
+        _ipcBridgeMock
+            .Setup(x => x.ExplainTriggersAsync("elem_1", "Background"))
+            .ReturnsAsync(new ExplainTriggersResult
+            {
+                Json = "{\"templateTriggers\":[{\"type\":\"Trigger\",\"active\":true}],\"attribution\":{\"valueSource\":\"TemplateTrigger\",\"setBy\":{\"kind\":\"ActiveTrigger\"}}}"
+            });
+
+        var result = await _tools.WpfExplainTriggers("elem_1", "Background");
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        json.Should().Contain("\"active\":true");
+        json.Should().Contain("\"kind\":\"ActiveTrigger\"");
+        _ipcBridgeMock.Verify(x => x.ExplainTriggersAsync("elem_1", "Background"), Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfExplainTriggers_WithEmptyHandle_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfExplainTriggers(""));
+    }
+
+    [Fact]
     public async Task WpfEvaluateBinding_ReturnsParsedEvaluation()
     {
         _ipcBridgeMock

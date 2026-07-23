@@ -86,6 +86,14 @@ public class EvaluateBindingResult
 }
 
 /// <summary>
+/// Result of explaining an element's triggers and value attribution (as JSON).
+/// </summary>
+public class ExplainTriggersResult
+{
+    public string? Json { get; set; }
+}
+
+/// <summary>
 /// Result of capturing a snapshot.
 /// </summary>
 public class SnapshotResult

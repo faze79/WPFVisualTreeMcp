@@ -343,6 +343,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_styles` | Get applied styles and templates |
 | `wpf_watch_property` | Monitor a property for changes |
 | `wpf_evaluate_binding` | Explain **why** a property has its value — value source, and for bindings a hop-by-hop path resolution pinpointing where a broken binding fails |
+| `wpf_explain_triggers` | Evaluate Style **and ControlTemplate** triggers against the current state (condition, current value, active, setters) — 'why doesn't this trigger fire?'; and attribute a property's value to the style setter / active trigger that set it |
 | `wpf_snapshot` | Capture an element subtree's state (layout, visibility, brushes, text) under a label |
 | `wpf_diff` | Diff two snapshots — measure exactly what a change moved (property from→to, added/removed) |
 | `wpf_set_property` | **Live-edit** a dependency property at runtime (type-converted), to test a change without rebuilding. *State-changing, reversible.* |
@@ -488,7 +489,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 27 tools auto-discovered via `[McpServerTool]` attributes (21 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
+- **Tools**: 28 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

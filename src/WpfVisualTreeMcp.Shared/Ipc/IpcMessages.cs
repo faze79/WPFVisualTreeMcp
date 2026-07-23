@@ -94,6 +94,21 @@ public class FindElementsDeepResponse : IpcResponse
     public int Count { get; set; }
 }
 
+// Explain Triggers (evaluate Style/Template triggers + attribute a property's value)
+public class ExplainTriggersRequest : IpcRequest
+{
+    public override string RequestType => "ExplainTriggers";
+    public string ElementHandle { get; set; } = string.Empty;
+
+    /// <summary>Optional: attribute this property's current value to its source (style setter / active trigger / local / default).</summary>
+    public string? PropertyName { get; set; }
+}
+
+public class ExplainTriggersResponse : IpcResponse
+{
+    public string? Json { get; set; }
+}
+
 // Evaluate Binding (explain why a property has its value)
 public class EvaluateBindingRequest : IpcRequest
 {

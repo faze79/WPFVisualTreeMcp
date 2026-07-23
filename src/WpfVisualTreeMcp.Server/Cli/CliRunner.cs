@@ -23,7 +23,7 @@ public static class CliRunner
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
-        "evaluate-binding", "layout", "export", "screenshot",
+        "evaluate-binding", "explain-triggers", "layout", "export", "screenshot",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -346,6 +346,14 @@ public static class CliRunner
                     break;
                 }
 
+                case "explain-triggers":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.ExplainTriggersAsync(cli.GetRequired("handle"), cli.GetStringOrNull("property"));
+                    Console.Out.WriteLine(string.IsNullOrEmpty(result.Json) ? "{}" : result.Json!);
+                    break;
+                }
+
                 case "snapshot":
                 {
                     await AttachAsync(processManager, cli, false);
@@ -532,6 +540,7 @@ COMMANDS
   snapshot      --pid [--handle H] [--label L] [--depth N]                 (capture state for diff)
   diff          --pid --before L1 --after L2                               (compare two snapshots)
   evaluate-binding --pid --handle H --property P                           (why does this property have its value?)
+  explain-triggers --pid --handle H [--property P]                         (evaluate Style/Template triggers; attribute a value)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
   screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
@@ -652,6 +661,14 @@ TYPICAL WORKFLOW
                                 + "  the path hop-by-hop against the source, showing each segment's value\n"
                                 + "  and exactly where a broken binding fails (null intermediate, or a\n"
                                 + "  property that doesn't exist on the DataContext type).",
+            "explain-triggers" => "explain-triggers --pid <id> --handle <handle> [--property <name>]\n"
+                                + "  Evaluate the element's Style and ControlTemplate triggers against the\n"
+                                + "  current state: for each, the condition, the property's current value,\n"
+                                + "  whether it matches, whether the trigger is active, and the setters it\n"
+                                + "  applies. Answers 'why doesn't this trigger fire?' (its condition\n"
+                                + "  property currently holds a different value). With --property, also\n"
+                                + "  attribute that property's value to the style setter or active trigger\n"
+                                + "  that set it (or local/inherited/default).",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
             "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
                           + "  Capture the window (or one element) as PNG and print the file path.\n"

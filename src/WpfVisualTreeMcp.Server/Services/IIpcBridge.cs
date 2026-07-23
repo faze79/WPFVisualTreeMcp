@@ -72,6 +72,13 @@ public interface IIpcBridge
     Task<EvaluateBindingResult> EvaluateBindingAsync(string elementHandle, string propertyName);
 
     /// <summary>
+    /// Explains an element's Style and ControlTemplate triggers, each evaluated against the
+    /// current state (condition, current value, active, setters). When <paramref name="propertyName"/>
+    /// is given, also attributes that property's value to the style setter or active trigger that set it.
+    /// </summary>
+    Task<ExplainTriggersResult> ExplainTriggersAsync(string elementHandle, string? propertyName);
+
+    /// <summary>
     /// Captures a snapshot of an element subtree (or the main window), stored under a label
     /// for a later diff.
     /// </summary>

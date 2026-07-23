@@ -261,6 +261,27 @@ public class NamedPipeBridge : IIpcBridge
         return ParseLayoutInfoResponse(response, elementHandle);
     }
 
+    public async Task<ExplainTriggersResult> ExplainTriggersAsync(string elementHandle, string? propertyName)
+    {
+        var session = EnsureConnected();
+
+        var request = new ExplainTriggersRequest
+        {
+            ElementHandle = elementHandle,
+            PropertyName = propertyName
+        };
+
+        var response = await SendRequestAsync<ExplainTriggersRequest, ExplainTriggersResponse>(
+            session.ProcessId, request);
+
+        if (!response.Success)
+        {
+            throw new InvalidOperationException(response.Error ?? "Failed to explain triggers");
+        }
+
+        return new ExplainTriggersResult { Json = response.Json };
+    }
+
     public async Task<EvaluateBindingResult> EvaluateBindingAsync(string elementHandle, string propertyName)
     {
         var session = EnsureConnected();

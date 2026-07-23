@@ -244,6 +244,7 @@ public class InspectorService : IDisposable
             "SetProperty" => HandleSetProperty(data),
             "RevertProperty" => HandleRevertProperty(data),
             "EvaluateBinding" => HandleEvaluateBinding(data),
+            "ExplainTriggers" => HandleExplainTriggers(data),
             "Snapshot" => HandleSnapshot(data),
             "Diff" => HandleDiff(data),
             "ClickElement" => HandleClickElement(data),
@@ -573,6 +574,28 @@ public class InspectorService : IDisposable
 
         _highlighter.Highlight(element, request.DurationMs);
         return new HighlightElementResponse { RequestId = request.RequestId };
+    }
+
+    private IpcResponse HandleExplainTriggers(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<ExplainTriggersRequest>(data);
+        if (string.IsNullOrEmpty(request?.ElementHandle))
+        {
+            return new ExplainTriggersResponse { Success = false, Error = "ElementHandle required" };
+        }
+
+        var resolved = _treeWalker.ResolveHandle(request.ElementHandle!);
+        if (resolved == null)
+        {
+            return new ExplainTriggersResponse { Success = false, Error = StaleHandleError(request.ElementHandle!) };
+        }
+        if (resolved is not FrameworkElement fe)
+        {
+            return new ExplainTriggersResponse { Success = false, Error = WrongElementTypeError(request.ElementHandle!, resolved, "FrameworkElement") };
+        }
+
+        var json = _resourceInspector.ExplainTriggers(fe, request.PropertyName);
+        return new ExplainTriggersResponse { RequestId = request.RequestId, Json = json };
     }
 
     private IpcResponse HandleEvaluateBinding(JsonElement data)
