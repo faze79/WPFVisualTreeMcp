@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -28,6 +29,21 @@ public class InspectorService : IDisposable
     private bool _disposed;
 
     private static readonly object _initLock = new();
+#if NET48
+    private static readonly HashSet<string> _privateDependencyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Microsoft.Bcl.AsyncInterfaces",
+        "System.Buffers",
+        "System.Memory",
+        "System.Numerics.Vectors",
+        "System.Runtime.CompilerServices.Unsafe",
+        "System.Text.Encodings.Web",
+        "System.Text.Json",
+        "System.Threading.Tasks.Extensions",
+        "System.ValueTuple",
+    };
+    private static bool _dependencyResolverRegistered;
+#endif
     public static InspectorService? Instance { get; private set; }
 
     /// <summary>
@@ -105,6 +121,9 @@ public class InspectorService : IDisposable
             try
             {
                 DebugLog($"Inspector.Initialize called for PID={processId}");
+#if NET48
+                RegisterDependencyResolver();
+#endif
                 Instance = new InspectorService(processId);
                 DebugLog("Inspector instance created, calling Start()");
                 Instance.Start();
@@ -118,6 +137,27 @@ public class InspectorService : IDisposable
             }
         }
     }
+
+#if NET48
+    private static void RegisterDependencyResolver()
+    {
+        if (_dependencyResolverRegistered) return;
+
+        var inspectorDirectory = Path.GetDirectoryName(typeof(InspectorService).Assembly.Location);
+        if (string.IsNullOrEmpty(inspectorDirectory)) return;
+
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+        {
+            var assemblyName = new AssemblyName(args.Name).Name;
+            if (string.IsNullOrEmpty(assemblyName) || !_privateDependencyNames.Contains(assemblyName))
+                return null;
+
+            var assemblyPath = Path.Combine(inspectorDirectory, assemblyName + ".dll");
+            return File.Exists(assemblyPath) ? Assembly.LoadFrom(assemblyPath) : null;
+        };
+        _dependencyResolverRegistered = true;
+    }
+#endif
 
     private InspectorService(int processId)
     {
