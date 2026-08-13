@@ -1,16 +1,60 @@
 # WpfVisualTreeMcp.Injector
 
-This project handles injection of the Inspector DLL into target WPF processes.
+This project injects the WPF Inspector into an already-running WPF process. It
+is used by both the MCP server and the one-shot CLI when auto-injection is
+requested.
 
-## Current Status
+## How Auto-Injection Works
 
-The injector is currently a **stub implementation**. Full DLL injection into external .NET processes requires advanced techniques that are beyond the scope of the initial implementation.
+1. `ProcessInjector` verifies that the target is managed and detects its
+   architecture.
+2. It selects the matching x64 or x86 `WpfInspectorBootstrapper.dll`.
+3. For a same-bitness target, it uses `OpenProcess`, `VirtualAllocEx`,
+   `WriteProcessMemory`, and `CreateRemoteThread` to call `LoadLibraryW` in the
+   target. A 64-bit server launches the bundled 32-bit `WpfInjectorHelper.exe`
+   for an x86 target.
+4. The native bootstrapper detects the loaded CLR. It uses
+   `ExecuteInDefaultAppDomain` for .NET Framework and `hostfxr` for CoreCLR.
+5. The bootstrapper loads `WpfVisualTreeMcp.Inspector.dll`, which starts the
+   named-pipe endpoint used by the server.
 
-## Injection Approaches
+Auto-injection does not require source changes to the target application.
 
-### Option 1: Self-Hosted Mode (Recommended for Development)
+## Requirements and Limitations
 
-For development and testing, the recommended approach is to have your WPF application directly reference the Inspector DLL:
+- **Windows and architecture:** Native bootstrappers are provided for x64 and
+  x86. Native ARM64 targets are not supported. Cross-bitness injection from the
+  normal 64-bit server into an x86 target requires `WpfInjectorHelper.exe` and
+  the x86 .NET 8 runtime.
+- **Process access:** The injector needs process-query, remote-thread, and
+  virtual-memory access. Integrity-level differences, protected or sandboxed
+  processes, endpoint security, and process-hardening policies can deny these
+  operations.
+- **Runtime compatibility:** .NET Framework targets load the `net48` Inspector
+  in the default AppDomain and require the .NET Framework 4.8 runtime. CoreCLR
+  targets load the `net8.0-windows` Inspector through `hostfxr` and require a
+  compatible Windows Desktop runtime. Custom CLR hosts and incompatible loaded
+  runtimes may reject the Inspector.
+- **Complete payload:** The architecture directory must contain the matching
+  native bootstrapper, Inspector assembly, and managed dependency closure.
+  CoreCLR injection also requires the Inspector runtime configuration.
+  `LoadLibraryW` or managed initialization fails when the payload is incomplete.
+- **Application state:** Injection starts the pipe server immediately, but WPF
+  operations require `Application.Current` and a responsive UI dispatcher.
+  Requests time out while the UI thread is blocked.
+- **Timing and lifetime:** Auto-injection cannot observe binding errors or UI
+  initialization that occurred before attachment. A restarted process must be
+  injected again. Detaching the external client does not unload the Inspector;
+  it remains in the target until process exit.
+- **Target stability:** Injection loads native and managed code, starts threads,
+  registers listeners, and resolves private dependencies inside the target.
+  Applications with conflicting assemblies or unusual hosting arrangements may
+  be destabilized.
+
+## Self-Hosted Alternative
+
+When the application source can be changed, self-hosting avoids remote-process
+injection and gives the application control over startup and disposal:
 
 ```csharp
 // In your WPF application's App.xaml.cs
@@ -25,49 +69,26 @@ protected override void OnStartup(StartupEventArgs e)
 
 This avoids the complexity of injection and provides the most reliable experience.
 
-### Option 2: Native Injection (Future)
+Self-hosting is appropriate when policy blocks injection, diagnostics must start
+with the application, or injection conflicts with the target's runtime. It
+requires a target-framework-compatible Inspector reference.
 
-For production scenarios where you need to attach to arbitrary WPF applications, the following approaches can be considered:
+## Diagnostics
 
-1. **CreateRemoteThread with LoadLibrary**
-   - Classic DLL injection technique
-   - Requires a native C++ helper for bootstrapping managed code
+Run the smallest attachment attempt with verbose logging:
 
-2. **CLR Debugging APIs (ICorDebug)**
-   - Uses the .NET debugging infrastructure
-   - Can create threads and load assemblies in the target process
+```powershell
+wpfinspect attach --pid <process-id> --auto-inject --verbose
+```
 
-3. **EasyHook or Similar Libraries**
-   - Third-party libraries that simplify managed injection
-   - Handle the complexity of cross-process managed code loading
-
-4. **AppDomain Injection via Profiling API**
-   - Uses the CLR profiling infrastructure
-   - Most invasive but most capable option
-
-## Why Injection is Complex
-
-Injecting managed code (.NET) into another managed process is significantly more complex than native DLL injection because:
-
-1. The CLR must be properly initialized in the target process
-2. The injected assembly must be loaded into the correct AppDomain
-3. The injected code must run on the correct thread (usually the UI thread for WPF)
-4. .NET Core/5+ has different hosting requirements than .NET Framework
-
-## Recommended Development Workflow
-
-1. **During Development**
-   - Use self-hosted mode in your test applications
-   - Reference the Inspector DLL directly
-
-2. **For Testing with External Apps**
-   - Build a test harness that loads Inspector on startup
-   - Use this for integration testing
-
-3. **Future Production**
-   - Implement proper injection using one of the approaches above
-   - Or consider a different architecture (e.g., a Visual Studio extension)
+The native bootstrapper writes initialization details to
+`%TEMP%\WpfInspectorBootstrapper.log`. When running as an MCP server, logs are
+stored under `%LOCALAPPDATA%\WpfVisualTreeMcp\logs`.
 
 ## Files
 
-- `ProcessInjector.cs` - Stub implementation with P/Invoke declarations for future use
+- `ProcessInjector.cs` - Target discovery, architecture selection, and remote
+  `LoadLibraryW` injection
+- `../WpfVisualTreeMcp.Bootstrapper/WpfInspectorBootstrapper.cpp` - Native CLR
+  bootstrapper
+- `../WpfVisualTreeMcp.InjectorHelper/Program.cs` - x86 cross-bitness helper

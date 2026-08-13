@@ -107,7 +107,7 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 | Interaction surface | click (UIA + physical, double/right), set-text w/ read-back, send-keys, **select-item (virtualized)** | click / type / select | usually invoke-only |
 | Wait for element conditions | ✅ `wpf_wait_for` | ✅ | ❌ |
 | Popup / dropdown / context-menu screenshots | ✅ screen mode | partial | screenshot only |
-| Cross-architecture injection (x64 ⇄ x86) | ✅ | n/a | ❌ |
+| Cross-architecture injection (x64 server → x86 target) | ✅ | n/a | ❌ |
 | Dual-mode: MCP server **and** one-shot CLI | ✅ | ❌ | ❌ |
 | Distribution | NuGet (`dnx`/tool) + official MCP registry | varies | varies |
 
@@ -226,7 +226,36 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 }
 ```
 
-### Self-Hosted Mode (Recommended)
+### Auto-Injection Mode
+
+Auto-injection loads the Inspector into an already-running WPF process without
+source changes. Set `auto_inject=true` when calling `wpf_attach`, or run:
+
+```powershell
+wpfinspect attach --pid <process-id> --auto-inject
+```
+
+Auto-injection has these constraints:
+
+- It requires permission to open the target process, write memory, and create a
+  remote thread. Elevated, protected, sandboxed, or security-hardened processes
+  may reject it, and endpoint security may block it as DLL injection.
+- The matching x64 or x86 native bootstrapper and the complete Inspector
+  dependency set must be present. A 64-bit server additionally needs the
+  bundled x86 helper and the x86 .NET 8 runtime to inject into a 32-bit target.
+  Native ARM64 targets are not supported.
+- Injection occurs after process startup, so it cannot recover earlier binding
+  errors or initialization activity. A restarted application must be injected
+  again under its new process ID.
+- The target must have an initialized WPF `Application` and a responsive UI
+  dispatcher. The injected Inspector remains loaded until the target exits.
+- Loading native and managed code into the target can conflict with its runtime,
+  assembly versions, or process-hardening policy.
+
+See the [injector documentation](src/WpfVisualTreeMcp.Injector/README.md) for the
+implementation, runtime requirements, diagnostics, and detailed limitations.
+
+### Self-Hosted Mode
 
 For your WPF application to be inspectable, add a reference to the Inspector DLL and initialize it on startup:
 
