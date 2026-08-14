@@ -402,9 +402,11 @@ Non-virtualized content is rendered directly; virtualized content is paged and
 stitched, then the original scroll position is restored. Logically scrolling,
 virtualized controls with horizontal overflow are not currently supported by
 full-content capture. Increase `max_height` when a long image would otherwise be
-downscaled too far. Full-content capture fails safely if a direct output or the
-retained frames plus final image would exceed the 67,108,864-pixel memory budget,
-or if capture work exceeds its 25-second execution deadline.
+downscaled too far. Full-content output is area-downscaled to at most 8,388,608
+pixels. Capture fails safely if retained frames plus the final image exceed the
+67,108,864-pixel raw-bitmap budget, the encoded PNG exceeds 33,554,432 bytes, or
+chunked render, composition, and encoding work reaches its 25-second cooperative
+execution deadline.
 
 For detailed examples of the original inspection tools, see
 [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for

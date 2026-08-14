@@ -141,10 +141,12 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   content directly, or pages and stitches virtualized content before restoring offsets
 - Full-content capture supports physical scrolling in both dimensions and logical
   virtualized scrolling vertically; logical virtualized horizontal overflow is rejected
-- Full-content capture rejects direct outputs or retained-frame-plus-output allocations
-  exceeding 67,108,864 pixels rather than risking unbounded process memory growth
-- Full-content capture uses a 25-second cooperative execution deadline that starts before
-  Dispatcher scheduling, leaving headroom below the 30-second named-pipe request timeout
+- Full-content output is area-downscaled to at most 8,388,608 pixels; capture rejects
+  retained-frame-plus-output allocations above 67,108,864 pixels and encoded PNGs above
+  33,554,432 bytes, avoiding unbounded bitmap, PNG, base64, and JSON memory growth
+- Full-content rendering, composition, and encoding use cancellation-aware bounded chunks
+  under a 25-second cooperative deadline that starts before Dispatcher scheduling,
+  leaving headroom below the 30-second named-pipe request timeout
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging

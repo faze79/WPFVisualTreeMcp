@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared payload entry.
 - Treat the Inspector named pipe, rather than a loaded module, as the attachment readiness
   signal.
-- Bound direct and stitched full-content screenshot memory and execution time, and derive
+- Bound direct and stitched full-content screenshot raw, PNG, and base64 memory; split
+  rendering, composition, and encoding into cancellation-aware chunks; and derive
   logical-page displacement from realized item-container geometry so identical or
   variable-height adjacent frames stitch correctly.
 

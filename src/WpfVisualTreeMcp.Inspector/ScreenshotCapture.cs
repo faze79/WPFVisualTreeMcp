@@ -18,6 +18,10 @@ namespace WpfVisualTreeMcp.Inspector;
 public class ScreenshotCapture
 {
     private const long MaxFullContentPixelCount = 64L * 1024 * 1024;
+    internal const long MaxFullContentOutputPixelCount = 8L * 1024 * 1024;
+    internal const long MaxFullContentEncodedByteCount = 32L * 1024 * 1024;
+    private const int MaxRenderTilePixelCount = 1024 * 1024;
+    private const int RenderTileWidth = 1024;
     private const int ComparisonTileWidth = 1024;
     private const int ComparisonTileHeight = 64;
 
@@ -137,7 +141,8 @@ public class ScreenshotCapture
             var bounds = GetFullContentBounds(content);
             if (bounds.Width >= 1 && bounds.Height >= 1)
             {
-                var result = CaptureVisual(content, bounds, maxWidth, maxHeight);
+                var result = CaptureVisual(
+                    content, bounds, maxWidth, maxHeight, cancellationToken);
                 ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 return result;
             }
@@ -157,26 +162,63 @@ public class ScreenshotCapture
     }
 
     private static (string base64, int width, int height) CaptureVisual(
-        UIElement element, Rect bounds, int maxWidth, int maxHeight)
+        UIElement element, Rect bounds, int maxWidth, int maxHeight,
+        CancellationToken cancellationToken)
     {
         GetDpi(element, out var dpiX, out var dpiY);
 
         int nativePixelWidth = (int)Math.Ceiling(bounds.Width * dpiX / 96.0);
         int nativePixelHeight = (int)Math.Ceiling(bounds.Height * dpiY / 96.0);
-        var scale = CalculateScale(nativePixelWidth, nativePixelHeight, maxWidth, maxHeight);
-        var bitmap = RenderVisual(element, bounds, dpiX, dpiY, scale);
+        var scale = CalculateFullContentScale(
+            nativePixelWidth, nativePixelHeight, maxWidth, maxHeight);
+        var bitmap = RenderVisual(
+            element, bounds, dpiX, dpiY, scale, cancellationToken: cancellationToken);
 
-        return EncodePng(bitmap, bitmap.PixelWidth, bitmap.PixelHeight);
+        return EncodeFullContentPng(
+            bitmap, bitmap.PixelWidth, bitmap.PixelHeight, cancellationToken);
     }
 
     private static BitmapSource RenderVisual(
         UIElement element, Rect bounds, double dpiX, double dpiY, double scale = 1.0,
-        long retainedPixels = 0)
+        long retainedPixels = 0, CancellationToken cancellationToken = default)
     {
         int pixelWidth = Math.Max(1, (int)(Math.Ceiling(bounds.Width * dpiX / 96.0) * scale));
         int pixelHeight = Math.Max(1, (int)(Math.Ceiling(bounds.Height * dpiY / 96.0) * scale));
         CalculateNextRetainedPixelCount(retainedPixels, pixelWidth, pixelHeight);
 
+        var bitmap = new WriteableBitmap(
+            pixelWidth, pixelHeight, dpiX * scale, dpiY * scale, PixelFormats.Pbgra32, null);
+        var tiles = BuildRenderTiles(pixelWidth, pixelHeight);
+        var maxTileWidth = Math.Min(pixelWidth, RenderTileWidth);
+        var maxTileHeight = Math.Max(
+            1, Math.Min(pixelHeight, MaxRenderTilePixelCount / maxTileWidth));
+        var pixels = new byte[checked(maxTileWidth * maxTileHeight * 4)];
+        var pixelsPerDipX = pixelWidth / bounds.Width;
+        var pixelsPerDipY = pixelHeight / bounds.Height;
+
+        foreach (var tile in tiles)
+        {
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
+            var tileBounds = new Rect(
+                bounds.X + tile.X / pixelsPerDipX,
+                bounds.Y + tile.Y / pixelsPerDipY,
+                tile.Width / pixelsPerDipX,
+                tile.Height / pixelsPerDipY);
+            var tileBitmap = RenderVisualTile(
+                element, tileBounds, tile.Width, tile.Height);
+            var stride = checked(tile.Width * 4);
+            tileBitmap.CopyPixels(pixels, stride, 0);
+            bitmap.WritePixels(tile, pixels, stride, 0);
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
+        }
+
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    private static BitmapSource RenderVisualTile(
+        UIElement element, Rect bounds, int pixelWidth, int pixelHeight)
+    {
         var dv = new DrawingVisual();
         using (var ctx = dv.RenderOpen())
         {
@@ -194,11 +236,35 @@ public class ScreenshotCapture
 
         var rtb = new RenderTargetBitmap(
             pixelWidth, pixelHeight,
-            dpiX * scale, dpiY * scale,
+            96.0 * pixelWidth / bounds.Width,
+            96.0 * pixelHeight / bounds.Height,
             PixelFormats.Pbgra32);
         rtb.Render(dv);
         rtb.Freeze();
         return rtb;
+    }
+
+    internal static IReadOnlyList<Int32Rect> BuildRenderTiles(int pixelWidth, int pixelHeight)
+    {
+        if (pixelWidth < 1)
+            throw new ArgumentOutOfRangeException(nameof(pixelWidth));
+        if (pixelHeight < 1)
+            throw new ArgumentOutOfRangeException(nameof(pixelHeight));
+
+        var tiles = new List<Int32Rect>();
+        var tileWidth = Math.Min(pixelWidth, RenderTileWidth);
+        var tileHeight = Math.Max(
+            1, Math.Min(pixelHeight, MaxRenderTilePixelCount / tileWidth));
+        for (var y = 0; y < pixelHeight; y += tileHeight)
+        {
+            var height = Math.Min(tileHeight, pixelHeight - y);
+            for (var x = 0; x < pixelWidth; x += tileWidth)
+            {
+                var width = Math.Min(tileWidth, pixelWidth - x);
+                tiles.Add(new Int32Rect(x, y, width, height));
+            }
+        }
+        return tiles;
     }
 
     private static void GetDpi(Visual visual, out double dpiX, out double dpiY)
@@ -213,11 +279,27 @@ public class ScreenshotCapture
         }
     }
 
-    private static double CalculateScale(int pixelWidth, int pixelHeight, int maxWidth, int maxHeight)
+    internal static double CalculateFullContentScale(
+        int pixelWidth, int pixelHeight, int maxWidth, int maxHeight)
     {
-        if (pixelWidth <= maxWidth && pixelHeight <= maxHeight)
-            return 1.0;
-        return Math.Min((double)maxWidth / pixelWidth, (double)maxHeight / pixelHeight);
+        return CalculateScale(
+            pixelWidth, pixelHeight, maxWidth, maxHeight, MaxFullContentOutputPixelCount);
+    }
+
+    private static double CalculateScale(
+        int pixelWidth, int pixelHeight, int maxWidth, int maxHeight,
+        long maxPixelCount = long.MaxValue)
+    {
+        var scale = Math.Min(
+            1.0,
+            Math.Min((double)maxWidth / pixelWidth, (double)maxHeight / pixelHeight));
+        var scaledPixelCount = pixelWidth * (double)pixelHeight * scale * scale;
+        if (scaledPixelCount > maxPixelCount)
+        {
+            scale = Math.Min(
+                scale, Math.Sqrt(maxPixelCount / (pixelWidth * (double)pixelHeight)));
+        }
+        return scale;
     }
 
     private static ScrollViewer? FindScrollViewer(UIElement element)
@@ -352,7 +434,8 @@ public class ScreenshotCapture
                         new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight),
                         dpiX,
                         dpiY,
-                        retainedPixels: retainedPixels);
+                        retainedPixels: retainedPixels,
+                        cancellationToken: cancellationToken);
                     ThrowIfFullContentCaptureTimedOut(cancellationToken);
                     retainedPixels = AddFrame(frames, new CaptureFrame(
                         bitmap,
@@ -415,7 +498,8 @@ public class ScreenshotCapture
                     new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight),
                     dpiX,
                     dpiY,
-                    retainedPixels: retainedPixels);
+                    retainedPixels: retainedPixels,
+                    cancellationToken: cancellationToken);
                 ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 var currentItemPositions = GetRealizedItemPositions(
                     virtualizingPanel, itemsOwner, presenter, dpiY);
@@ -615,32 +699,71 @@ public class ScreenshotCapture
         long retainedPixels, CancellationToken cancellationToken)
     {
         ThrowIfFullContentCaptureTimedOut(cancellationToken);
-        var scale = CalculateScale(sourceWidth, sourceHeight, maxWidth, maxHeight);
+        var scale = CalculateFullContentScale(
+            sourceWidth, sourceHeight, maxWidth, maxHeight);
         var pixelWidth = Math.Max(1, (int)(sourceWidth * scale));
         var pixelHeight = Math.Max(1, (int)(sourceHeight * scale));
         EnsureFullContentBudget(checked(retainedPixels + (long)pixelWidth * pixelHeight));
-        var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
+        var bitmap = new WriteableBitmap(
+            pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32, null);
+        foreach (var frame in frames)
         {
-            foreach (var frame in frames)
-            {
-                ThrowIfFullContentCaptureTimedOut(cancellationToken);
-                context.DrawImage(frame.Bitmap, new Rect(
-                    frame.X * scale,
-                    frame.Y * scale,
-                    frame.Bitmap.PixelWidth * scale,
-                    frame.Bitmap.PixelHeight * scale));
-            }
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
+            CopyFrame(
+                frame, bitmap, scale, cancellationToken);
         }
 
-        var bitmap = new RenderTargetBitmap(
-            pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(visual);
-        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         bitmap.Freeze();
-        var result = EncodePng(bitmap, pixelWidth, pixelHeight);
+        var result = EncodeFullContentPng(
+            bitmap, pixelWidth, pixelHeight, cancellationToken);
         ThrowIfFullContentCaptureTimedOut(cancellationToken);
         return result;
+    }
+
+    private static void CopyFrame(
+        CaptureFrame frame, WriteableBitmap target, double scale,
+        CancellationToken cancellationToken)
+    {
+        var destinationX = (int)Math.Round(frame.X * scale);
+        var destinationY = (int)Math.Round(frame.Y * scale);
+        var scaledWidth = Math.Max(1, (int)Math.Round(frame.Bitmap.PixelWidth * scale));
+        var scaledHeight = Math.Max(1, (int)Math.Round(frame.Bitmap.PixelHeight * scale));
+        BitmapSource source = frame.Bitmap;
+        if (scaledWidth != source.PixelWidth || scaledHeight != source.PixelHeight)
+        {
+            source = new TransformedBitmap(source, new ScaleTransform(
+                (double)scaledWidth / source.PixelWidth,
+                (double)scaledHeight / source.PixelHeight));
+            source.Freeze();
+        }
+
+        var copyWidth = Math.Min(source.PixelWidth, target.PixelWidth - destinationX);
+        var copyHeight = Math.Min(source.PixelHeight, target.PixelHeight - destinationY);
+        if (copyWidth < 1 || copyHeight < 1)
+            return;
+
+        var tileWidth = Math.Min(copyWidth, RenderTileWidth);
+        var tileHeight = Math.Max(
+            1, Math.Min(copyHeight, MaxRenderTilePixelCount / tileWidth));
+        var pixels = new byte[checked(tileWidth * tileHeight * 4)];
+        for (var y = 0; y < copyHeight; y += tileHeight)
+        {
+            var height = Math.Min(tileHeight, copyHeight - y);
+            for (var x = 0; x < copyWidth; x += tileWidth)
+            {
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
+                var width = Math.Min(tileWidth, copyWidth - x);
+                var sourceRect = new Int32Rect(x, y, width, height);
+                var stride = checked(width * 4);
+                source.CopyPixels(sourceRect, pixels, stride, 0);
+                target.WritePixels(
+                    new Int32Rect(destinationX + x, destinationY + y, width, height),
+                    pixels,
+                    stride,
+                    0);
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
+            }
+        }
     }
 
     private static long AddFrame(
@@ -780,14 +903,112 @@ public class ScreenshotCapture
     private static (string base64, int width, int height) EncodePng(
         BitmapSource source, int width, int height)
     {
+        return EncodePng(
+            source, width, height, new MemoryStream(), CancellationToken.None);
+    }
+
+    internal static (string base64, int width, int height) EncodeFullContentPng(
+        BitmapSource source, int width, int height, CancellationToken cancellationToken,
+        long maxEncodedByteCount = MaxFullContentEncodedByteCount)
+    {
+        return EncodePng(
+            source,
+            width,
+            height,
+            new BoundedMemoryStream(maxEncodedByteCount, cancellationToken),
+            cancellationToken);
+    }
+
+    private static (string base64, int width, int height) EncodePng(
+        BitmapSource source, int width, int height, MemoryStream stream,
+        CancellationToken cancellationToken)
+    {
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
 
-        using (var ms = new MemoryStream())
+        using (stream)
         {
-            encoder.Save(ms);
-            var base64 = Convert.ToBase64String(ms.ToArray());
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
+            try
+            {
+                encoder.Save(stream);
+            }
+            catch (InvalidOperationException)
+                when (stream is BoundedMemoryStream boundedStream &&
+                    boundedStream.Failure is TimeoutException timeoutException)
+            {
+                throw new TimeoutException(timeoutException.Message, timeoutException);
+            }
+            catch (InvalidOperationException)
+                when (stream is BoundedMemoryStream boundedStream &&
+                    boundedStream.Failure is InvalidOperationException budgetException &&
+                    budgetException.Message.StartsWith("Full-content encoded PNG", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(budgetException.Message, budgetException);
+            }
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
+            var base64 = Convert.ToBase64String(
+                stream.GetBuffer(), 0, checked((int)stream.Length));
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
             return (base64, width, height);
+        }
+    }
+
+    private sealed class BoundedMemoryStream : MemoryStream
+    {
+        private readonly long _maxLength;
+        private readonly CancellationToken _cancellationToken;
+
+        public Exception? Failure { get; private set; }
+
+        public BoundedMemoryStream(long maxLength, CancellationToken cancellationToken)
+        {
+            if (maxLength < 1 || maxLength > int.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(maxLength));
+
+            _maxLength = maxLength;
+            _cancellationToken = cancellationToken;
+        }
+
+        public override void SetLength(long value)
+        {
+            EnsureLength(value);
+            base.SetLength(value);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            EnsureLength(checked(Position + count));
+            base.Write(buffer, offset, count);
+            EnsureNotCanceled();
+        }
+
+        public override void WriteByte(byte value)
+        {
+            EnsureLength(checked(Position + 1));
+            base.WriteByte(value);
+            EnsureNotCanceled();
+        }
+
+        private void EnsureLength(long requestedLength)
+        {
+            EnsureNotCanceled();
+            if (requestedLength > _maxLength)
+            {
+                Failure = new InvalidOperationException(
+                    $"Full-content encoded PNG exceeds the {_maxLength:N0}-byte memory budget.");
+                throw Failure;
+            }
+        }
+
+        private void EnsureNotCanceled()
+        {
+            if (!_cancellationToken.IsCancellationRequested)
+                return;
+
+            Failure = new TimeoutException(
+                "Full-content capture exceeded its execution deadline.");
+            throw Failure;
         }
     }
 

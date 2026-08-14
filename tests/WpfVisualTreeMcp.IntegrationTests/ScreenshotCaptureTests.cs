@@ -29,6 +29,43 @@ public class ScreenshotCaptureTests
     }
 
     [Fact]
+    public void CalculateFullContentScale_LargeRequestedOutput_BoundsEncodedArea()
+    {
+        var scale = ScreenshotCapture.CalculateFullContentScale(
+            16384, 16384, 16384, 16384);
+
+        var width = (int)(16384 * scale);
+        var height = (int)(16384 * scale);
+        width.Should().Be(2896);
+        height.Should().Be(2896);
+        ((long)width * height).Should().BeLessOrEqualTo(
+            ScreenshotCapture.MaxFullContentOutputPixelCount);
+        scale.Should().BeLessThan(1.0);
+    }
+
+    [Fact]
+    public void BuildRenderTiles_LargeSurface_BoundsEachRenderAndCoversSurface()
+    {
+        var tiles = ScreenshotCapture.BuildRenderTiles(4096, 2048);
+
+        tiles.Should().HaveCountGreaterThan(1);
+        tiles.Should().OnlyContain(tile => (long)tile.Width * tile.Height <= 1024 * 1024);
+        tiles.Sum(tile => (long)tile.Width * tile.Height).Should().Be(4096L * 2048);
+    }
+
+    [Fact]
+    public void EncodeFullContentPng_EncodedOutputOverBudget_ThrowsBeforeBase64Allocation()
+    {
+        var bitmap = CreateBitmap(16, 10, 16);
+
+        var act = () => ScreenshotCapture.EncodeFullContentPng(
+            bitmap, bitmap.PixelWidth, bitmap.PixelHeight, CancellationToken.None, 1);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*encoded PNG exceeds the 1-byte memory budget*");
+    }
+
+    [Fact]
     public void CaptureFullContent_CanceledBeforeStart_ThrowsExecutionDeadlineError()
     {
         var capture = new ScreenshotCapture();

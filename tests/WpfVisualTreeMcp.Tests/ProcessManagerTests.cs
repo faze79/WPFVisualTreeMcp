@@ -66,6 +66,17 @@ public class ProcessManagerTests
             .WithMessage("*not found*");
     }
 
+    [Theory]
+    [InlineData(false, "Loaded (injected)")]
+    [InlineData(true, "Loaded (existing)")]
+    public void GetReadyInspectorStatus_ModulePresence_ReportsAccurateProvenance(
+        bool inspectorWasAlreadyLoaded, string expectedStatus)
+    {
+        var status = ProcessManager.GetReadyInspectorStatus(inspectorWasAlreadyLoaded);
+
+        status.Should().Be(expectedStatus);
+    }
+
     [Fact]
     public async Task DetachAsync_WithNonMatchingSession_DoesNotThrow()
     {

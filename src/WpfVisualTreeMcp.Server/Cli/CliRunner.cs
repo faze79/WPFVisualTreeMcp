@@ -681,7 +681,8 @@ TYPICAL WORKFLOW
                            + "  ComboBox dropdowns, context menus, tooltips); the window must be\n"
                            + "  visible on screen.\n"
                            + "  --full-content: with render mode, capture all content in a ScrollViewer,\n"
-                           + "  including unscrolled and virtualized content; restores the scroll position.",
+                           + "  including unscrolled and virtualized content; restores the scroll position.\n"
+                           + "  Large full-content output is area-downscaled and memory/deadline bounded.",
             "export" => "export --pid <id> [--handle <handle>] [--format json|xaml] [--out <file>]\n"
                       + "  Export the tree. Writes to --out if given, otherwise prints content inline.",
             _ => null,

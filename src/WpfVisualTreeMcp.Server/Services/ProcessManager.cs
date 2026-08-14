@@ -131,7 +131,8 @@ public class ProcessManager : IProcessManager
         // The named pipe is the readiness signal. A loaded module alone does not
         // prove that Inspector initialization completed successfully.
         var inspectorAvailable = await IsInspectorPipeAvailableAsync(targetProcess.Id);
-        if (!inspectorAvailable && IsInspectorLoaded(targetProcess))
+        var inspectorLoaded = !inspectorAvailable && IsInspectorLoaded(targetProcess);
+        if (inspectorLoaded)
         {
             _logger.LogWarning(
                 "Inspector module is loaded in target process, but its named pipe is unavailable");
@@ -157,8 +158,11 @@ public class ProcessManager : IProcessManager
                     var pipeConnected = await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromSeconds(10));
                     if (pipeConnected)
                     {
-                        _logger.LogInformation("Inspector successfully injected and initialized");
-                        session.InspectorStatus = "Loaded (injected)";
+                        _logger.LogInformation(
+                            inspectorLoaded
+                                ? "Existing Inspector finished initializing"
+                                : "Inspector successfully injected and initialized");
+                        session.InspectorStatus = GetReadyInspectorStatus(inspectorLoaded);
                     }
                     else
                     {
@@ -192,6 +196,11 @@ public class ProcessManager : IProcessManager
         }
 
         return session;
+    }
+
+    internal static string GetReadyInspectorStatus(bool inspectorWasAlreadyLoaded)
+    {
+        return inspectorWasAlreadyLoaded ? "Loaded (existing)" : "Loaded (injected)";
     }
 
     /// <summary>
