@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Build and package the x64 and x86 native bootstrappers so Auto-injection works from the
+  NuGet tool and release archive.
+- Package the complete .NET Framework Inspector dependency closure and resolve its
+  co-located private assemblies without relying on the target application's binding redirects.
+- Use the standard CoreCLR runtimeconfig filename so it remains accessible from the NuGet
+  tool's deeply nested installation directory.
+
 ## [0.12.0] - 2026-07-24
 
 ### Added

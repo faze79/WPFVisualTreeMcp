@@ -287,6 +287,8 @@ public partial class App : Application
 ```
 
 This enables the MCP server to connect to your application via named pipes for real-time inspection.
+The Inspector multi-targets .NET Framework 4.7.2, .NET Framework 4.8, and
+.NET 8 for Windows, so project references select a compatible build.
 
 ## Usage Examples
 
@@ -498,7 +500,7 @@ WpfVisualTreeMcp/
 │   │   ├── WpfTools.cs                 # 20 WPF tools (17 inspection + click/set-text/send-keys)
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
-│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
+│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
 │   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; net48 + net8.0)
 │   ├── WpfVisualTreeMcp.InjectorHelper/# x86 .NET 8 helper exe for cross-arch injection (v0.6.0)
 │   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting
