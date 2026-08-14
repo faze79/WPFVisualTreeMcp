@@ -52,6 +52,7 @@
     <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />
     <!-- Inspector is a packaged payload, not a compile-time Server dependency. -->
     <ProjectReference Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj"
+                      Condition="'$(NoBuild)' != 'true' And '$(_IsPacking)' != 'true'"
                       ReferenceOutputAssembly="false"
                       Private="false"
                       SkipGetTargetFrameworkProperties="true" />
