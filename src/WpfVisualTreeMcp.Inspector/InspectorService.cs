@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-#if NETFRAMEWORK
 using System.Reflection;
-#endif
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -31,7 +29,6 @@ public class InspectorService : IDisposable
     private bool _disposed;
 
     private static readonly object _initLock = new();
-#if NETFRAMEWORK
     private static readonly HashSet<string> _privateDependencyNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Microsoft.Bcl.AsyncInterfaces",
@@ -44,6 +41,7 @@ public class InspectorService : IDisposable
         "System.Threading.Tasks.Extensions",
         "System.ValueTuple",
     };
+#if NETFRAMEWORK
     private static bool _dependencyResolverRegistered;
 #endif
     public static InspectorService? Instance { get; private set; }
@@ -151,7 +149,13 @@ public class InspectorService : IDisposable
         AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
         {
             var assemblyName = new AssemblyName(args.Name).Name;
-            if (string.IsNullOrEmpty(assemblyName) || !_privateDependencyNames.Contains(assemblyName))
+            var requestingAssembly = args.RequestingAssembly;
+            var requestingAssemblyName = requestingAssembly?.GetName().Name;
+            var requestingAssemblyDirectory = requestingAssembly == null || requestingAssembly.IsDynamic
+                ? null
+                : Path.GetDirectoryName(requestingAssembly.Location);
+            if (!ShouldResolvePrivateDependency(
+                assemblyName, requestingAssemblyName, requestingAssemblyDirectory, inspectorDirectory))
                 return null;
 
             var assemblyPath = Path.Combine(inspectorDirectory, assemblyName + ".dll");
@@ -160,6 +164,38 @@ public class InspectorService : IDisposable
         _dependencyResolverRegistered = true;
     }
 #endif
+
+    internal static bool ShouldResolvePrivateDependency(
+        string? requestedAssemblyName,
+        string? requestingAssemblyName,
+        string? requestingAssemblyDirectory,
+        string inspectorDirectory)
+    {
+        if (requestedAssemblyName is not { Length: > 0 } ||
+            !_privateDependencyNames.Contains(requestedAssemblyName) ||
+            requestingAssemblyName is not { Length: > 0 } ||
+            requestingAssemblyDirectory is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        var isPayloadRequester =
+            string.Equals(
+                requestingAssemblyName,
+                typeof(InspectorService).Assembly.GetName().Name,
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                requestingAssemblyName,
+                typeof(IpcRequest).Assembly.GetName().Name,
+                StringComparison.OrdinalIgnoreCase) ||
+            _privateDependencyNames.Contains(requestingAssemblyName);
+        return isPayloadRequester && string.Equals(
+            Path.GetFullPath(requestingAssemblyDirectory).TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(inspectorDirectory).TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     private InspectorService(int processId)
     {
