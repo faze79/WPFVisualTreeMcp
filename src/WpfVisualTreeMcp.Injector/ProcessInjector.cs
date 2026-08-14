@@ -363,8 +363,22 @@ public class ProcessInjector
     public string GetInspectorDllPath()
     {
         var assemblyLocation = typeof(ProcessInjector).Assembly.Location;
-        var directory = Path.GetDirectoryName(assemblyLocation);
-        return Path.Combine(directory!, "WpfVisualTreeMcp.Inspector.dll");
+        var directory = Path.GetDirectoryName(assemblyLocation)!;
+        var fileName = "WpfVisualTreeMcp.Inspector.dll";
+        var candidates = new[]
+        {
+            Path.Combine(directory, fileName),
+            Path.Combine(directory, "native", "x64", fileName),
+            Path.Combine(directory, "native", "x86", fileName),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return candidates[1];
     }
 
     /// <summary>
