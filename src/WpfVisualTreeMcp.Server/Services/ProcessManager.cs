@@ -166,8 +166,11 @@ public class ProcessManager : IProcessManager
                     }
                     else
                     {
-                        _logger.LogWarning("Inspector injected but named pipe not available");
-                        session.InspectorStatus = "Injected - pipe timeout";
+                        _logger.LogWarning(
+                            inspectorLoaded
+                                ? "Inspector already loaded but named pipe not available"
+                                : "Inspector injected but named pipe not available");
+                        session.InspectorStatus = GetPipeTimeoutInspectorStatus(inspectorLoaded);
                     }
                 }
                 else
@@ -201,6 +204,11 @@ public class ProcessManager : IProcessManager
     internal static string GetReadyInspectorStatus(bool inspectorWasAlreadyLoaded)
     {
         return inspectorWasAlreadyLoaded ? "Loaded (existing)" : "Loaded (injected)";
+    }
+
+    internal static string GetPipeTimeoutInspectorStatus(bool inspectorWasAlreadyLoaded)
+    {
+        return inspectorWasAlreadyLoaded ? "Loaded (existing) - pipe timeout" : "Injected - pipe timeout";
     }
 
     /// <summary>

@@ -77,6 +77,17 @@ public class ProcessManagerTests
         status.Should().Be(expectedStatus);
     }
 
+    [Theory]
+    [InlineData(false, "Injected - pipe timeout")]
+    [InlineData(true, "Loaded (existing) - pipe timeout")]
+    public void GetPipeTimeoutInspectorStatus_ModulePresence_ReportsAccurateProvenance(
+        bool inspectorWasAlreadyLoaded, string expectedStatus)
+    {
+        var status = ProcessManager.GetPipeTimeoutInspectorStatus(inspectorWasAlreadyLoaded);
+
+        status.Should().Be(expectedStatus);
+    }
+
     [Fact]
     public async Task DetachAsync_WithNonMatchingSession_DoesNotThrow()
     {
