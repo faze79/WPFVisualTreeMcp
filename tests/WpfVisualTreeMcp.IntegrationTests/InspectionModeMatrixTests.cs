@@ -91,7 +91,7 @@ public class InspectionModeMatrixTests
                 attachJson.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
                 attachJson.RootElement.GetProperty("processId").GetInt32().Should().Be(sample.Id);
                 attachJson.RootElement.GetProperty("inspectorStatus").GetString()
-                    .Should().Be(autoInject ? "Loaded (injected)" : "Loaded (self-hosted)");
+                    .Should().Be(autoInject ? "Loaded (injected)" : "Loaded (existing)");
             }
 
             if (autoInject)
@@ -103,7 +103,7 @@ public class InspectionModeMatrixTests
                 secondAttachJson.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
                 secondAttachJson.RootElement.GetProperty("processId").GetInt32().Should().Be(sample.Id);
                 secondAttachJson.RootElement.GetProperty("inspectorStatus").GetString()
-                    .Should().Be("Loaded (self-hosted)",
+                    .Should().Be("Loaded (existing)",
                         "the second attach should reuse the loaded Inspector without reinjecting it");
             }
 

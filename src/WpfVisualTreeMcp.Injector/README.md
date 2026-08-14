@@ -63,7 +63,7 @@ protected override void OnStartup(StartupEventArgs e)
     base.OnStartup(e);
 
     // Initialize the inspector
-    WpfVisualTreeMcp.Inspector.InspectorService.Initialize(Process.GetCurrentProcess().Id);
+    WpfVisualTreeMcp.Inspector.InspectorService.Initialize(System.Diagnostics.Process.GetCurrentProcess().Id);
 }
 ```
 

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+#if NETFRAMEWORK
 using System.Reflection;
+#endif
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -29,7 +31,7 @@ public class InspectorService : IDisposable
     private bool _disposed;
 
     private static readonly object _initLock = new();
-#if NET48
+#if NETFRAMEWORK
     private static readonly HashSet<string> _privateDependencyNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Microsoft.Bcl.AsyncInterfaces",
@@ -121,7 +123,7 @@ public class InspectorService : IDisposable
             try
             {
                 DebugLog($"Inspector.Initialize called for PID={processId}");
-#if NET48
+#if NETFRAMEWORK
                 RegisterDependencyResolver();
 #endif
                 Instance = new InspectorService(processId);
@@ -138,7 +140,7 @@ public class InspectorService : IDisposable
         }
     }
 
-#if NET48
+#if NETFRAMEWORK
     private static void RegisterDependencyResolver()
     {
         if (_dependencyResolverRegistered) return;

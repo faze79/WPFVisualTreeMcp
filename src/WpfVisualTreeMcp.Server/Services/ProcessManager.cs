@@ -128,13 +128,13 @@ public class ProcessManager : IProcessManager
         _logger.LogInformation("Attached to process {ProcessId} ({ProcessName})",
             targetProcess.Id, targetProcess.ProcessName);
 
-        // Check if Inspector is already loaded (self-hosted mode)
+        // Check if Inspector is already running, whether self-hosted or previously injected
         var inspectorLoaded = IsInspectorLoaded(targetProcess) ||
-            await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromMilliseconds(700));
+            await IsInspectorPipeAvailableAsync(targetProcess.Id);
         if (inspectorLoaded)
         {
-            _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");
-            session.InspectorStatus = "Loaded (self-hosted)";
+            _logger.LogInformation("Inspector already running in target process");
+            session.InspectorStatus = "Loaded (existing)";
         }
         else if (autoInject)
         {
@@ -186,6 +186,29 @@ public class ProcessManager : IProcessManager
         }
 
         return session;
+    }
+
+    /// <summary>
+    /// Quickly checks whether an existing Inspector pipe accepts connections.
+    /// </summary>
+    private async Task<bool> IsInspectorPipeAvailableAsync(int processId)
+    {
+        var pipeName = $"wpf_inspector_{processId}";
+
+        try
+        {
+            using var pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            await pipeClient.ConnectAsync(100);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
