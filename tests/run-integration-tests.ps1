@@ -52,6 +52,7 @@ function Assert-X86DotNetRuntime {
     if ([string]::IsNullOrWhiteSpace($dotnetRoot)) {
         $dotnetRoot = Join-Path ${env:ProgramFiles(x86)} 'dotnet'
     }
+    $env:DOTNET_ROOT_X86 = $dotnetRoot
 
     $dotnet = Join-Path $dotnetRoot 'dotnet.exe'
     if (-not (Test-Path -LiteralPath $dotnet)) {
@@ -139,6 +140,9 @@ foreach ($targetFramework in @('net472', 'net48', 'net8.0-windows')) {
         Invoke-ExternalCommand dotnet $arguments
     }
 }
+
+# Leave the shared intermediate output in its normal, non-RID-specific state.
+Invoke-ExternalCommand dotnet @('restore', $sample)
 
 Invoke-ExternalCommand dotnet @('build', $integrationTests, '--configuration', 'Release')
 

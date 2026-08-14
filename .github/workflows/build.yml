@@ -17,15 +17,15 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.3
+      uses: microsoft/setup-msbuild@v3
 
     - name: Build native bootstrapper
       run: |
@@ -41,8 +41,23 @@ jobs:
     - name: Test
       run: dotnet test WpfVisualTreeMcp.sln --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx"
 
+    - name: Install x86 .NET runtime
+      shell: pwsh
+      run: |
+        $dotnetRoot = Join-Path $env:RUNNER_TEMP 'dotnet-x86'
+        $installScript = Join-Path $env:RUNNER_TEMP 'dotnet-install.ps1'
+        Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installScript
+        & $installScript -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir $dotnetRoot -NoPath
+        & $installScript -Channel 8.0 -Runtime windowsdesktop -Architecture x86 -InstallDir $dotnetRoot -NoPath
+        if (-not (Test-Path -LiteralPath (Join-Path $dotnetRoot 'dotnet.exe'))) { throw 'x86 .NET runtime installation failed.' }
+        "DOTNET_ROOT_X86=$dotnetRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Test WPF inspection matrix
+      shell: pwsh
+      run: ./tests/run-integration-tests.ps1 -SkipNativeBuild
+
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
@@ -111,7 +126,7 @@ jobs:
         }
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: wpf-visual-tree-mcp
         path: ./publish
@@ -121,14 +136,14 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    # Server transitively references the WPF (net8.0-windows) Inspector, so a
+    # Server has a build-only reference to the WPF Inspector payload, so a
     # restore/format on Linux needs Windows targeting enabled.
     - name: Restore dependencies
       run: dotnet restore src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -p:EnableWindowsTargeting=true
@@ -143,21 +158,22 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.3
+      uses: microsoft/setup-msbuild@v3
 
     - name: Restore NuGet packages
       run: dotnet restore WpfVisualTreeMcp.sln
 
-    - name: Build .NET Framework projects
+    - name: Build .NET Framework targets
       run: |
-        dotnet build src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release
-        dotnet build src/WpfVisualTreeMcp.Injector/WpfVisualTreeMcp.Injector.csproj --configuration Release
-        dotnet build samples/SampleWpfApp/SampleWpfApp.csproj --configuration Release
+        dotnet build src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --framework net472
+        dotnet build src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --framework net48
+        dotnet build samples/SampleWpfApp/SampleWpfApp.csproj --configuration Release --framework net472
+        dotnet build samples/SampleWpfApp/SampleWpfApp.csproj --configuration Release --framework net48
