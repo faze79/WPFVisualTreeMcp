@@ -1,6 +1,8 @@
 # Tools Reference
 
-Complete reference for all MCP tools provided by WpfVisualTreeMcp.
+Detailed reference for the original inspection tools provided by
+WpfVisualTreeMcp. For the current list of all 28 tools, see the
+[README](../README.md#available-tools) or run `wpfinspect help`.
 
 ## Process Management
 

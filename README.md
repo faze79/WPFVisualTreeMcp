@@ -120,6 +120,8 @@ In short: UIA-based tools see what accessibility exposes, and computer-use agent
 - Windows 10/11
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
 - A WPF application to inspect
+- Visual Studio 2022 C++ build tools when building the auto-injection payload from source
+- x86 .NET 8 Windows Desktop runtime when running the cross-bitness integration tests
 
 ### Installation
 
@@ -359,7 +361,13 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_layout_info` | Get layout information |
 | `wpf_export_tree` | Export visual tree to XAML or JSON |
 
-For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md).
+Screenshot capture covers the element's current arranged bounds. It does not
+scroll and stitch off-screen content, and virtualized items that have not been
+realized are not available to capture.
+
+For detailed examples of the original inspection tools, see
+[docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for
+complete CLI documentation.
 
 ## Roadmap
 
@@ -452,13 +460,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 3. Build and run tests:
    ```bash
-   dotnet build
-   dotnet test
+   dotnet build WpfVisualTreeMcp.sln -c Release
+   dotnet test WpfVisualTreeMcp.sln -c Release
+
+   # Full 12-case self-hosted/auto-injection matrix (Windows PowerShell)
+   ./tests/run-integration-tests.ps1
    ```
 
 4. Run the sample WPF app for testing:
    ```bash
-   dotnet run --project samples/SampleWpfApp
+   dotnet run --project samples/SampleWpfApp --framework net8.0-windows
    ```
 
 ### Project Structure
@@ -468,18 +479,20 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 20 WPF tools (17 inspection + click/set-text/send-keys)
+│   │   ├── WpfTools.cs                 # 28 WPF tools (22 inspection + 6 state-changing)
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
-│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; net48 + net8.0)
+│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; .NET 8)
 │   ├── WpfVisualTreeMcp.InjectorHelper/# x86 .NET 8 helper exe for cross-arch injection (v0.6.0)
 │   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting
 │   └── WpfVisualTreeMcp.Shared/        # Shared models & IPC contracts
 ├── samples/
 │   └── SampleWpfApp/                   # Test application
 ├── tests/
-│   └── WpfVisualTreeMcp.Tests/         # Unit tests (48 tests)
+│   ├── WpfVisualTreeMcp.Tests/         # Server, CLI and injector unit tests
+│   ├── WpfVisualTreeMcp.Shared.Tests/  # Shared contract tests across all target frameworks
+│   └── WpfVisualTreeMcp.IntegrationTests/ # 3 frameworks × 2 architectures × 2 modes
 ├── publish/                            # Published server + native DLLs
 │   └── native/{x64,x86}/              # Architecture-specific bootstrapper
 └── docs/                               # Documentation
@@ -489,7 +502,7 @@ WpfVisualTreeMcp/
 
 - **MCP SDK**: Built with the [official C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk) from Microsoft/Anthropic
 - **Protocol**: JSON-RPC 2.0 over stdio transport
-- **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
+- **Target Framework**: .NET 8.0 (Server/Injector) / .NET Framework 4.7.2, 4.8 + .NET 8.0-windows (Inspector)
 - **IPC**: Named Pipes for server-to-application communication
 - **Tools**: 28 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)

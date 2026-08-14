@@ -31,7 +31,7 @@ Before you begin, ensure you have:
    src/WpfVisualTreeMcp.Server/bin/Debug/net8.0/WpfVisualTreeMcp.Server.exe
    ```
 
-### Option 2: .NET Tool Installation (Coming Soon)
+### Option 2: .NET Tool Installation
 
 ```bash
 dotnet tool install -g WpfVisualTreeMcp
@@ -134,6 +134,9 @@ Add a reference to `WpfVisualTreeMcp.Inspector` in your WPF project:
 </ItemGroup>
 ```
 
+The Inspector supports WPF applications targeting .NET Framework 4.7.2,
+.NET Framework 4.8, and .NET 8 for Windows.
+
 ### Step 2: Initialize the Inspector
 
 In your `App.xaml.cs`, initialize the inspector on startup:
@@ -175,7 +178,7 @@ Either start your own WPF application (with the Inspector set up as above) or us
 
 ```bash
 cd WpfVisualTreeMcp
-dotnet run --project samples/SampleWpfApp
+dotnet run --project samples/SampleWpfApp --framework net8.0-windows
 ```
 
 The sample app already has the Inspector configured.
@@ -255,7 +258,7 @@ What styles are defined in this application?
 ### "No WPF applications found"
 
 - Ensure the target application is running
-- Check that it's a .NET Framework WPF application
+- Check that it is a supported .NET Framework or .NET 8 WPF application
 - The application must have a main window visible
 
 ### "Failed to attach to process" or "Inspector not loaded"

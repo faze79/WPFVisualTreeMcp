@@ -18,8 +18,11 @@ dotnet build -c Release WpfVisualTreeMcp.sln
 # Run tests
 dotnet test WpfVisualTreeMcp.sln
 
+# Run the full self-hosted/auto-injection matrix (Windows PowerShell)
+./tests/run-integration-tests.ps1
+
 # Run sample WPF app for testing
-dotnet run --project samples/SampleWpfApp
+dotnet run --project samples/SampleWpfApp --framework net8.0-windows
 
 # Publish MCP Server executable (same exe also runs as the CLI)
 dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
@@ -129,6 +132,8 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   dropdowns, context menus and tooltips — requires the window visible and unobstructed)
 - DPI-aware via `PresentationSource.FromVisual`
 - Downscales if exceeding `max_width`/`max_height` (default 1920x1080)
+- Captures the element's current arranged bounds; it does not scroll and stitch
+  off-screen content, and virtualized items that have not been realized are absent
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging
@@ -140,9 +145,9 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
 ## WPF App Inspection Modes
 
 ### Auto-Injection Mode
-Use `wpf_attach(process_id=<pid>, auto_inject=true)` to inject the Inspector into any running .NET Framework WPF app. Requires:
+Use `wpf_attach(process_id=<pid>, auto_inject=true)` to inject the Inspector into a running .NET Framework or .NET 8 WPF app. Requires:
 - Native bootstrapper DLL in `publish/native/x64/` (or x86)
-- Target process must be .NET Framework (CLR hosting)
+- A supported CLR and matching Inspector payload (`net48` for .NET Framework or `net8.0-windows` for CoreCLR)
 - Architecture detection is automatic (x64 vs x86)
 
 ### Self-Hosted Mode
@@ -177,7 +182,7 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
 The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
 with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
 it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
-`CliRunner.IsCliCommand`). This gives the same 21 capabilities without an MCP
+`CliRunner.IsCliCommand`). This gives the same 28 capabilities without an MCP
 connection — useful when the MCP server is not connected, for scripting, or for
 verifying the pipeline manually.
 
