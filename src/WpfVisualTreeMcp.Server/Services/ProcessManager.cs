@@ -129,7 +129,8 @@ public class ProcessManager : IProcessManager
             targetProcess.Id, targetProcess.ProcessName);
 
         // Check if Inspector is already loaded (self-hosted mode)
-        var inspectorLoaded = IsInspectorLoaded(targetProcess);
+        var inspectorLoaded = IsInspectorLoaded(targetProcess) ||
+            await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromMilliseconds(700));
         if (inspectorLoaded)
         {
             _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");

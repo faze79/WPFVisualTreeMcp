@@ -90,11 +90,21 @@ public class InspectionModeMatrixTests
             {
                 attachJson.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
                 attachJson.RootElement.GetProperty("processId").GetInt32().Should().Be(sample.Id);
-                if (autoInject)
-                {
-                    attachJson.RootElement.GetProperty("inspectorStatus").GetString()
-                        .Should().Be("Loaded (injected)");
-                }
+                attachJson.RootElement.GetProperty("inspectorStatus").GetString()
+                    .Should().Be(autoInject ? "Loaded (injected)" : "Loaded (self-hosted)");
+            }
+
+            if (autoInject)
+            {
+                var secondAttach = await RunCliAsync(attachArguments, TimeSpan.FromSeconds(20));
+                secondAttach.ExitCode.Should().Be(0, FormatCommandFailure("second attach", secondAttach));
+
+                using var secondAttachJson = JsonDocument.Parse(secondAttach.StandardOutput);
+                secondAttachJson.RootElement.GetProperty("success").GetBoolean().Should().BeTrue();
+                secondAttachJson.RootElement.GetProperty("processId").GetInt32().Should().Be(sample.Id);
+                secondAttachJson.RootElement.GetProperty("inspectorStatus").GetString()
+                    .Should().Be("Loaded (self-hosted)",
+                        "the second attach should reuse the loaded Inspector without reinjecting it");
             }
 
             var find = await FindSubmitButtonAsync(sample.Id, TimeSpan.FromSeconds(15));
