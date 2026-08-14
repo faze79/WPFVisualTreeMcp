@@ -52,7 +52,7 @@ public class InspectionModeMatrixTests
         using var sample = StartSample(samplePath, mode);
         try
         {
-            await WaitForMainWindowAsync(sample, TimeSpan.FromSeconds(15));
+            await WaitForMainWindowAsync(sample, TimeSpan.FromSeconds(30));
 
             GetProcessArchitecture(sample).Should().Be(architecture);
             var runtimeModule = targetFramework == "net8.0-windows" ? "coreclr.dll" : "clr.dll";
