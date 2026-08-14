@@ -150,6 +150,8 @@ jobs:
 
     - name: Check formatting
       run: dotnet format src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --verify-no-changes --verbosity diagnostic
+      env:
+        EnableWindowsTargeting: true
       continue-on-error: true
 
   # Build verification for .NET Framework projects (Windows only)

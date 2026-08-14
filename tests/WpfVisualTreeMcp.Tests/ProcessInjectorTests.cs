@@ -68,7 +68,7 @@ public class ProcessInjectorTests
     {
         // Arrange
         var invalidProcessId = int.MaxValue - 1;
-        var dllPath = _injector.GetInspectorDllPath();
+        var dllPath = typeof(ProcessInjector).Assembly.Location;
 
         // Act & Assert
         var act = () => _injector.InjectIntoProcess(invalidProcessId, dllPath);
