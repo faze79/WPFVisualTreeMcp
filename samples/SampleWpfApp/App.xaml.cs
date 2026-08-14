@@ -1,6 +1,5 @@
-using System.Diagnostics;
+using System;
 using System.Windows;
-using WpfVisualTreeMcp.Inspector;
 
 namespace SampleWpfApp;
 
@@ -9,19 +8,32 @@ namespace SampleWpfApp;
 /// </summary>
 public partial class App : Application
 {
+    private bool _inspectorStarted;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Initialize the WPF Visual Tree Inspector
-        // This enables the MCP server to inspect this application
-        InspectorService.Initialize(Process.GetCurrentProcess().Id);
+        _inspectorStarted = !string.Equals(
+            Environment.GetEnvironmentVariable("WPF_VISUAL_TREE_MCP_SELF_HOSTED"),
+            "false",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (_inspectorStarted)
+        {
+            // Initialize the WPF Visual Tree Inspector
+            // This enables the MCP server to inspect this application
+            SelfHostedInspector.Start();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Clean up the inspector service
-        InspectorService.Instance?.Dispose();
+        if (_inspectorStarted)
+        {
+            // Clean up the inspector service
+            SelfHostedInspector.Stop();
+        }
 
         base.OnExit(e);
     }
