@@ -18,4 +18,8 @@
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
+  </ItemGroup>
+
 </Project>

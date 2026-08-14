@@ -28,8 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared payload entry.
 - Treat the Inspector named pipe, rather than a loaded module, as the attachment readiness
   signal.
-- Bound full-content screenshot memory and derive logical-page displacement from scroll
-  offsets so identical adjacent frames cannot stall stitching.
+- Bound direct and stitched full-content screenshot memory and derive logical-page
+  displacement from realized item-container geometry so identical or variable-height
+  adjacent frames stitch correctly.
 
 ## [0.12.0] - 2026-07-24
 

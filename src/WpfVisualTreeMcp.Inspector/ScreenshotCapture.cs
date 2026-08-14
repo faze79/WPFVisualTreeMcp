@@ -16,7 +16,7 @@ namespace WpfVisualTreeMcp.Inspector;
 /// </summary>
 public class ScreenshotCapture
 {
-    private const long MaxStitchPixelCount = 64L * 1024 * 1024;
+    private const long MaxFullContentPixelCount = 64L * 1024 * 1024;
 
     /// <summary>
     /// Captures a UIElement as a PNG image and returns it as base64.
@@ -154,6 +154,7 @@ public class ScreenshotCapture
     {
         int pixelWidth = Math.Max(1, (int)(Math.Ceiling(bounds.Width * dpiX / 96.0) * scale));
         int pixelHeight = Math.Max(1, (int)(Math.Ceiling(bounds.Height * dpiY / 96.0) * scale));
+        EnsureFullContentBudget(checked((long)pixelWidth * pixelHeight));
 
         var dv = new DrawingVisual();
         using (var ctx = dv.RenderOpen())
@@ -228,18 +229,25 @@ public class ScreenshotCapture
 
     private static bool ContainsActiveVirtualizingPanel(DependencyObject root)
     {
-        var found = false;
+        return FindActiveVirtualizingPanel(root) != null;
+    }
+
+    private static VirtualizingPanel? FindActiveVirtualizingPanel(DependencyObject root)
+    {
+        VirtualizingPanel? found = null;
         VisitVisualDescendants(root, current =>
         {
             if (current is not VirtualizingPanel panel)
                 return false;
 
             var owner = ItemsControl.GetItemsOwner(panel);
-            if (owner == null || VirtualizingPanel.GetIsVirtualizing(owner))
+            if (owner != null && VirtualizingPanel.GetIsVirtualizing(owner))
             {
-                found = true;
+                found = panel;
                 return true;
             }
+            if (owner == null && found == null)
+                found = panel;
             return false;
         });
         return found;
@@ -351,10 +359,15 @@ public class ScreenshotCapture
             GetDpi(scrollViewer, out var dpiX, out var dpiY);
             var frames = new List<CaptureFrame>();
             BitmapSource? previous = null;
+            IReadOnlyDictionary<int, int>? previousItemPositions = null;
             double previousOffset = 0;
             double previousViewportHeight = 0;
             long retainedPixels = 0;
             var y = 0;
+            var virtualizingPanel = FindActiveVirtualizingPanel(scrollViewer);
+            var itemsOwner = virtualizingPanel == null
+                ? null
+                : ItemsControl.GetItemsOwner(virtualizingPanel);
 
             scrollViewer.ScrollToHome();
             scrollViewer.UpdateLayout();
@@ -367,20 +380,27 @@ public class ScreenshotCapture
                     new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight),
                     dpiX,
                     dpiY);
+                var currentItemPositions = GetRealizedItemPositions(
+                    virtualizingPanel, itemsOwner, presenter, dpiY);
                 if (previous != null)
                 {
-                    var logicalAdvance = currentOffset - previousOffset;
-                    var expectedAdvance = (int)Math.Round(
-                        previous.PixelHeight * logicalAdvance / Math.Max(1.0, previousViewportHeight));
-                    expectedAdvance = Math.Max(1, Math.Min(previous.PixelHeight, expectedAdvance));
-                    var expectedOverlap = previous.PixelHeight - expectedAdvance;
-                    var tolerance = Math.Max(2, (int)Math.Ceiling(
-                        previous.PixelHeight / Math.Max(1.0, previousViewportHeight)));
+                    var expectedAdvance = CalculateRealizedPixelAdvance(
+                        previousItemPositions!, currentItemPositions);
+                    if (expectedAdvance == null)
+                    {
+                        var logicalAdvance = currentOffset - previousOffset;
+                        expectedAdvance = (int)Math.Round(
+                            previous.PixelHeight * logicalAdvance / Math.Max(1.0, previousViewportHeight));
+                    }
+                    var boundedAdvance = Math.Max(
+                        1, Math.Min(previous.PixelHeight, expectedAdvance.Value));
+                    var expectedOverlap = previous.PixelHeight - boundedAdvance;
                     y += previous.PixelHeight - FindVerticalOverlap(
-                        previous, bitmap, expectedOverlap, tolerance);
+                        previous, bitmap, expectedOverlap, 2);
                 }
                 retainedPixels = AddFrame(frames, new CaptureFrame(bitmap, 0, y), retainedPixels);
                 previous = bitmap;
+                previousItemPositions = currentItemPositions;
                 previousOffset = currentOffset;
                 previousViewportHeight = scrollViewer.ViewportHeight;
 
@@ -411,6 +431,57 @@ public class ScreenshotCapture
         {
             RestoreOffsets(scrollViewer, originalHorizontalOffset, originalVerticalOffset);
         }
+    }
+
+    private static IReadOnlyDictionary<int, int> GetRealizedItemPositions(
+        VirtualizingPanel? panel,
+        ItemsControl? owner,
+        Visual ancestor,
+        double dpiY)
+    {
+        var positions = new Dictionary<int, int>();
+        if (panel == null || owner == null)
+            return positions;
+
+        VisitVisualDescendants(panel, current =>
+        {
+            if (current is not Visual visual)
+                return false;
+
+            var index = owner.ItemContainerGenerator.IndexFromContainer(current);
+            if (index < 0)
+                return false;
+
+            var point = visual.TransformToAncestor(ancestor).Transform(new Point());
+            positions[index] = (int)Math.Round(point.Y * dpiY / 96.0);
+            return false;
+        });
+        return positions;
+    }
+
+    internal static int? CalculateRealizedPixelAdvance(
+        IReadOnlyDictionary<int, int> previousPositions,
+        IReadOnlyDictionary<int, int> currentPositions)
+    {
+        var advances = new List<int>();
+        foreach (var pair in previousPositions)
+        {
+            if (!currentPositions.TryGetValue(pair.Key, out var currentPosition))
+                continue;
+
+            var advance = pair.Value - currentPosition;
+            if (advance > 0)
+                advances.Add(advance);
+        }
+
+        if (advances.Count == 0)
+            return null;
+
+        advances.Sort();
+        var middle = advances.Count / 2;
+        if (advances.Count % 2 != 0)
+            return advances[middle];
+        return (int)Math.Round((advances[middle - 1] + advances[middle]) / 2.0);
     }
 
     private static List<double> BuildOffsets(double scrollable, double viewport)
@@ -475,7 +546,7 @@ public class ScreenshotCapture
         var scale = CalculateScale(sourceWidth, sourceHeight, maxWidth, maxHeight);
         var pixelWidth = Math.Max(1, (int)(sourceWidth * scale));
         var pixelHeight = Math.Max(1, (int)(sourceHeight * scale));
-        EnsureStitchBudget(checked(retainedPixels + (long)pixelWidth * pixelHeight));
+        EnsureFullContentBudget(checked(retainedPixels + (long)pixelWidth * pixelHeight));
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
@@ -501,17 +572,17 @@ public class ScreenshotCapture
     {
         var nextPixelCount = checked(
             retainedPixels + (long)frame.Bitmap.PixelWidth * frame.Bitmap.PixelHeight);
-        EnsureStitchBudget(nextPixelCount);
+        EnsureFullContentBudget(nextPixelCount);
         frames.Add(frame);
         return nextPixelCount;
     }
 
-    private static void EnsureStitchBudget(long pixelCount)
+    private static void EnsureFullContentBudget(long pixelCount)
     {
-        if (pixelCount > MaxStitchPixelCount)
+        if (pixelCount > MaxFullContentPixelCount)
         {
             throw new InvalidOperationException(
-                $"Full-content capture exceeds the {MaxStitchPixelCount:N0}-pixel memory budget.");
+                $"Full-content capture exceeds the {MaxFullContentPixelCount:N0}-pixel memory budget.");
         }
     }
 

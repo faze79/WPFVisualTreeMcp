@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using FluentAssertions;
+using WpfVisualTreeMcp.Inspector;
 using Xunit;
 using Xunit.Sdk;
 
@@ -29,6 +30,26 @@ public class InspectionModeMatrixTests
         { "net8.0-windows", "x64", "SelfHosted" },
         { "net8.0-windows", "x64", "AutoInjection" },
     };
+
+    [Fact]
+    public void CalculateRealizedPixelAdvance_VariableHeightContainers_UsesSharedContainerGeometry()
+    {
+        var previousPositions = new Dictionary<int, int>
+        {
+            [2] = 120,
+            [3] = 150,
+        };
+        var currentPositions = new Dictionary<int, int>
+        {
+            [2] = 0,
+            [3] = 30,
+        };
+
+        var advance = ScreenshotCapture.CalculateRealizedPixelAdvance(
+            previousPositions, currentPositions);
+
+        advance.Should().Be(120);
+    }
 
     [IntegrationTheory]
     [MemberData(nameof(Cases))]

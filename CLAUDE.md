@@ -141,8 +141,8 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   content directly, or pages and stitches virtualized content before restoring offsets
 - Full-content capture supports physical scrolling in both dimensions and logical
   virtualized scrolling vertically; logical virtualized horizontal overflow is rejected
-- Full-content stitching rejects captures whose retained frames plus output exceed
-  67,108,864 pixels rather than risking unbounded process memory growth
+- Full-content capture rejects direct outputs or retained-frame-plus-output allocations
+  exceeding 67,108,864 pixels rather than risking unbounded process memory growth
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging
