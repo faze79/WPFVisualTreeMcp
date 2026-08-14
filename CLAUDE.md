@@ -141,6 +141,8 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   content directly, or pages and stitches virtualized content before restoring offsets
 - Full-content capture supports physical scrolling in both dimensions and logical
   virtualized scrolling vertically; logical virtualized horizontal overflow is rejected
+- Full-content stitching rejects captures whose retained frames plus output exceed
+  67,108,864 pixels rather than risking unbounded process memory growth
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging
@@ -249,6 +251,10 @@ Run `WpfVisualTreeMcp.Server.exe help` for the full command list, or
    skipped with a notice if the secret is absent)
 5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
    workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
+
+The end-user CLI skill is stored under `.agents/skills/wpf-visual-tree-cli/`.
+Keep its command map, installation guidance, inspection modes, and limitations in
+sync with the CLI help, README, and release notes.
 
 ## Test Framework
 

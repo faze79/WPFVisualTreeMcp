@@ -9,48 +9,43 @@ param(
 Write-Host "=== WPF Visual Tree Inspector - Sync to ValueS ===" -ForegroundColor Cyan
 Write-Host ""
 
+$inspectorOutput = Join-Path $PSScriptRoot 'src\WpfVisualTreeMcp.Inspector\bin\Debug\net48'
+$valuesOutput = Split-Path -Parent $ValuesExePath
+$inspectorDlls = @(Get-ChildItem -LiteralPath $inspectorOutput -Filter '*.dll' -File -ErrorAction Stop)
+if ($inspectorDlls.Count -eq 0) {
+    throw "No Inspector DLLs were found at: $inspectorOutput"
+}
+if (-not (Test-Path -LiteralPath $valuesOutput -PathType Container)) {
+    throw "ValueS output directory was not found at: $valuesOutput"
+}
+
 # Stop ValueS if running
 $valuesProcess = Get-Process ValueS -ErrorAction SilentlyContinue
 if ($valuesProcess) {
-    Write-Host "[1/4] Stopping ValueS process (PID: $($valuesProcess.Id))..." -ForegroundColor Yellow
+    Write-Host "[1/3] Stopping ValueS process (PID: $($valuesProcess.Id))..." -ForegroundColor Yellow
     Stop-Process -Name ValueS -Force
     Start-Sleep -Seconds 2
     Write-Host "      ValueS stopped." -ForegroundColor Green
 } else {
-    Write-Host "[1/4] ValueS is not running." -ForegroundColor Gray
+    Write-Host "[1/3] ValueS is not running." -ForegroundColor Gray
 }
 
-# Copy Inspector DLL
-Write-Host "[2/4] Copying Inspector DLL..." -ForegroundColor Yellow
+# Copy Inspector and its complete .NET Framework dependency closure
+Write-Host "[2/3] Copying Inspector dependency closure..." -ForegroundColor Yellow
 try {
-    Copy-Item 'C:\DevOPS\WPFVisualTreeMcp\src\WpfVisualTreeMcp.Inspector\bin\Debug\net48\WpfVisualTreeMcp.Inspector.dll' `
-              -Destination 'C:\DevOPS\VALUES\Salvagnini.ValueS\bin\x64\Debug\' -Force
+    Copy-Item -LiteralPath $inspectorDlls.FullName -Destination $valuesOutput -Force
 
-    $inspectorDll = Get-Item 'C:\DevOPS\VALUES\Salvagnini.ValueS\bin\x64\Debug\WpfVisualTreeMcp.Inspector.dll'
-    Write-Host "      Inspector.dll copied (Modified: $($inspectorDll.LastWriteTime))" -ForegroundColor Green
+    Write-Host "      Copied $($inspectorDlls.Count) DLLs." -ForegroundColor Green
 } catch {
-    Write-Host "      ERROR: Failed to copy Inspector.dll - $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
-}
-
-# Copy Shared DLL
-Write-Host "[3/4] Copying Shared DLL..." -ForegroundColor Yellow
-try {
-    Copy-Item 'C:\DevOPS\WPFVisualTreeMcp\src\WpfVisualTreeMcp.Shared\bin\Debug\net48\WpfVisualTreeMcp.Shared.dll' `
-              -Destination 'C:\DevOPS\VALUES\Salvagnini.ValueS\bin\x64\Debug\' -Force
-
-    $sharedDll = Get-Item 'C:\DevOPS\VALUES\Salvagnini.ValueS\bin\x64\Debug\WpfVisualTreeMcp.Shared.dll'
-    Write-Host "      Shared.dll copied (Modified: $($sharedDll.LastWriteTime))" -ForegroundColor Green
-} catch {
-    Write-Host "      ERROR: Failed to copy Shared.dll - $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "      ERROR: Failed to copy Inspector dependency closure - $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 
 # Restart ValueS (unless -NoRestart is specified)
 if (-not $NoRestart) {
-    Write-Host "[4/4] Starting ValueS..." -ForegroundColor Yellow
+    Write-Host "[3/3] Starting ValueS..." -ForegroundColor Yellow
 
-    if (Test-Path $ValuesExePath) {
+    if (Test-Path -LiteralPath $ValuesExePath) {
         Start-Process $ValuesExePath -WorkingDirectory (Split-Path $ValuesExePath)
         Start-Sleep -Seconds 2
 
@@ -65,7 +60,7 @@ if (-not $NoRestart) {
         Write-Host "      Please start ValueS manually" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "[4/4] Skipping restart (use -NoRestart to disable)" -ForegroundColor Gray
+    Write-Host "[3/3] Skipping restart (-NoRestart specified)" -ForegroundColor Gray
 }
 
 Write-Host ""

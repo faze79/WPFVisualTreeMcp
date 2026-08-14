@@ -151,8 +151,13 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 ```bash
 git clone https://github.com/faze79/WpfVisualTreeMcp.git
 cd WpfVisualTreeMcp
-dotnet build -c Release
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
+dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
 ```
+
+The native steps require Visual Studio Build Tools with Desktop development
+with C++. A managed `dotnet build` is sufficient when Auto-injection is not needed.
 
 ### Configuration
 
@@ -210,7 +215,8 @@ Add to `~/.claude/settings.json`:
 **Important Notes:**
 - Use absolute paths to the built `.exe` file
 - Use forward slashes (`/`) in paths on Windows
-- Build in Release mode for production: `dotnet build -c Release`
+- Use the Release publish output for production; source-built Auto-injection also
+  requires both native bootstrapper builds shown above
 - Restart Claude Code after configuration changes
 
 #### Cursor
@@ -396,7 +402,8 @@ Non-virtualized content is rendered directly; virtualized content is paged and
 stitched, then the original scroll position is restored. Logically scrolling,
 virtualized controls with horizontal overflow are not currently supported by
 full-content capture. Increase `max_height` when a long image would otherwise be
-downscaled too far.
+downscaled too far. Stitching fails safely if retained frames plus the final image
+would exceed the 67,108,864-pixel memory budget.
 
 For detailed examples of the original inspection tools, see
 [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for

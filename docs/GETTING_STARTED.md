@@ -21,14 +21,20 @@ Before you begin, ensure you have:
    cd WpfVisualTreeMcp
    ```
 
-2. Build the solution:
-   ```bash
-   dotnet build
+2. For a complete Auto-injection publish, build both native bootstrappers and
+   publish the server:
+   ```powershell
+   msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+   msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
+   dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
    ```
+
+   The native steps require Visual Studio Build Tools with Desktop development
+   with C++. A managed `dotnet build` is sufficient when Auto-injection is not needed.
 
 3. The MCP server will be available at:
    ```
-   src/WpfVisualTreeMcp.Server/bin/Debug/net8.0/WpfVisualTreeMcp.Server.exe
+   publish/WpfVisualTreeMcp.Server.exe
    ```
 
 ### Option 2: .NET Tool Installation
@@ -48,7 +54,7 @@ There are multiple ways to configure the MCP server in Claude Code:
 Use the `claude mcp add` command for quick setup:
 
 ```bash
-# Build the server first
+# Build the server first (use the complete source-publish steps above for Auto-injection)
 cd WpfVisualTreeMcp
 dotnet build -c Release
 
@@ -122,7 +128,7 @@ Restart Claude Code or reload the window after making changes.
 
 ## Setting Up Your WPF Application (Self-Hosted Mode)
 
-For the MCP server to inspect your WPF application, you need to add the Inspector DLL to your project. This is called "self-hosted mode" and is the recommended approach.
+For the MCP server to inspect your WPF application without runtime injection, add the Inspector DLL to your project. This is called "self-hosted mode."
 
 ### Step 1: Add Project Reference
 

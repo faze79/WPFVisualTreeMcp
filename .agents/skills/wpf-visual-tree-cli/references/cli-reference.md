@@ -90,7 +90,7 @@ screenshot --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--m
 
 `render` is the screenshot default and works if the window is covered, but it omits popup windows. `screen` captures visible popups, dropdowns, context menus, and tooltips but requires an unobstructed visible window.
 
-Add `--full-content` in render mode to capture all content in a `ScrollViewer`. Pass the most precise element handle because a control template or subtree can contain more than one ScrollViewer. Ordinary content is rendered directly; virtualized content is paged and stitched, with the original scroll offsets restored. Increase `--max-height` when the default limit would make a long image unreadably small. Full-content capture cannot be combined with `--mode screen`, and logically scrolling virtualized controls with horizontal overflow are unsupported.
+Add `--full-content` in render mode to capture all content in a `ScrollViewer`. Pass the most precise element handle because a control template or subtree can contain more than one ScrollViewer. Ordinary content is rendered directly; virtualized content is paged and stitched, with the original scroll offsets restored. Increase `--max-height` when the default limit would make a long image unreadably small. Full-content capture cannot be combined with `--mode screen`, logically scrolling virtualized controls with horizontal overflow are unsupported, and captures whose retained frames plus output exceed the built-in 67,108,864-pixel budget fail safely.
 
 ### Change application state
 

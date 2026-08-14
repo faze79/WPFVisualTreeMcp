@@ -19,6 +19,9 @@ requested.
    named-pipe endpoint used by the server.
 
 Auto-injection does not require source changes to the target application.
+The server treats a successful named-pipe connection as the readiness signal;
+a loaded Inspector module without a responsive pipe is reported diagnostically
+rather than treated as a usable attachment.
 
 ## Requirements and Limitations
 

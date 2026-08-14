@@ -40,14 +40,14 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore WpfVisualTreeMcp.sln
 
+    - name: Publish MCP Server from clean checkout
+      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-restore --configuration Release --output ./publish/server
+
     - name: Build Release
       run: dotnet build WpfVisualTreeMcp.sln --no-restore --configuration Release
 
     - name: Test
       run: dotnet test WpfVisualTreeMcp.sln --no-build --configuration Release --verbosity normal
-
-    - name: Publish MCP Server
-      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish/server
 
     - name: Verify auto-injection payload
       shell: pwsh
@@ -56,8 +56,17 @@ jobs:
         $requiredPayloadFiles = @(
           './publish/server/native/x64/WpfInspectorBootstrapper.dll'
           './publish/server/native/x86/WpfInspectorBootstrapper.dll'
+          './publish/server/native/x86/WpfInjectorHelper.exe'
+          './publish/server/native/x86/WpfInjectorHelper.dll'
+          './publish/server/native/x86/WpfInjectorHelper.deps.json'
+          './publish/server/native/x86/WpfInjectorHelper.runtimeconfig.json'
+          './publish/server/native/x86/WpfVisualTreeMcp.Injector.dll'
+          './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Inspector.dll'
           './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json'
+          './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Shared.dll'
+          './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Inspector.dll'
           './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json'
+          './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Shared.dll'
           foreach ($architecture in @('x64', 'x86')) {
             foreach ($dll in $netFxInspectorDlls) {
               "./publish/server/native/$architecture/$($dll.Name)"
@@ -90,11 +99,18 @@ jobs:
         $requiredEntrySuffixes = @(
           foreach ($architecture in @('x64', 'x86')) {
             "/native/$architecture/WpfInspectorBootstrapper.dll"
+            "/native/$architecture/coreclr/WpfVisualTreeMcp.Inspector.dll"
             "/native/$architecture/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json"
+            "/native/$architecture/coreclr/WpfVisualTreeMcp.Shared.dll"
             foreach ($dllName in $netFxInspectorDllNames) {
               "/native/$architecture/$dllName"
             }
           }
+          '/native/x86/WpfInjectorHelper.exe'
+          '/native/x86/WpfInjectorHelper.dll'
+          '/native/x86/WpfInjectorHelper.deps.json'
+          '/native/x86/WpfInjectorHelper.runtimeconfig.json'
+          '/native/x86/WpfVisualTreeMcp.Injector.dll'
         )
 
         Add-Type -AssemblyName System.IO.Compression.FileSystem

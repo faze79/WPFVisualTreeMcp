@@ -128,10 +128,16 @@ public class ProcessManager : IProcessManager
         _logger.LogInformation("Attached to process {ProcessId} ({ProcessName})",
             targetProcess.Id, targetProcess.ProcessName);
 
-        // Check if Inspector is already running, whether self-hosted or previously injected
-        var inspectorLoaded = IsInspectorLoaded(targetProcess) ||
-            await IsInspectorPipeAvailableAsync(targetProcess.Id);
-        if (inspectorLoaded)
+        // The named pipe is the readiness signal. A loaded module alone does not
+        // prove that Inspector initialization completed successfully.
+        var inspectorAvailable = await IsInspectorPipeAvailableAsync(targetProcess.Id);
+        if (!inspectorAvailable && IsInspectorLoaded(targetProcess))
+        {
+            _logger.LogWarning(
+                "Inspector module is loaded in target process, but its named pipe is unavailable");
+        }
+
+        if (inspectorAvailable)
         {
             _logger.LogInformation("Inspector already running in target process");
             session.InspectorStatus = "Loaded (existing)";

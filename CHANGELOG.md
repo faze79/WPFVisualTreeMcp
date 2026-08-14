@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Capture complete `ScrollViewer` content with `wpf_capture_screenshot(full_content=true)`
   or `screenshot --full-content`, including vertically virtualized items, while restoring
   the original scroll position after capture.
+- Target .NET Framework 4.7.2, .NET Framework 4.8, and .NET 8 for Windows from the
+  Inspector, Shared, sample, and self-hosted integration matrix.
 
 ### Fixed
 
@@ -21,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   co-located private assemblies without relying on the target application's binding redirects.
 - Use the standard CoreCLR runtimeconfig filename so it remains accessible from the NuGet
   tool's deeply nested installation directory.
+- Collect the injection payload after project references build so clean publish and pack
+  operations cannot silently omit managed assemblies or the x86 helper, and validate every
+  declared payload entry.
+- Treat the Inspector named pipe, rather than a loaded module, as the attachment readiness
+  signal.
+- Bound full-content screenshot memory and derive logical-page displacement from scroll
+  offsets so identical adjacent frames cannot stall stitching.
 
 ## [0.12.0] - 2026-07-24
 

@@ -91,8 +91,6 @@ if (-not $SkipNativeBuild) {
     }
 }
 
-$inspector = Join-Path $repoRoot 'src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj'
-$injectorHelper = Join-Path $repoRoot 'src\WpfVisualTreeMcp.InjectorHelper\WpfVisualTreeMcp.InjectorHelper.csproj'
 $server = Join-Path $repoRoot 'src\WpfVisualTreeMcp.Server\WpfVisualTreeMcp.Server.csproj'
 $sample = Join-Path $repoRoot 'samples\SampleWpfApp\SampleWpfApp.csproj'
 $integrationTests = Join-Path $repoRoot 'tests\WpfVisualTreeMcp.IntegrationTests\WpfVisualTreeMcp.IntegrationTests.csproj'
@@ -104,8 +102,6 @@ if (-not $sampleIntermediateOutput.StartsWith($samplePathPrefix, [StringComparis
     throw "Sample intermediate output path is outside the sample project: $sampleIntermediateOutput"
 }
 
-Invoke-ExternalCommand dotnet @('build', $inspector, '--configuration', 'Release', '--no-incremental')
-Invoke-ExternalCommand dotnet @('build', $injectorHelper, '--configuration', 'Release', '--no-incremental')
 Invoke-ExternalCommand dotnet @(
     'publish',
     $server,

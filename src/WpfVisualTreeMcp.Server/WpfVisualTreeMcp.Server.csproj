@@ -60,7 +60,7 @@
       Build the x86 injector helper alongside Server so cross-arch injection works.
       We don't link against its output (it's a separate exe, not an assembly we
       consume); we just want MSBuild to build it before our own publish so its
-      bin files are present for the <None Include> globs below.
+      bin files are present when the payload is collected below.
     -->
     <ProjectReference Include="..\WpfVisualTreeMcp.InjectorHelper\WpfVisualTreeMcp.InjectorHelper.csproj"
                       ReferenceOutputAssembly="false"
@@ -69,120 +69,86 @@
                       SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
-  <!-- Include pre-built native bootstrapper DLLs and co-located Inspector for injection -->
-  <ItemGroup>
-    <!-- x64 bootstrapper -->
-    <None Include="..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll')"
-          Link="native\x64\WpfInspectorBootstrapper.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <!-- x64 co-located Inspector and its complete .NET Framework dependency closure -->
-    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net48\*.dll"
-          Link="native\x64\%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <!-- x86 (Win32) bootstrapper -->
-    <None Include="..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll')"
-          Link="native\x86\WpfInspectorBootstrapper.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <!-- x86 co-located Inspector and its complete .NET Framework dependency closure -->
-    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net48\*.dll"
-          Link="native\x86\%(Filename)%(Extension)">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-  </ItemGroup>
+  <!-- Tool packing suppresses the build-only Inspector project reference. Build the -->
+  <!-- two payload frameworks explicitly before collecting a first-build pack. -->
+  <Target Name="BuildInspectorPayloadForPack"
+          BeforeTargets="CollectInjectionPayload"
+          Condition="'$(_IsPacking)' == 'true' And '$(NoBuild)' != 'true'">
+    <MSBuild Projects="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net48" />
+    <MSBuild Projects="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net8.0-windows" />
+  </Target>
 
-  <!-- x86 InjectorHelper.exe — invoked by ProcessInjector when a 64-bit server -->
-  <!-- needs to inject into a 32-bit WPF target. Framework-dependent .NET 8.   -->
-  <ItemGroup>
-    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe"
-          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe')"
-          Link="native\x86\WpfInjectorHelper.exe">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.dll')"
-          Link="native\x86\WpfInjectorHelper.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.runtimeconfig.json"
-          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.runtimeconfig.json')"
-          Link="native\x86\WpfInjectorHelper.runtimeconfig.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.deps.json"
-          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.deps.json')"
-          Link="native\x86\WpfInjectorHelper.deps.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll')"
-          Link="native\x86\WpfVisualTreeMcp.Injector.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-  </ItemGroup>
+  <!-- Collect injection payloads after project references have built. Evaluation-time -->
+  <!-- globs are empty on a clean publish because the Inspector output does not exist yet. -->
+  <Target Name="CollectInjectionPayload">
+    <ItemGroup>
+      <_InjectionPayload Remove="@(_InjectionPayload)" />
+      <_NetFrameworkInspectorPayload Remove="@(_NetFrameworkInspectorPayload)" />
+      <_NetFrameworkInspectorPayload Include="..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\*.dll" />
 
-  <!-- CoreCLR Inspector (net8.0-windows) for .NET 5+/8+ target processes -->
-  <ItemGroup>
-    <!-- x64 CoreCLR Inspector -->
-    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll')"
-          Link="native\x64\coreclr\WpfVisualTreeMcp.Inspector.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
-          Link="native\x64\coreclr\WpfVisualTreeMcp.Inspector.runtimeconfig.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll')"
-          Link="native\x64\coreclr\WpfVisualTreeMcp.Shared.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <!-- x86 CoreCLR Inspector (same managed DLLs, AnyCPU) -->
-    <None Include="..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net8.0-windows\WpfVisualTreeMcp.Inspector.dll')"
-          Link="native\x86\coreclr\WpfVisualTreeMcp.Inspector.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
-          Link="native\x86\coreclr\WpfVisualTreeMcp.Inspector.runtimeconfig.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-    <None Include="..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll"
-          Condition="Exists('..\WpfVisualTreeMcp.Shared\bin\Release\net8.0\WpfVisualTreeMcp.Shared.dll')"
-          Link="native\x86\coreclr\WpfVisualTreeMcp.Shared.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
-  </ItemGroup>
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll"
+                         RelativePath="native\x64\WpfInspectorBootstrapper.dll" />
+      <_InjectionPayload Include="@(_NetFrameworkInspectorPayload)"
+                         RelativePath="native\x64\%(Filename)%(Extension)" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll"
+                         RelativePath="native\x86\WpfInspectorBootstrapper.dll" />
+      <_InjectionPayload Include="@(_NetFrameworkInspectorPayload)"
+                         RelativePath="native\x86\%(Filename)%(Extension)" />
 
-  <Target Name="ValidateInjectionPayload" BeforeTargets="Publish;Pack">
-    <Error Condition="!Exists('..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll')"
-           Text="The x64 native bootstrapper has not been built. Build WpfVisualTreeMcp.Bootstrapper.vcxproj for Release|x64 before publishing or packing." />
-    <Error Condition="!Exists('..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll')"
-           Text="The Win32 native bootstrapper has not been built. Build WpfVisualTreeMcp.Bootstrapper.vcxproj for Release|Win32 before publishing or packing." />
-    <Error Condition="!Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net48\WpfVisualTreeMcp.Inspector.dll')"
-           Text="The .NET Framework Inspector has not been built. Build WpfVisualTreeMcp.Inspector for Release|net48 before publishing or packing." />
-    <Error Condition="!Exists('..\WpfVisualTreeMcp.Inspector\bin\Release\net48\System.Text.Json.dll')"
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe"
+                         RelativePath="native\x86\WpfInjectorHelper.exe" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.dll"
+                         RelativePath="native\x86\WpfInjectorHelper.dll" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.runtimeconfig.json"
+                         RelativePath="native\x86\WpfInjectorHelper.runtimeconfig.json" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.deps.json"
+                         RelativePath="native\x86\WpfInjectorHelper.deps.json" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll"
+                         RelativePath="native\x86\WpfVisualTreeMcp.Injector.dll" />
+
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
+                         RelativePath="native\x64\coreclr\WpfVisualTreeMcp.Inspector.dll" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
+                         RelativePath="native\x64\coreclr\WpfVisualTreeMcp.Inspector.runtimeconfig.json" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Shared\bin\$(Configuration)\net8.0\WpfVisualTreeMcp.Shared.dll"
+                         RelativePath="native\x64\coreclr\WpfVisualTreeMcp.Shared.dll" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\WpfVisualTreeMcp.Inspector.dll"
+                         RelativePath="native\x86\coreclr\WpfVisualTreeMcp.Inspector.dll" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json"
+                         RelativePath="native\x86\coreclr\WpfVisualTreeMcp.Inspector.runtimeconfig.json" />
+      <_InjectionPayload Include="..\WpfVisualTreeMcp.Shared\bin\$(Configuration)\net8.0\WpfVisualTreeMcp.Shared.dll"
+                         RelativePath="native\x86\coreclr\WpfVisualTreeMcp.Shared.dll" />
+    </ItemGroup>
+
+    <Error Condition="'@(_NetFrameworkInspectorPayload)' == ''"
+           Text="The .NET Framework Inspector dependency closure is empty. Build WpfVisualTreeMcp.Inspector for $(Configuration)|net48 before publishing or packing." />
+    <Error Condition="!Exists('..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\System.Text.Json.dll')"
            Text="The .NET Framework Inspector dependency closure is incomplete: System.Text.Json.dll was not found." />
+    <Error Condition="!Exists('%(_InjectionPayload.Identity)')"
+           Text="Injection payload file '%(_InjectionPayload.Identity)' for '%(_InjectionPayload.RelativePath)' was not found." />
+  </Target>
+
+  <Target Name="CopyInjectionPayloadToOutput"
+          AfterTargets="Build"
+          Condition="Exists('..\WpfVisualTreeMcp.Bootstrapper\build\x64\Release\WpfInspectorBootstrapper.dll') And Exists('..\WpfVisualTreeMcp.Bootstrapper\build\Win32\Release\WpfInspectorBootstrapper.dll')"
+          DependsOnTargets="CollectInjectionPayload">
+    <Copy SourceFiles="@(_InjectionPayload)"
+          DestinationFiles="@(_InjectionPayload->'$(TargetDir)%(RelativePath)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="AddInjectionPayloadToPublish"
+          BeforeTargets="ComputeFilesToPublish"
+          DependsOnTargets="CollectInjectionPayload">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_InjectionPayload)"
+                             RelativePath="%(_InjectionPayload.RelativePath)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
   </Target>
 
 </Project>
