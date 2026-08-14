@@ -158,6 +158,8 @@ Use `wpf_attach(process_id=<pid>, auto_inject=true)` to inject the Inspector int
 - Native bootstrapper DLL in `publish/native/x64/` (or x86)
 - A supported CLR and matching Inspector payload (`net48` for .NET Framework or `net8.0-windows` for CoreCLR)
 - Architecture detection and payload selection use the target process (x64 vs x86)
+- .NET Framework private dependency resolution is limited to the Inspector payload chain
+  in the Inspector directory; do not broaden it to unrelated target-application binds
 
 ### Self-Hosted Mode
 For your own WPF application, add a reference to the Inspector and initialize on startup:

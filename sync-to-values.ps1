@@ -67,6 +67,5 @@ Write-Host ""
 Write-Host "=== Sync completed ===" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Restart Claude Code to reload the MCP server" -ForegroundColor Gray
-Write-Host "  2. Test with: wpf_attach(process_id: <PID>)" -ForegroundColor Gray
-Write-Host "  3. Try: wpf_find_elements(type_name: 'TabItem', max_results: 10)" -ForegroundColor Gray
+Write-Host "  1. Test with: wpf_attach(process_id: <PID>)" -ForegroundColor Gray
+Write-Host "  2. Try: wpf_find_elements(type_name: 'TabItem', max_results: 10)" -ForegroundColor Gray

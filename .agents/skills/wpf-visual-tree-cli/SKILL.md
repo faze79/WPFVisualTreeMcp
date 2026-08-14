@@ -25,7 +25,7 @@ dotnet tool update --global WpfVisualTreeMcp
 
 Run `wpfinspect help` and `wpfinspect <command> --help` before relying on bundled syntax when the installed version differs from the current repository. Read [references/cli-reference.md](references/cli-reference.md) for the current command map and examples.
 
-Distinguish command compatibility from artifact contents. The published v0.12.0 artifacts have a known Auto-injection packaging defect: they omit the native bootstrapper and the complete .NET Framework Inspector dependency closure. The current repository source builds both bootstrapper architectures, packages the dependency closure under both architecture directories, selects the Inspector payload for the target process architecture, resolves co-located .NET Framework dependencies, and validates publish/pack payloads. Do not assume an installed package contains that repair until its release notes or package contents confirm it.
+Distinguish command compatibility from artifact contents. The published v0.12.0 artifacts have a known Auto-injection packaging defect: they omit the native bootstrapper and the complete .NET Framework Inspector dependency closure. The current repository source builds both bootstrapper architectures, packages the dependency closure under both architecture directories, selects the Inspector payload for the target process architecture, resolves co-located .NET Framework dependencies only for the Inspector payload chain, and validates publish/pack payloads. Do not assume an installed package contains that repair until its release notes or package contents confirm it.
 
 Do not treat `dotnet build` alone as a complete Auto-injection source build because it skips the native `.vcxproj`. Read [references/cli-reference.md](references/cli-reference.md) for the native x64/Win32 MSBuild commands before publishing a source build for injection.
 
@@ -97,7 +97,7 @@ Before `set-property`, take a labeled snapshot when useful. Revert experimental 
 
 ## Choose auto-injection or self-hosting
 
-Use auto-injection when the application cannot be modified, its security policy permits runtime DLL injection, and the installed artifact contains the complete injection payload. Current source builds package the x64 and x86 bootstrappers, the `net48` Inspector dependency closure, the x86 helper, and the CoreCLR runtime configuration; inherent injection constraints still apply.
+Use auto-injection when the application cannot be modified, its security policy permits runtime DLL injection, and the installed artifact contains the complete injection payload. Current source builds package the x64 and x86 bootstrappers, the `net48` Inspector dependency closure with resolution scoped to the Inspector payload chain, the x86 helper, and the CoreCLR runtime configuration; inherent injection constraints still apply.
 
 Recommend self-hosted mode instead when it solves a concrete auto-injection limitation:
 

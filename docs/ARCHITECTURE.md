@@ -180,6 +180,7 @@ public async Task<VisualTreeNode> GetVisualTreeAsync(ElementHandle root)
 ### Injection Safety
 - .NET Framework and .NET 8 WPF applications are supported
 - Auto-injection loads native and managed code by creating a remote thread
+- .NET Framework private dependencies are resolved only for the Inspector payload chain in the Inspector directory
 - Process permissions, endpoint security, runtime conflicts, or blocked UI threads can prevent injection or affect the target
 
 ## Error Handling

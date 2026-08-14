@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build and package the x64 and x86 native bootstrappers so Auto-injection works from the
   NuGet tool and release archive.
 - Package the complete .NET Framework Inspector dependency closure and resolve its
-  co-located private assemblies without relying on the target application's binding redirects.
+  co-located private assemblies only for the Inspector payload chain, without relying on
+  the target application's binding redirects or changing unrelated application binds.
 - Use the standard CoreCLR runtimeconfig filename so it remains accessible from the NuGet
   tool's deeply nested installation directory.
 - Collect the injection payload after project references build so clean publish and pack
