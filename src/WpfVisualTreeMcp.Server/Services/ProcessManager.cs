@@ -142,7 +142,7 @@ public class ProcessManager : IProcessManager
             _logger.LogInformation("Inspector not loaded, attempting injection...");
             try
             {
-                var inspectorPath = _injector.GetInspectorDllPath();
+                var inspectorPath = _injector.GetInspectorDllPath(targetProcess);
                 var result = _injector.InjectIntoProcess(targetProcess.Id, inspectorPath);
 
                 if (result)
