@@ -17,7 +17,6 @@
     <RootNamespace>WpfVisualTreeMcp.InjectorHelper</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- Suppress NETSDK1206 for net48 multi-targeted ref project -->
     <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
