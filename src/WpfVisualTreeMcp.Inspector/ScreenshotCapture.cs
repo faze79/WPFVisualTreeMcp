@@ -17,6 +17,8 @@ namespace WpfVisualTreeMcp.Inspector;
 public class ScreenshotCapture
 {
     private const long MaxFullContentPixelCount = 64L * 1024 * 1024;
+    private const int ComparisonTileWidth = 1024;
+    private const int ComparisonTileHeight = 64;
 
     /// <summary>
     /// Captures a UIElement as a PNG image and returns it as base64.
@@ -150,11 +152,12 @@ public class ScreenshotCapture
     }
 
     private static BitmapSource RenderVisual(
-        UIElement element, Rect bounds, double dpiX, double dpiY, double scale = 1.0)
+        UIElement element, Rect bounds, double dpiX, double dpiY, double scale = 1.0,
+        long retainedPixels = 0)
     {
         int pixelWidth = Math.Max(1, (int)(Math.Ceiling(bounds.Width * dpiX / 96.0) * scale));
         int pixelHeight = Math.Max(1, (int)(Math.Ceiling(bounds.Height * dpiY / 96.0) * scale));
-        EnsureFullContentBudget(checked((long)pixelWidth * pixelHeight));
+        CalculateNextRetainedPixelCount(retainedPixels, pixelWidth, pixelHeight);
 
         var dv = new DrawingVisual();
         using (var ctx = dv.RenderOpen())
@@ -307,7 +310,7 @@ public class ScreenshotCapture
             long retainedPixels = 0;
             var horizontalOffsets = BuildOffsets(scrollViewer.ScrollableWidth, scrollViewer.ViewportWidth);
             var verticalOffsets = BuildOffsets(scrollViewer.ScrollableHeight, scrollViewer.ViewportHeight);
-            if (horizontalOffsets.Count * verticalOffsets.Count > 400)
+            if (ExceedsCaptureTileLimit(horizontalOffsets.Count, verticalOffsets.Count))
                 throw new InvalidOperationException("The scrollable surface requires more than 400 capture tiles.");
 
             foreach (var verticalOffset in verticalOffsets)
@@ -322,7 +325,8 @@ public class ScreenshotCapture
                         presenter,
                         new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight),
                         dpiX,
-                        dpiY);
+                        dpiY,
+                        retainedPixels: retainedPixels);
                     retainedPixels = AddFrame(frames, new CaptureFrame(
                         bitmap,
                         (int)Math.Round(scrollViewer.HorizontalOffset * dpiX / 96.0),
@@ -379,7 +383,8 @@ public class ScreenshotCapture
                     presenter,
                     new Rect(0, 0, presenter.ActualWidth, presenter.ActualHeight),
                     dpiX,
-                    dpiY);
+                    dpiY,
+                    retainedPixels: retainedPixels);
                 var currentItemPositions = GetRealizedItemPositions(
                     virtualizingPanel, itemsOwner, presenter, dpiY);
                 if (previous != null)
@@ -498,16 +503,21 @@ public class ScreenshotCapture
         return offsets;
     }
 
-    private static int FindVerticalOverlap(
+    internal static bool ExceedsCaptureTileLimit(int horizontalCount, int verticalCount)
+    {
+        return (long)horizontalCount * verticalCount > 400;
+    }
+
+    internal static int FindVerticalOverlap(
         BitmapSource previous, BitmapSource current, int expectedOverlap, int tolerance)
     {
         var width = Math.Min(previous.PixelWidth, current.PixelWidth);
         var maximum = Math.Min(previous.PixelHeight, current.PixelHeight);
-        var stride = width * 4;
-        var previousPixels = new byte[stride * previous.PixelHeight];
-        var currentPixels = new byte[stride * current.PixelHeight];
-        previous.CopyPixels(new Int32Rect(0, 0, width, previous.PixelHeight), previousPixels, stride, 0);
-        current.CopyPixels(new Int32Rect(0, 0, width, current.PixelHeight), currentPixels, stride, 0);
+        var bufferWidth = Math.Min(width, ComparisonTileWidth);
+        var bufferHeight = Math.Min(maximum, ComparisonTileHeight);
+        var bufferSize = checked(bufferWidth * bufferHeight * 4);
+        var previousPixels = new byte[bufferSize];
+        var currentPixels = new byte[bufferSize];
 
         expectedOverlap = Math.Max(0, Math.Min(maximum, expectedOverlap));
         tolerance = Math.Max(0, tolerance);
@@ -519,17 +529,8 @@ public class ScreenshotCapture
                 if (overlap < 0 || overlap > maximum)
                     continue;
 
-                var previousStart = (previous.PixelHeight - overlap) * stride;
-                var bytes = overlap * stride;
-                var equal = true;
-                for (var i = 0; i < bytes; i++)
-                {
-                    if (previousPixels[previousStart + i] == currentPixels[i])
-                        continue;
-                    equal = false;
-                    break;
-                }
-                if (equal)
+                if (VerticalRegionsEqual(
+                    previous, current, width, overlap, previousPixels, currentPixels))
                     return overlap;
 
                 if (distance == 0)
@@ -537,6 +538,42 @@ public class ScreenshotCapture
             }
         }
         return expectedOverlap;
+    }
+
+    private static bool VerticalRegionsEqual(
+        BitmapSource previous,
+        BitmapSource current,
+        int width,
+        int overlap,
+        byte[] previousPixels,
+        byte[] currentPixels)
+    {
+        for (var y = 0; y < overlap; y += ComparisonTileHeight)
+        {
+            var height = Math.Min(ComparisonTileHeight, overlap - y);
+            for (var x = 0; x < width; x += ComparisonTileWidth)
+            {
+                var currentWidth = Math.Min(ComparisonTileWidth, width - x);
+                var stride = checked(currentWidth * 4);
+                var byteCount = checked(stride * height);
+                previous.CopyPixels(
+                    new Int32Rect(x, previous.PixelHeight - overlap + y, currentWidth, height),
+                    previousPixels,
+                    stride,
+                    0);
+                current.CopyPixels(
+                    new Int32Rect(x, y, currentWidth, height),
+                    currentPixels,
+                    stride,
+                    0);
+                for (var i = 0; i < byteCount; i++)
+                {
+                    if (previousPixels[i] != currentPixels[i])
+                        return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static (string base64, int width, int height) ComposeFrames(
@@ -570,10 +607,17 @@ public class ScreenshotCapture
     private static long AddFrame(
         List<CaptureFrame> frames, CaptureFrame frame, long retainedPixels)
     {
-        var nextPixelCount = checked(
-            retainedPixels + (long)frame.Bitmap.PixelWidth * frame.Bitmap.PixelHeight);
-        EnsureFullContentBudget(nextPixelCount);
+        var nextPixelCount = CalculateNextRetainedPixelCount(
+            retainedPixels, frame.Bitmap.PixelWidth, frame.Bitmap.PixelHeight);
         frames.Add(frame);
+        return nextPixelCount;
+    }
+
+    internal static long CalculateNextRetainedPixelCount(
+        long retainedPixels, int pixelWidth, int pixelHeight)
+    {
+        var nextPixelCount = checked(retainedPixels + (long)pixelWidth * pixelHeight);
+        EnsureFullContentBudget(nextPixelCount);
         return nextPixelCount;
     }
 
