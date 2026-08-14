@@ -1,0 +1,4 @@
+interface:
+  display_name: "WPF Visual Tree CLI"
+  short_description: "Inspect and drive WPF apps from the CLI"
+  default_prompt: "Use $wpf-visual-tree-cli to inspect a running WPF app safely from the command line."
