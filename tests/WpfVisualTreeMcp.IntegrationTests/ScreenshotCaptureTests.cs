@@ -1,4 +1,6 @@
 using FluentAssertions;
+using System.Threading;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using WpfVisualTreeMcp.Inspector;
@@ -24,6 +26,19 @@ public class ScreenshotCaptureTests
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*pixel memory budget*");
+    }
+
+    [Fact]
+    public void CaptureFullContent_CanceledBeforeStart_ThrowsExecutionDeadlineError()
+    {
+        var capture = new ScreenshotCapture();
+        var cancellationToken = new CancellationToken(canceled: true);
+
+        var act = () => capture.CaptureFullContent(
+            new UIElement(), 100, 100, cancellationToken);
+
+        act.Should().Throw<TimeoutException>()
+            .WithMessage("Full-content capture exceeded its execution deadline.");
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfVisualTreeMcp.Shared.Ipc;
@@ -14,6 +15,7 @@ namespace WpfVisualTreeMcp.Inspector;
 /// </summary>
 public class InspectorService : IDisposable
 {
+    private static readonly TimeSpan FullContentCaptureTimeout = TimeSpan.FromSeconds(25);
     private readonly IpcServer _ipcServer;
     private readonly TreeWalker _treeWalker;
     private readonly PropertyReader _propertyReader;
@@ -259,6 +261,13 @@ public class InspectorService : IDisposable
                 return await HandleWaitForElementAsync(data);
             }
 
+            // Start before Dispatcher scheduling so queue delay and capture work share
+            // one budget below the named-pipe request timeout (30s).
+            using var fullContentCaptureCts = requestType == "CaptureScreenshot"
+                ? new CancellationTokenSource(FullContentCaptureTimeout)
+                : null;
+            var fullContentCaptureToken = fullContentCaptureCts?.Token ?? CancellationToken.None;
+
             // Use Task.Run to avoid blocking the named pipe thread
             var result = await Task.Run(() =>
             {
@@ -268,7 +277,7 @@ public class InspectorService : IDisposable
                 return Application.Current.Dispatcher.Invoke(() =>
                 {
                     DebugLog($"Inside Dispatcher callback, UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-                    return HandleRequest(requestType, data);
+                    return HandleRequest(requestType, data, fullContentCaptureToken);
                 }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(10));
             });
 
@@ -300,7 +309,8 @@ public class InspectorService : IDisposable
         }
     }
 
-    private IpcResponse HandleRequest(string requestType, JsonElement data)
+    private IpcResponse HandleRequest(
+        string requestType, JsonElement data, CancellationToken fullContentCaptureToken)
     {
         return requestType switch
         {
@@ -316,7 +326,7 @@ public class InspectorService : IDisposable
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
-            "CaptureScreenshot" => HandleCaptureScreenshot(data),
+            "CaptureScreenshot" => HandleCaptureScreenshot(data, fullContentCaptureToken),
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "SetProperty" => HandleSetProperty(data),
@@ -1127,7 +1137,8 @@ public class InspectorService : IDisposable
         };
     }
 
-    private IpcResponse HandleCaptureScreenshot(JsonElement data)
+    private IpcResponse HandleCaptureScreenshot(
+        JsonElement data, CancellationToken fullContentCaptureToken)
     {
         var request = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data);
 
@@ -1191,7 +1202,8 @@ public class InspectorService : IDisposable
             var maxHeight = request?.MaxHeight ?? 1080;
 
             var (base64, width, height) = request?.FullContent == true
-                ? screenshotCapture.CaptureFullContent(element, maxWidth, maxHeight)
+                ? screenshotCapture.CaptureFullContent(
+                    element, maxWidth, maxHeight, fullContentCaptureToken)
                 : mode == "screen"
                     ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
                     : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);

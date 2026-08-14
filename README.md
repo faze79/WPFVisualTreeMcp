@@ -403,7 +403,8 @@ stitched, then the original scroll position is restored. Logically scrolling,
 virtualized controls with horizontal overflow are not currently supported by
 full-content capture. Increase `max_height` when a long image would otherwise be
 downscaled too far. Full-content capture fails safely if a direct output or the
-retained frames plus final image would exceed the 67,108,864-pixel memory budget.
+retained frames plus final image would exceed the 67,108,864-pixel memory budget,
+or if capture work exceeds its 25-second execution deadline.
 
 For detailed examples of the original inspection tools, see
 [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for

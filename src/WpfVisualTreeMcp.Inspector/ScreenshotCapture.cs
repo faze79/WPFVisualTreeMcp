@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -108,8 +109,18 @@ public class ScreenshotCapture
     public (string base64, int width, int height) CaptureFullContent(
         UIElement element, int maxWidth = 1920, int maxHeight = 1080)
     {
+        return CaptureFullContent(
+            element, maxWidth, maxHeight, CancellationToken.None);
+    }
+
+    internal (string base64, int width, int height) CaptureFullContent(
+        UIElement element, int maxWidth, int maxHeight, CancellationToken cancellationToken)
+    {
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         element.UpdateLayout();
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         var scrollViewer = FindScrollViewer(element);
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         if (scrollViewer == null)
         {
             throw new InvalidOperationException(
@@ -118,15 +129,22 @@ public class ScreenshotCapture
 
         scrollViewer.ApplyTemplate();
         scrollViewer.UpdateLayout();
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
 
         if (scrollViewer.Content is UIElement content && !ContainsActiveVirtualizingPanel(scrollViewer))
         {
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
             var bounds = GetFullContentBounds(content);
             if (bounds.Width >= 1 && bounds.Height >= 1)
-                return CaptureVisual(content, bounds, maxWidth, maxHeight);
+            {
+                var result = CaptureVisual(content, bounds, maxWidth, maxHeight);
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
+                return result;
+            }
         }
 
-        return CaptureScrollableViewport(scrollViewer, maxWidth, maxHeight);
+        return CaptureScrollableViewport(
+            scrollViewer, maxWidth, maxHeight, cancellationToken);
     }
 
     private static Rect GetFullContentBounds(UIElement element)
@@ -287,19 +305,24 @@ public class ScreenshotCapture
     }
 
     private static (string base64, int width, int height) CaptureScrollableViewport(
-        ScrollViewer scrollViewer, int maxWidth, int maxHeight)
+        ScrollViewer scrollViewer, int maxWidth, int maxHeight,
+        CancellationToken cancellationToken)
     {
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         var presenter = FindScrollContentPresenter(scrollViewer);
         if (presenter == null || presenter.ActualWidth < 1 || presenter.ActualHeight < 1)
             throw new InvalidOperationException("The ScrollViewer viewport is not rendered and cannot be stitched.");
 
         if (scrollViewer.CanContentScroll)
-            return CaptureLogicalVerticalScroll(scrollViewer, presenter, maxWidth, maxHeight);
-        return CapturePhysicalScroll(scrollViewer, presenter, maxWidth, maxHeight);
+            return CaptureLogicalVerticalScroll(
+                scrollViewer, presenter, maxWidth, maxHeight, cancellationToken);
+        return CapturePhysicalScroll(
+            scrollViewer, presenter, maxWidth, maxHeight, cancellationToken);
     }
 
     private static (string base64, int width, int height) CapturePhysicalScroll(
-        ScrollViewer scrollViewer, ScrollContentPresenter presenter, int maxWidth, int maxHeight)
+        ScrollViewer scrollViewer, ScrollContentPresenter presenter, int maxWidth, int maxHeight,
+        CancellationToken cancellationToken)
     {
         var originalHorizontalOffset = scrollViewer.HorizontalOffset;
         var originalVerticalOffset = scrollViewer.VerticalOffset;
@@ -310,6 +333,7 @@ public class ScreenshotCapture
             long retainedPixels = 0;
             var horizontalOffsets = BuildOffsets(scrollViewer.ScrollableWidth, scrollViewer.ViewportWidth);
             var verticalOffsets = BuildOffsets(scrollViewer.ScrollableHeight, scrollViewer.ViewportHeight);
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
             if (ExceedsCaptureTileLimit(horizontalOffsets.Count, verticalOffsets.Count))
                 throw new InvalidOperationException("The scrollable surface requires more than 400 capture tiles.");
 
@@ -317,9 +341,11 @@ public class ScreenshotCapture
             {
                 foreach (var horizontalOffset in horizontalOffsets)
                 {
+                    ThrowIfFullContentCaptureTimedOut(cancellationToken);
                     scrollViewer.ScrollToHorizontalOffset(horizontalOffset);
                     scrollViewer.ScrollToVerticalOffset(verticalOffset);
                     scrollViewer.UpdateLayout();
+                    ThrowIfFullContentCaptureTimedOut(cancellationToken);
 
                     var bitmap = RenderVisual(
                         presenter,
@@ -327,6 +353,7 @@ public class ScreenshotCapture
                         dpiX,
                         dpiY,
                         retainedPixels: retainedPixels);
+                    ThrowIfFullContentCaptureTimedOut(cancellationToken);
                     retainedPixels = AddFrame(frames, new CaptureFrame(
                         bitmap,
                         (int)Math.Round(scrollViewer.HorizontalOffset * dpiX / 96.0),
@@ -338,7 +365,8 @@ public class ScreenshotCapture
                 Math.Max(scrollViewer.ExtentWidth, presenter.ActualWidth) * dpiX / 96.0));
             var height = Math.Max(1, (int)Math.Ceiling(
                 Math.Max(scrollViewer.ExtentHeight, presenter.ActualHeight) * dpiY / 96.0));
-            return ComposeFrames(frames, width, height, maxWidth, maxHeight, retainedPixels);
+            return ComposeFrames(
+                frames, width, height, maxWidth, maxHeight, retainedPixels, cancellationToken);
         }
         finally
         {
@@ -347,7 +375,8 @@ public class ScreenshotCapture
     }
 
     private static (string base64, int width, int height) CaptureLogicalVerticalScroll(
-        ScrollViewer scrollViewer, ScrollContentPresenter presenter, int maxWidth, int maxHeight)
+        ScrollViewer scrollViewer, ScrollContentPresenter presenter, int maxWidth, int maxHeight,
+        CancellationToken cancellationToken)
     {
         if (scrollViewer.ScrollableWidth > 0)
         {
@@ -375,9 +404,11 @@ public class ScreenshotCapture
 
             scrollViewer.ScrollToHome();
             scrollViewer.UpdateLayout();
+            ThrowIfFullContentCaptureTimedOut(cancellationToken);
 
             for (var page = 0; page < 200; page++)
             {
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 var currentOffset = scrollViewer.VerticalOffset;
                 var bitmap = RenderVisual(
                     presenter,
@@ -385,6 +416,7 @@ public class ScreenshotCapture
                     dpiX,
                     dpiY,
                     retainedPixels: retainedPixels);
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 var currentItemPositions = GetRealizedItemPositions(
                     virtualizingPanel, itemsOwner, presenter, dpiY);
                 if (previous != null)
@@ -416,6 +448,7 @@ public class ScreenshotCapture
                 scrollViewer.ScrollToVerticalOffset(
                     Math.Min(scrollViewer.ScrollableHeight, currentOffset + pageSize));
                 scrollViewer.UpdateLayout();
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 if (scrollViewer.VerticalOffset <= currentOffset)
                     break;
 
@@ -430,7 +463,8 @@ public class ScreenshotCapture
                 width = Math.Max(width, frame.X + frame.Bitmap.PixelWidth);
                 height = Math.Max(height, frame.Y + frame.Bitmap.PixelHeight);
             }
-            return ComposeFrames(frames, width, height, maxWidth, maxHeight, retainedPixels);
+            return ComposeFrames(
+                frames, width, height, maxWidth, maxHeight, retainedPixels, cancellationToken);
         }
         finally
         {
@@ -578,8 +612,9 @@ public class ScreenshotCapture
 
     private static (string base64, int width, int height) ComposeFrames(
         List<CaptureFrame> frames, int sourceWidth, int sourceHeight, int maxWidth, int maxHeight,
-        long retainedPixels)
+        long retainedPixels, CancellationToken cancellationToken)
     {
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         var scale = CalculateScale(sourceWidth, sourceHeight, maxWidth, maxHeight);
         var pixelWidth = Math.Max(1, (int)(sourceWidth * scale));
         var pixelHeight = Math.Max(1, (int)(sourceHeight * scale));
@@ -589,6 +624,7 @@ public class ScreenshotCapture
         {
             foreach (var frame in frames)
             {
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 context.DrawImage(frame.Bitmap, new Rect(
                     frame.X * scale,
                     frame.Y * scale,
@@ -600,8 +636,11 @@ public class ScreenshotCapture
         var bitmap = new RenderTargetBitmap(
             pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         bitmap.Freeze();
-        return EncodePng(bitmap, pixelWidth, pixelHeight);
+        var result = EncodePng(bitmap, pixelWidth, pixelHeight);
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
+        return result;
     }
 
     private static long AddFrame(
@@ -628,6 +667,12 @@ public class ScreenshotCapture
             throw new InvalidOperationException(
                 $"Full-content capture exceeds the {MaxFullContentPixelCount:N0}-pixel memory budget.");
         }
+    }
+
+    private static void ThrowIfFullContentCaptureTimedOut(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+            throw new TimeoutException("Full-content capture exceeded its execution deadline.");
     }
 
     private static void RestoreOffsets(
