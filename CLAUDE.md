@@ -136,8 +136,11 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   dropdowns, context menus and tooltips — requires the window visible and unobstructed)
 - DPI-aware via `PresentationSource.FromVisual`
 - Downscales if exceeding `max_width`/`max_height` (default 1920x1080)
-- Captures the element's current arranged bounds; it does not scroll and stitch
-  off-screen content, and virtualized items that have not been realized are absent
+- Captures the element's current arranged bounds by default; `full_content=true`
+  (render mode only) locates the target's largest ScrollViewer, renders ordinary
+  content directly, or pages and stitches virtualized content before restoring offsets
+- Full-content capture supports physical scrolling in both dimensions and logical
+  virtualized scrolling vertically; logical virtualized horizontal overflow is rejected
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging

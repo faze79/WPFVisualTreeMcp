@@ -67,7 +67,7 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 - **Property Watching** - Monitor property changes in real-time
 
 ### Interaction & Export
-- **Screenshot Capture** - Capture window/element screenshots visible to AI agents
+- **Screenshot Capture** - Capture window/element screenshots, including complete ScrollViewer content and virtualized items
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Control Click** *(v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click
 - **Set Text** *(new in v0.5.0)* - Fill a TextBox/ComboBox/PasswordBox via UI Automation `IValueProvider.SetValue`, with a `TextBox.Text` / `PasswordBox.Password` / reflected-`Text` fallback, or `physical=true` to type via OS keyboard input (full Unicode BMP)
@@ -95,7 +95,7 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 | Find controls by visible text / properties | ✅ | manual | partial (UIA) | pixel guessing |
 | Click / type / select / shortcuts | ✅ | ❌ | ✅ | ✅ (blind) |
 | Wait for UI conditions (no sleep loops) | ✅ | ❌ | ✅ | ❌ |
-| Element screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
+| Element/full-scroll screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
 | Works without target source changes | ✅ (auto-injection) | ✅ | ✅ | ✅ |
 
 **vs. other WPF MCP servers.** Most WPF MCP servers are built on **UI Automation** (FlaUI): they read the *accessibility* tree, and can only reach WPF internals — bindings, DataContext, ViewModel state — if you **install their in-process probe into the app you want to inspect**. This server takes the Snoop route instead: it **injects at runtime**, so it reads the *real* visual tree and diagnoses binding errors and DataContext **with zero changes to the target app** — nothing to add to your build, nothing to ship into production.
@@ -367,7 +367,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_element_properties` | Get all dependency properties of an element |
 | `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
-| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
+| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `full_content=true` captures complete ScrollViewer content; `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |
@@ -390,9 +390,13 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_layout_info` | Get layout information |
 | `wpf_export_tree` | Export visual tree to XAML or JSON |
 
-Screenshot capture covers the element's current arranged bounds. It does not
-scroll and stitch off-screen content, and virtualized items that have not been
-realized are not available to capture.
+Screenshot capture covers the element's current arranged bounds by default. Set
+`full_content=true` with render mode to capture all content in a `ScrollViewer`.
+Non-virtualized content is rendered directly; virtualized content is paged and
+stitched, then the original scroll position is restored. Logically scrolling,
+virtualized controls with horizontal overflow are not currently supported by
+full-content capture. Increase `max_height` when a long image would otherwise be
+downscaled too far.
 
 For detailed examples of the original inspection tools, see
 [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for

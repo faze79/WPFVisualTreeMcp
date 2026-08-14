@@ -29,7 +29,7 @@ public static class CliRunner
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "auto-inject", "compact", "verbose", "physical", "visible-only", "all", "help", "h",
+        "auto-inject", "compact", "verbose", "physical", "visible-only", "full-content", "all", "help", "h",
     };
 
     private static string Exe =>
@@ -417,12 +417,15 @@ public static class CliRunner
                 case "screenshot":
                 {
                     await AttachAsync(processManager, cli, false);
-                    var maxW = Math.Clamp(cli.GetInt("max-width", 1920), 1, 3840);
-                    var maxH = Math.Clamp(cli.GetInt("max-height", 1080), 1, 2160);
+                    var fullContent = cli.Flags.Contains("full-content");
+                    var maxW = Math.Clamp(cli.GetInt("max-width", 1920), 1, fullContent ? 16384 : 3840);
+                    var maxH = Math.Clamp(cli.GetInt("max-height", 1080), 1, fullContent ? 16384 : 2160);
                     var shotMode = cli.GetString("mode", "render").ToLowerInvariant();
                     if (shotMode != "render" && shotMode != "screen")
                         throw new ArgumentException("--mode must be 'render' or 'screen'.");
-                    var shot = await bridge.CaptureScreenshotAsync(cli.GetStringOrNull("handle"), maxW, maxH, shotMode);
+                    if (fullContent && shotMode == "screen")
+                        throw new ArgumentException("--full-content is supported with --mode render only.");
+                    var shot = await bridge.CaptureScreenshotAsync(cli.GetStringOrNull("handle"), maxW, maxH, shotMode, fullContent);
                     if (string.IsNullOrEmpty(shot.ImageBase64))
                         throw new InvalidOperationException("Screenshot capture returned no image data.");
 
@@ -543,7 +546,7 @@ COMMANDS
   explain-triggers --pid --handle H [--property P]                         (evaluate Style/Template triggers; attribute a value)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
-  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
+  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen] [--full-content]
 
 Element handles (elem_XXXXXXXX) come from 'tree' / 'find' and stay valid while
 the target app keeps running.
@@ -670,13 +673,15 @@ TYPICAL WORKFLOW
                                 + "  attribute that property's value to the style setter or active trigger\n"
                                 + "  that set it (or local/inherited/default).",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
-            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen]\n"
-                          + "  Capture the window (or one element) as PNG and print the file path.\n"
-                          + "  --mode render (default): off-screen re-render; works when covered,\n"
-                          + "  but cannot see open popups/dropdowns/context menus.\n"
-                          + "  --mode screen: capture the actual screen pixels (includes popups,\n"
-                          + "  ComboBox dropdowns, context menus, tooltips); the window must be\n"
-                          + "  visible on screen.",
+            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen] [--full-content]\n"
+                           + "  Capture the window (or one element) as PNG and print the file path.\n"
+                           + "  --mode render (default): off-screen re-render; works when covered,\n"
+                           + "  but cannot see open popups/dropdowns/context menus.\n"
+                           + "  --mode screen: capture the actual screen pixels (includes popups,\n"
+                           + "  ComboBox dropdowns, context menus, tooltips); the window must be\n"
+                           + "  visible on screen.\n"
+                           + "  --full-content: with render mode, capture all content in a ScrollViewer,\n"
+                           + "  including unscrolled and virtualized content; restores the scroll position.",
             "export" => "export --pid <id> [--handle <handle>] [--format json|xaml] [--out <file>]\n"
                       + "  Export the tree. Writes to --out if given, otherwise prints content inline.",
             _ => null,

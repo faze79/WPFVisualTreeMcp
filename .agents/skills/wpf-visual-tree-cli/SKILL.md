@@ -23,7 +23,7 @@ dotnet tool install --global WpfVisualTreeMcp
 dotnet tool update --global WpfVisualTreeMcp
 ```
 
-Run `wpfinspect help` and `wpfinspect <command> --help` before relying on bundled syntax when the installed version differs from v0.12.0. Read [references/cli-reference.md](references/cli-reference.md) for the v0.12.0 command map and examples.
+Run `wpfinspect help` and `wpfinspect <command> --help` before relying on bundled syntax when the installed version differs from the current repository. Read [references/cli-reference.md](references/cli-reference.md) for the current command map and examples.
 
 Distinguish command compatibility from artifact contents. The published v0.12.0 artifacts have a known Auto-injection packaging defect: they omit the native bootstrapper and the complete .NET Framework Inspector dependency closure. The current repository source builds both bootstrapper architectures, packages the dependency closure under both architecture directories, selects the Inspector payload for the target process architecture, resolves co-located .NET Framework dependencies, and validates publish/pack payloads. Do not assume an installed package contains that repair until its release notes or package contents confirm it.
 
@@ -123,5 +123,6 @@ Do not suggest self-hosting when target source cannot be changed. Do not suggest
 - Native bootstrapper or managed dependency is missing: treat this as the known v0.12.0 packaging defect when applicable. Do not keep retrying injection; update to a release containing the repair, use a verified current source build, or self-host.
 - ARM64 target: explain that native ARM64 Auto-injection is unsupported; use a supported x64/x86 target or self-host when the application architecture and Inspector reference permit it.
 - Popup/menu missing from screenshot: use `screenshot --mode screen` while the window is visible and unobstructed. Use default `render` mode for covered windows and ordinary controls.
+- Unscrolled ScrollViewer content is missing: when installed help lists it, pass the precise ScrollViewer or owning control handle to `screenshot --full-content`; use a larger `--max-height` for long output. This render-mode option restores the original scroll position after paging virtualized content. It cannot be combined with `--mode screen`, and logically scrolling virtualized controls with horizontal overflow are unsupported.
 - Command fails opaquely: rerun that command with `--verbose`, keeping stderr separate from stdout JSON.
 - Missing command, option, helper, or known fixed behavior: check installed versus current package versions and release notes; suggest a global-tool update only when the evidence connects the limitation to version drift.

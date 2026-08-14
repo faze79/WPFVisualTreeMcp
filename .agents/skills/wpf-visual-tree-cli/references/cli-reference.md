@@ -1,6 +1,6 @@
 # WpfVisualTreeMcp CLI reference
 
-The command map in this reference matches WpfVisualTreeMcp v0.12.0. Treat the installed command's `help` output as authoritative for other versions. Packaging and target-framework notes describe the current repository state; verify which later release first contains them.
+The command map in this reference matches the current WpfVisualTreeMcp repository. Treat the installed command's `help` output as authoritative; v0.12.0 does not contain every current option. Packaging and target-framework notes describe the current repository state; verify which later release first contains them.
 
 ## Installation and mode selection
 
@@ -85,10 +85,12 @@ diff           --pid --before L1 --after L2
 ```text
 highlight  --pid --handle H [--duration MS]
 export     --pid [--handle H] [--format json|xaml] [--out FILE]
-screenshot --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen]
+screenshot --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen] [--full-content]
 ```
 
-`render` is the screenshot default and works if the window is covered, but it omits popup windows. `screen` captures visible popups, dropdowns, context menus, and tooltips but requires an unobstructed visible window. Neither mode scrolls and stitches off-screen content; virtualized items that have not been realized are absent.
+`render` is the screenshot default and works if the window is covered, but it omits popup windows. `screen` captures visible popups, dropdowns, context menus, and tooltips but requires an unobstructed visible window.
+
+Add `--full-content` in render mode to capture all content in a `ScrollViewer`. Pass the most precise element handle because a control template or subtree can contain more than one ScrollViewer. Ordinary content is rendered directly; virtualized content is paged and stitched, with the original scroll offsets restored. Increase `--max-height` when the default limit would make a long image unreadably small. Full-content capture cannot be combined with `--mode screen`, and logically scrolling virtualized controls with horizontal overflow are unsupported.
 
 ### Change application state
 

@@ -1141,14 +1141,24 @@ public class InspectorService : IDisposable
                     Error = $"Unknown screenshot mode '{request?.Mode}'. Expected 'render' or 'screen'."
                 };
             }
+            if (request?.FullContent == true && mode == "screen")
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "Full-content capture is supported by render mode only."
+                };
+            }
 
             var screenshotCapture = new ScreenshotCapture();
             var maxWidth = request?.MaxWidth ?? 1920;
             var maxHeight = request?.MaxHeight ?? 1080;
 
-            var (base64, width, height) = mode == "screen"
-                ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
-                : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
+            var (base64, width, height) = request?.FullContent == true
+                ? screenshotCapture.CaptureFullContent(element, maxWidth, maxHeight)
+                : mode == "screen"
+                    ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
+                    : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
 
             return new CaptureScreenshotResponse
             {

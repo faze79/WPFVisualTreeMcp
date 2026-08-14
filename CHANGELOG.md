@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Capture complete `ScrollViewer` content with `wpf_capture_screenshot(full_content=true)`
+  or `screenshot --full-content`, including vertically virtualized items, while restoring
+  the original scroll position after capture.
+
 ### Fixed
 
 - Build and package the x64 and x86 native bootstrappers so Auto-injection works from the

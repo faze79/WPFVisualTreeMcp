@@ -33,7 +33,7 @@ public class InspectionModeMatrixTests
     [IntegrationTheory]
     [MemberData(nameof(Cases))]
     [Trait("Category", "Integration")]
-    public async Task Cli_inspects_sample_for_target_architecture_and_mode(
+    public async Task Cli_inspects_and_captures_full_content_for_target_architecture_and_mode(
         string targetFramework,
         string architecture,
         string mode)
@@ -45,6 +45,10 @@ public class InspectionModeMatrixTests
             "SampleWpfApp.exe");
         File.Exists(samplePath).Should().BeTrue("the integration runner should publish every sample matrix variant");
 
+        var screenshotDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"WpfVisualTreeMcp-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(screenshotDirectory);
         using var sample = StartSample(samplePath, mode);
         try
         {
@@ -118,10 +122,63 @@ public class InspectionModeMatrixTests
             submitButton.GetProperty("typeName").GetString().Should().Be("System.Windows.Controls.Button");
             submitButton.GetProperty("handle").GetString().Should().StartWith("elem_");
             findJson.RootElement.GetProperty("count").GetInt32().Should().Be(1);
+
+            var listBoxHandle = await FindElementHandleAsync(
+                sample.Id, "ItemsListBox", TimeSpan.FromSeconds(15));
+            var select = await RunCliAsync(
+                new[]
+                {
+                    "select-item",
+                    "--pid",
+                    sample.Id.ToString(),
+                    "--handle",
+                    listBoxHandle,
+                    "--index",
+                    "39",
+                    "--compact",
+                },
+                TimeSpan.FromSeconds(15));
+            select.ExitCode.Should().Be(0, FormatCommandFailure("select-item", select));
+
+            var beforePath = Path.Combine(screenshotDirectory, "before.png");
+            var fullPath = Path.Combine(screenshotDirectory, "full.png");
+            var afterPath = Path.Combine(screenshotDirectory, "after.png");
+            var beforeCapture = await CaptureScreenshotAsync(sample.Id, listBoxHandle, beforePath, false);
+            var fullCapture = await CaptureScreenshotAsync(sample.Id, listBoxHandle, fullPath, true);
+            var afterCapture = await CaptureScreenshotAsync(sample.Id, listBoxHandle, afterPath, false);
+
+            fullCapture.height.Should().BeGreaterThan(
+                beforeCapture.height,
+                "full-content capture should include virtualized items outside the ListBox viewport");
+            afterCapture.Should().Be(beforeCapture);
+            File.ReadAllBytes(afterPath).Should().Equal(
+                File.ReadAllBytes(beforePath),
+                "full-content capture should restore the original scroll position");
+
+            if (targetFramework == "net8.0-windows" && architecture == "x64" && mode == "SelfHosted")
+            {
+                var scrollViewerHandle = await FindElementHandleAsync(
+                    sample.Id, "ScreenshotScrollViewer", TimeSpan.FromSeconds(15));
+                var viewportCapture = await CaptureScreenshotAsync(
+                    sample.Id,
+                    scrollViewerHandle,
+                    Path.Combine(screenshotDirectory, "direct-viewport.png"),
+                    false);
+                var directCapture = await CaptureScreenshotAsync(
+                    sample.Id,
+                    scrollViewerHandle,
+                    Path.Combine(screenshotDirectory, "direct-full.png"),
+                    true);
+                directCapture.height.Should().BeGreaterThan(
+                    viewportCapture.height,
+                    "non-virtualized ScrollViewer content should be rendered beyond the viewport");
+            }
         }
         finally
         {
             await StopProcessAsync(sample);
+            if (Directory.Exists(screenshotDirectory))
+                Directory.Delete(screenshotDirectory, true);
         }
     }
 
@@ -251,6 +308,71 @@ public class InspectionModeMatrixTests
         {
             return false;
         }
+    }
+
+    private static async Task<string> FindElementHandleAsync(
+        int processId, string elementName, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        CommandResult? lastResult = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            lastResult = await RunCliAsync(
+                new[]
+                {
+                    "find",
+                    "--pid",
+                    processId.ToString(),
+                    "--name",
+                    elementName,
+                    "--compact",
+                },
+                TimeSpan.FromSeconds(10));
+
+            if (lastResult.ExitCode == 0)
+            {
+                using var document = JsonDocument.Parse(lastResult.StandardOutput);
+                var elements = document.RootElement.GetProperty("elements");
+                if (elements.GetArrayLength() == 1)
+                    return elements[0].GetProperty("handle").GetString()!;
+            }
+            await Task.Delay(250);
+        }
+
+        throw new XunitException(
+            $"Element '{elementName}' was not found. " +
+            (lastResult == null ? "The CLI find command was not attempted." : FormatCommandFailure("find", lastResult)));
+    }
+
+    private static async Task<(int width, int height)> CaptureScreenshotAsync(
+        int processId, string elementHandle, string outputPath, bool fullContent)
+    {
+        var arguments = new List<string>
+        {
+            "screenshot",
+            "--pid",
+            processId.ToString(),
+            "--handle",
+            elementHandle,
+            "--out",
+            outputPath,
+            "--max-width",
+            "4000",
+            "--max-height",
+            "4000",
+            "--compact",
+        };
+        if (fullContent)
+            arguments.Add("--full-content");
+
+        var result = await RunCliAsync(arguments, TimeSpan.FromSeconds(20));
+        result.ExitCode.Should().Be(0, FormatCommandFailure("screenshot", result));
+        File.Exists(outputPath).Should().BeTrue();
+
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        return (
+            document.RootElement.GetProperty("width").GetInt32(),
+            document.RootElement.GetProperty("height").GetInt32());
     }
 
     private static async Task<CommandResult> RunCliAsync(IEnumerable<string> arguments, TimeSpan timeout)
