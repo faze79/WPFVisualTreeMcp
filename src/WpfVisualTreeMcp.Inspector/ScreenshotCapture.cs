@@ -22,6 +22,7 @@ public class ScreenshotCapture
     internal const long MaxFullContentEncodedByteCount = 32L * 1024 * 1024;
     private const int MaxRenderTilePixelCount = 1024 * 1024;
     private const int RenderTileWidth = 1024;
+    private const int MaxPhysicalCaptureTileCount = 400;
     private const int ComparisonTileWidth = 1024;
     private const int ComparisonTileHeight = 64;
 
@@ -607,11 +608,12 @@ public class ScreenshotCapture
         return (int)Math.Round((advances[middle - 1] + advances[middle]) / 2.0);
     }
 
-    private static List<double> BuildOffsets(double scrollable, double viewport)
+    internal static List<double> BuildOffsets(double scrollable, double viewport)
     {
         var offsets = new List<double> { 0 };
         var step = Math.Max(1.0, viewport);
-        while (offsets[offsets.Count - 1] < scrollable)
+        while (offsets.Count <= MaxPhysicalCaptureTileCount &&
+            offsets[offsets.Count - 1] < scrollable)
         {
             var next = Math.Min(scrollable, offsets[offsets.Count - 1] + step);
             if (next <= offsets[offsets.Count - 1])
@@ -623,7 +625,7 @@ public class ScreenshotCapture
 
     internal static bool ExceedsCaptureTileLimit(int horizontalCount, int verticalCount)
     {
-        return (long)horizontalCount * verticalCount > 400;
+        return (long)horizontalCount * verticalCount > MaxPhysicalCaptureTileCount;
     }
 
     internal static int FindVerticalOverlap(

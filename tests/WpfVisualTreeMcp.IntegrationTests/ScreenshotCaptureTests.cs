@@ -19,6 +19,16 @@ public class ScreenshotCaptureTests
     }
 
     [Fact]
+    public void BuildOffsets_HugeSurface_StopsAtTileLimitSentinel()
+    {
+        var offsets = ScreenshotCapture.BuildOffsets(1_000_000, 1);
+
+        offsets.Should().HaveCount(401);
+        offsets[^1].Should().Be(400);
+        ScreenshotCapture.ExceedsCaptureTileLimit(offsets.Count, 1).Should().BeTrue();
+    }
+
+    [Fact]
     public void CalculateNextRetainedPixelCount_ExceedingAggregateBudget_Throws()
     {
         var act = () => ScreenshotCapture.CalculateNextRetainedPixelCount(
