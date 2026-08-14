@@ -105,12 +105,17 @@ public class IpcSerializerTests
             IpcSerializer.DeserializeRequest(clickJson)!.Value.data);
         clickBack!.ClickType.Should().Be("right");
 
-        var shot = new CaptureScreenshotRequest { Mode = "render", FullContent = true };
+        var shot = new CaptureScreenshotRequest { Mode = "screen" };
         var shotJson = IpcSerializer.SerializeRequest(shot);
         var shotBack = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(
             IpcSerializer.DeserializeRequest(shotJson)!.Value.data);
-        shotBack!.Mode.Should().Be("render");
-        shotBack.FullContent.Should().BeTrue();
+        shotBack!.Mode.Should().Be("screen");
+
+        var fullShot = new CaptureScreenshotRequest { FullContent = true };
+        var fullShotJson = IpcSerializer.SerializeRequest(fullShot);
+        var fullShotBack = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(
+            IpcSerializer.DeserializeRequest(fullShotJson)!.Value.data);
+        fullShotBack!.FullContent.Should().BeTrue();
     }
 
     [Fact]
