@@ -107,9 +107,23 @@ public class ScreenshotCaptureTests
         var previous = CreateBitmap(1030, 10, 80);
         var current = CreateBitmap(1030, 20, 80);
 
-        var overlap = ScreenshotCapture.FindVerticalOverlap(previous, current, 69, 1);
+        var overlap = ScreenshotCapture.FindVerticalOverlap(
+            previous, current, 69, 1, CancellationToken.None);
 
         overlap.Should().Be(70);
+    }
+
+    [Fact]
+    public void FindVerticalOverlap_CanceledBeforeComparison_ThrowsExecutionDeadlineError()
+    {
+        var bitmap = CreateBitmap(1, 0, 1);
+        var cancellationToken = new CancellationToken(canceled: true);
+
+        var act = () => ScreenshotCapture.FindVerticalOverlap(
+            bitmap, bitmap, 1, 0, cancellationToken);
+
+        act.Should().ThrowExactly<FullContentCaptureTimeoutException>()
+            .WithMessage("Full-content capture exceeded its execution deadline.");
     }
 
     private static BitmapSource CreateBitmap(int width, int firstRowValue, int height)

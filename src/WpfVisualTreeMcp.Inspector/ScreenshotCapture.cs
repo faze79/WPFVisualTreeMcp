@@ -518,7 +518,7 @@ public class ScreenshotCapture
                         1, Math.Min(previous.PixelHeight, expectedAdvance.Value));
                     var expectedOverlap = previous.PixelHeight - boundedAdvance;
                     y += previous.PixelHeight - FindVerticalOverlap(
-                        previous, bitmap, expectedOverlap, 2);
+                        previous, bitmap, expectedOverlap, 2, cancellationToken);
                 }
                 retainedPixels = AddFrame(frames, new CaptureFrame(bitmap, 0, y), retainedPixels);
                 previous = bitmap;
@@ -629,8 +629,10 @@ public class ScreenshotCapture
     }
 
     internal static int FindVerticalOverlap(
-        BitmapSource previous, BitmapSource current, int expectedOverlap, int tolerance)
+        BitmapSource previous, BitmapSource current, int expectedOverlap, int tolerance,
+        CancellationToken cancellationToken)
     {
+        ThrowIfFullContentCaptureTimedOut(cancellationToken);
         var width = Math.Min(previous.PixelWidth, current.PixelWidth);
         var maximum = Math.Min(previous.PixelHeight, current.PixelHeight);
         var bufferWidth = Math.Min(width, ComparisonTileWidth);
@@ -650,7 +652,8 @@ public class ScreenshotCapture
                     continue;
 
                 if (VerticalRegionsEqual(
-                    previous, current, width, overlap, previousPixels, currentPixels))
+                    previous, current, width, overlap, previousPixels, currentPixels,
+                    cancellationToken))
                     return overlap;
 
                 if (distance == 0)
@@ -666,13 +669,15 @@ public class ScreenshotCapture
         int width,
         int overlap,
         byte[] previousPixels,
-        byte[] currentPixels)
+        byte[] currentPixels,
+        CancellationToken cancellationToken)
     {
         for (var y = 0; y < overlap; y += ComparisonTileHeight)
         {
             var height = Math.Min(ComparisonTileHeight, overlap - y);
             for (var x = 0; x < width; x += ComparisonTileWidth)
             {
+                ThrowIfFullContentCaptureTimedOut(cancellationToken);
                 var currentWidth = Math.Min(ComparisonTileWidth, width - x);
                 var stride = checked(currentWidth * 4);
                 var byteCount = checked(stride * height);
