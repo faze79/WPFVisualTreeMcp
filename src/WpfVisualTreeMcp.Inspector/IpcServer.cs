@@ -105,6 +105,8 @@ public class IpcServer : IDisposable
 
             while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
             {
+                using var dependencyResolutionScope =
+                    InspectorService.EnterPrivateDependencyResolutionScope();
                 try
                 {
                     stringBuilder.Clear();

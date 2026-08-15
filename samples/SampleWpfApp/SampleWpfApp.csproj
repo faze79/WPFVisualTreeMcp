@@ -9,10 +9,19 @@
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU;x86;x64</Platforms>
+    <EnableSelfHostedInspector Condition="'$(EnableSelfHostedInspector)' == ''">true</EnableSelfHostedInspector>
   </PropertyGroup>
 
-  <ItemGroup>
+  <PropertyGroup Condition="'$(EnableSelfHostedInspector)' == 'true'">
+    <DefineConstants>$(DefineConstants);SELF_HOSTED_INSPECTOR</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnableSelfHostedInspector)' == 'true'">
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(EnableSelfHostedInspector)' != 'true'">
+    <Compile Remove="SelfHostedInspector.cs" />
   </ItemGroup>
 
 </Project>

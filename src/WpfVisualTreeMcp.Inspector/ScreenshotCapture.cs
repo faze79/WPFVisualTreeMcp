@@ -797,7 +797,7 @@ public class ScreenshotCapture
     private static void ThrowIfFullContentCaptureTimedOut(CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
-            throw new TimeoutException("Full-content capture exceeded its execution deadline.");
+            throw new FullContentCaptureTimeoutException();
     }
 
     private static void RestoreOffsets(
@@ -937,9 +937,9 @@ public class ScreenshotCapture
             }
             catch (InvalidOperationException)
                 when (stream is BoundedMemoryStream boundedStream &&
-                    boundedStream.Failure is TimeoutException timeoutException)
+                    boundedStream.Failure is FullContentCaptureTimeoutException timeoutException)
             {
-                throw new TimeoutException(timeoutException.Message, timeoutException);
+                throw new FullContentCaptureTimeoutException(timeoutException);
             }
             catch (InvalidOperationException)
                 when (stream is BoundedMemoryStream boundedStream &&
@@ -1008,8 +1008,7 @@ public class ScreenshotCapture
             if (!_cancellationToken.IsCancellationRequested)
                 return;
 
-            Failure = new TimeoutException(
-                "Full-content capture exceeded its execution deadline.");
+            Failure = new FullContentCaptureTimeoutException();
             throw Failure;
         }
     }
@@ -1047,5 +1046,20 @@ public class ScreenshotCapture
         [DllImport("gdi32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool DeleteDC(IntPtr hDc);
+    }
+}
+
+internal sealed class FullContentCaptureTimeoutException : TimeoutException
+{
+    private const string ErrorMessage = "Full-content capture exceeded its execution deadline.";
+
+    public FullContentCaptureTimeoutException()
+        : base(ErrorMessage)
+    {
+    }
+
+    public FullContentCaptureTimeoutException(Exception innerException)
+        : base(ErrorMessage, innerException)
+    {
     }
 }

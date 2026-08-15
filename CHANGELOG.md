@@ -13,15 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `screenshot --full-content`, including vertically virtualized items, while restoring
   the original scroll position after capture.
 - Target .NET Framework 4.7.2, .NET Framework 4.8, and .NET 8 for Windows from the
-  Inspector, Shared, sample, and self-hosted integration matrix.
+  Inspector, Shared, sample, and 12-case Self-hosted/Auto-injection integration matrix.
 
 ### Fixed
 
 - Build and package the x64 and x86 native bootstrappers so Auto-injection works from the
   NuGet tool and release archive.
 - Package the complete .NET Framework Inspector dependency closure and resolve its
-  co-located private assemblies only for the Inspector payload chain, without relying on
-  the target application's binding redirects or changing unrelated application binds.
+  co-located private assemblies only while the Inspector payload chain is active, including
+  runtime requests without requester metadata, without relying on the target application's
+  binding redirects or changing unrelated application binds.
 - Use the standard CoreCLR runtimeconfig filename so it remains accessible from the NuGet
   tool's deeply nested installation directory.
 - Collect the injection payload after project references build so clean publish and pack

@@ -271,4 +271,5 @@ sync with the CLI help, README, and release notes.
 - Shared IPC/model tests: `tests/WpfVisualTreeMcp.Shared.Tests/`
   (`net472`, `net48`, and `net8.0`)
 - Live framework/architecture/mode matrix: `tests/WpfVisualTreeMcp.IntegrationTests/`
-  (run through `tests/run-integration-tests.ps1`)
+  (run through `tests/run-integration-tests.ps1`; Auto-injection cases publish the sample
+  without an Inspector reference so they exercise only the packaged payload)

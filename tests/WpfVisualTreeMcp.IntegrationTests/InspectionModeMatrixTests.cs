@@ -63,6 +63,7 @@ public class InspectionModeMatrixTests
             GetRequiredEnvironmentVariable("WPF_VISUAL_TREE_MCP_INTEGRATION_SAMPLES"),
             targetFramework,
             architecture,
+            mode,
             "SampleWpfApp.exe");
         File.Exists(samplePath).Should().BeTrue("the integration runner should publish every sample matrix variant");
 
@@ -82,6 +83,12 @@ public class InspectionModeMatrixTests
             var autoInject = mode == "AutoInjection";
             if (autoInject)
             {
+                File.Exists(Path.Combine(
+                        Path.GetDirectoryName(samplePath)!,
+                        "WpfVisualTreeMcp.Inspector.dll"))
+                    .Should().BeFalse(
+                        "the auto-injection target must not contain its own Inspector payload");
+
                 var beforeInjection = await RunCliAsync(
                     new[]
                     {

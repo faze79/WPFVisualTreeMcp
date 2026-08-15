@@ -84,8 +84,21 @@ public class ScreenshotCaptureTests
         var act = () => capture.CaptureFullContent(
             new UIElement(), 100, 100, cancellationToken);
 
-        act.Should().Throw<TimeoutException>()
+        act.Should().ThrowExactly<FullContentCaptureTimeoutException>()
             .WithMessage("Full-content capture exceeded its execution deadline.");
+    }
+
+    [Theory]
+    [InlineData(false, "Request timeout: UI thread is busy")]
+    [InlineData(true, "Full-content capture exceeded its execution deadline.")]
+    public void GetTimeoutErrorMessage_TimeoutKind_ReportsAccurateCause(
+        bool fullContentDeadline, string expected)
+    {
+        var exception = fullContentDeadline
+            ? new FullContentCaptureTimeoutException()
+            : new TimeoutException();
+
+        InspectorService.GetTimeoutErrorMessage(exception).Should().Be(expected);
     }
 
     [Fact]

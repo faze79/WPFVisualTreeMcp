@@ -113,27 +113,31 @@ Invoke-ExternalCommand dotnet @(
 
 foreach ($targetFramework in @('net472', 'net48', 'net8.0-windows')) {
     foreach ($architecture in @('x86', 'x64')) {
-        $output = Join-Path $samplesOutput "$targetFramework\$architecture"
-        if (Test-Path -LiteralPath $sampleIntermediateOutput) {
-            Remove-Item -LiteralPath $sampleIntermediateOutput -Recurse -Force
+        foreach ($mode in @('SelfHosted', 'AutoInjection')) {
+            $output = Join-Path $samplesOutput "$targetFramework\$architecture\$mode"
+            if (Test-Path -LiteralPath $sampleIntermediateOutput) {
+                Remove-Item -LiteralPath $sampleIntermediateOutput -Recurse -Force
+            }
+            $enableSelfHostedInspector = if ($mode -eq 'SelfHosted') { 'true' } else { 'false' }
+            $arguments = @(
+                'publish',
+                $sample,
+                '--configuration',
+                'Release',
+                '--framework',
+                $targetFramework,
+                '--runtime',
+                "win-$architecture",
+                '--output',
+                $output,
+                "-p:PlatformTarget=$architecture",
+                "-p:EnableSelfHostedInspector=$enableSelfHostedInspector"
+            )
+            if ($targetFramework -eq 'net8.0-windows') {
+                $arguments += @('--self-contained', 'false')
+            }
+            Invoke-ExternalCommand dotnet $arguments
         }
-        $arguments = @(
-            'publish',
-            $sample,
-            '--configuration',
-            'Release',
-            '--framework',
-            $targetFramework,
-            '--runtime',
-            "win-$architecture",
-            '--output',
-            $output,
-            "-p:PlatformTarget=$architecture"
-        )
-        if ($targetFramework -eq 'net8.0-windows') {
-            $arguments += @('--self-contained', 'false')
-        }
-        Invoke-ExternalCommand dotnet $arguments
     }
 }
 

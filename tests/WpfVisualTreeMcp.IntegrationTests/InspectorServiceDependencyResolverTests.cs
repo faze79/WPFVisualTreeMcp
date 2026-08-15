@@ -56,4 +56,20 @@ public class InspectorServiceDependencyResolverTests
 
         result.Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void ShouldResolvePrivateDependency_UnknownRequester_DependsOnInspectorScope(
+        bool allowUnknownRequester, bool expected)
+    {
+        var result = InspectorService.ShouldResolvePrivateDependency(
+            "System.Runtime.CompilerServices.Unsafe",
+            null,
+            null,
+            InspectorDirectory,
+            allowUnknownRequester);
+
+        result.Should().Be(expected);
+    }
 }
