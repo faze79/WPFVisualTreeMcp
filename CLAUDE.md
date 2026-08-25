@@ -9,17 +9,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
-# Build solution
+# Build managed solution
 dotnet build WpfVisualTreeMcp.sln
 
-# Build for Release
+# Build managed solution for Release
 dotnet build -c Release WpfVisualTreeMcp.sln
+
+# Build native auto-injection bootstrapper (Visual Studio MSBuild)
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
 
 # Run tests
 dotnet test WpfVisualTreeMcp.sln
 
+# Run the full self-hosted/auto-injection matrix (Windows PowerShell)
+./tests/run-integration-tests.ps1
+
 # Run sample WPF app for testing
-dotnet run --project samples/SampleWpfApp
+dotnet run --project samples/SampleWpfApp --framework net8.0-windows
 
 # Publish MCP Server executable (same exe also runs as the CLI)
 dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
@@ -39,8 +46,8 @@ MCP Server (.NET 8.0)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
-Target WPF Application (.NET Framework)
-    └─ Inspector DLL (.NET 4.8)
+Target WPF Application (.NET Framework 4.7.2/4.8 or .NET 8)
+    └─ Inspector DLL (compatible framework payload)
         ├─ TreeWalker (visual tree navigation + adorner/popup traversal)
         ├─ ScreenshotCapture (RenderTargetBitmap element capture)
         ├─ PropertyReader (dependency properties)
@@ -49,7 +56,7 @@ Target WPF Application (.NET Framework)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property`**, which drive controls or edit property values and change application state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
+**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. The six interaction/property commands — `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property` — drive controls or edit property values and change application state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default). `wpf_highlight_element` temporarily changes the UI, while `wpf_clear_binding_errors` clears Inspector-held diagnostics.
 
 ## Key Source Locations
 
@@ -65,7 +72,7 @@ Target WPF Application (.NET Framework)
 | Injector Helper | `src/WpfVisualTreeMcp.InjectorHelper/Program.cs` | 32-bit .NET 8 helper exe spawned by `ProcessInjector` for cross-arch injection (v0.6.0) |
 | IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
 | Process Manager | `src/WpfVisualTreeMcp.Server/Services/ProcessManager.cs` | WPF process discovery and attachment |
-| Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected DLL main entry point |
+| Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected or self-hosted DLL main entry point |
 | Screenshot Capture | `src/WpfVisualTreeMcp.Inspector/ScreenshotCapture.cs` | RenderTargetBitmap element/window capture |
 | IPC Server | `src/WpfVisualTreeMcp.Inspector/IpcServer.cs` | Named pipe server in target process |
 | IPC Messages | `src/WpfVisualTreeMcp.Shared/Ipc/IpcMessages.cs` | Request/response contracts |
@@ -129,6 +136,17 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
   dropdowns, context menus and tooltips — requires the window visible and unobstructed)
 - DPI-aware via `PresentationSource.FromVisual`
 - Downscales if exceeding `max_width`/`max_height` (default 1920x1080)
+- Captures the element's current arranged bounds by default; `full_content=true`
+  (render mode only) locates the target's largest ScrollViewer, renders ordinary
+  content directly, or pages and stitches virtualized content before restoring offsets
+- Full-content capture supports physical scrolling in both dimensions and logical
+  virtualized scrolling vertically; logical virtualized horizontal overflow is rejected
+- Full-content output is area-downscaled to at most 8,388,608 pixels; capture rejects
+  retained-frame-plus-output allocations above 67,108,864 pixels and encoded PNGs above
+  33,554,432 bytes, avoiding unbounded bitmap, PNG, base64, and JSON memory growth
+- Full-content rendering, composition, and encoding use cancellation-aware bounded chunks
+  under a 25-second cooperative deadline that starts before Dispatcher scheduling,
+  leaving headroom below the 30-second named-pipe request timeout
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
 
 ### Logging
@@ -140,10 +158,12 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
 ## WPF App Inspection Modes
 
 ### Auto-Injection Mode
-Use `wpf_attach(process_id=<pid>, auto_inject=true)` to inject the Inspector into any running .NET Framework WPF app. Requires:
+Use `wpf_attach(process_id=<pid>, auto_inject=true)` to inject the Inspector into a running .NET Framework or .NET 8 WPF app. Requires:
 - Native bootstrapper DLL in `publish/native/x64/` (or x86)
-- Target process must be .NET Framework (CLR hosting)
-- Architecture detection is automatic (x64 vs x86)
+- A supported CLR and matching Inspector payload (`net48` for .NET Framework or `net8.0-windows` for CoreCLR)
+- Architecture detection and payload selection use the target process (x64 vs x86)
+- .NET Framework private dependency resolution is limited to the Inspector payload chain
+  in the Inspector directory; do not broaden it to unrelated target-application binds
 
 ### Self-Hosted Mode
 For your own WPF application, add a reference to the Inspector and initialize on startup:
@@ -156,6 +176,10 @@ protected override void OnStartup(StartupEventArgs e)
     InspectorService.Initialize(Process.GetCurrentProcess().Id);
 }
 ```
+
+The Inspector multi-targets `net472`, `net48`, and `net8.0-windows`, so a project
+reference selects the build matching the WPF application's target framework.
+Self-hosting avoids runtime injection but requires modifying the application.
 
 ## MCP Server Configuration
 
@@ -177,7 +201,7 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
 The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
 with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
 it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
-`CliRunner.IsCliCommand`). This gives the same 21 capabilities without an MCP
+`CliRunner.IsCliCommand`). This gives the same 28 capabilities without an MCP
 connection — useful when the MCP server is not connected, for scripting, or for
 verifying the pipeline manually.
 
@@ -194,7 +218,9 @@ shell call. No MCP handshake required; `--help` is self-documenting.
 - **Targeting:** every command except `list` takes `--pid <id>` or `--process <name>`.
 - **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
   **export** writes to `--out` if given, otherwise prints content inline.
-- **click / select-item / set-text / send-keys** are the four state-changing commands.
+- **click / select-item / set-text / send-keys / set-property / revert-property**
+  are the six commands that change application state. `highlight` changes the UI
+  temporarily, and `clear-binding-errors` clears Inspector-held diagnostics.
   - `click` — UI Automation invoke by default; `--physical` for OS mouse click
     (auto-scrolls into view); `--click-type double|right` for double/right clicks
     (always physical; right opens context menus — capture with `screenshot --mode screen`).
@@ -206,7 +232,7 @@ shell call. No MCP handshake required; `--help` is self-documenting.
     The response reports the value read back after the write.
   - `send-keys` — OS-level keyboard input; modifiers `Ctrl/Shift/Alt/Win` plus
     letters, digits, F1-F12, and named keys.
-  - All four live in `ControlInteractor`.
+  - The first four live in `ControlInteractor`; property edits use `PropertyWriter`.
 
 ### Typical CLI workflow
 ```bash
@@ -226,14 +252,24 @@ Run `WpfVisualTreeMcp.Server.exe help` for the full command list, or
    (registry manifest — must match the NuGet package version exactly)
 3. Update `CHANGELOG.md` and `RELEASE_NOTES.md`
 4. Commit, tag `vX.Y.Z`, push tag → `release.yml` builds the zip, creates the GitHub
-   release, packs the NuGet package and pushes it to nuget.org (needs the
-   `NUGET_API_KEY` repo secret; skipped with a notice if absent)
+   release, packs the NuGet package and pushes it to nuget.org using trusted
+   publishing (requires the nuget.org policy and `NUGET_USER` repo secret;
+   skipped with a notice if the secret is absent)
 5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
    workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
+
+The end-user CLI skill is stored under `.agents/skills/wpf-visual-tree-cli/`.
+Keep its command map, installation guidance, inspection modes, and limitations in
+sync with the CLI help, README, and release notes.
 
 ## Test Framework
 
 - **xUnit** - Test runner
 - **Moq** - Mocking
 - **FluentAssertions** - Assertions
-- Tests located in `tests/WpfVisualTreeMcp.Tests/`
+- Server and Injector tests: `tests/WpfVisualTreeMcp.Tests/` (`net8.0`)
+- Shared IPC/model tests: `tests/WpfVisualTreeMcp.Shared.Tests/`
+  (`net472`, `net48`, and `net8.0`)
+- Live framework/architecture/mode matrix: `tests/WpfVisualTreeMcp.IntegrationTests/`
+  (run through `tests/run-integration-tests.ps1`; Auto-injection cases publish the sample
+  without an Inspector reference so they exercise only the packaged payload)

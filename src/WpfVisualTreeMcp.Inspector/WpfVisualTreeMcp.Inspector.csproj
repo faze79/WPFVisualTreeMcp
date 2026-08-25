@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <TargetFrameworks>net472;net48;net8.0-windows</TargetFrameworks>
     <OutputType>Library</OutputType>
     <RootNamespace>WpfVisualTreeMcp.Inspector</RootNamespace>
     <AssemblyName>WpfVisualTreeMcp.Inspector</AssemblyName>
@@ -10,9 +10,9 @@
     <UseWPF Condition="'$(TargetFramework)' == 'net8.0-windows'">true</UseWPF>
   </PropertyGroup>
 
-  <!-- .NET Framework 4.8: explicit WPF references -->
+  <!-- .NET Framework 4.7.2/4.8: explicit WPF references -->
   <!-- (net8.0-windows pulls these in automatically via UseWPF) -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472' Or '$(TargetFramework)' == 'net48'">
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
@@ -25,6 +25,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="WpfVisualTreeMcp.IntegrationTests" />
   </ItemGroup>
 
 </Project>

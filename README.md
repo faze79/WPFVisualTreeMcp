@@ -64,10 +64,10 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 ### Search & Monitoring
 - **Element Search** - Find elements by type, name, or property values
 - **Deep Search** - Search entire tree including AdornerLayer and Popup elements
-- **Property Watching** - Monitor property changes in real-time
+- **Property Watching** - Register property watches and read their initial values (streaming client notifications are planned)
 
 ### Interaction & Export
-- **Screenshot Capture** - Capture window/element screenshots visible to AI agents
+- **Screenshot Capture** - Capture window/element screenshots, including complete ScrollViewer content and virtualized items
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Control Click** *(v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click
 - **Set Text** *(new in v0.5.0)* - Fill a TextBox/ComboBox/PasswordBox via UI Automation `IValueProvider.SetValue`, with a `TextBox.Text` / `PasswordBox.Password` / reflected-`Text` fallback, or `physical=true` to type via OS keyboard input (full Unicode BMP)
@@ -95,7 +95,7 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 | Find controls by visible text / properties | ✅ | manual | partial (UIA) | pixel guessing |
 | Click / type / select / shortcuts | ✅ | ❌ | ✅ | ✅ (blind) |
 | Wait for UI conditions (no sleep loops) | ✅ | ❌ | ✅ | ❌ |
-| Element screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
+| Element/full-scroll screenshots + popup-aware screen capture | ✅ | ❌ | partial | full screen only |
 | Works without target source changes | ✅ (auto-injection) | ✅ | ✅ | ✅ |
 
 **vs. other WPF MCP servers.** Most WPF MCP servers are built on **UI Automation** (FlaUI): they read the *accessibility* tree, and can only reach WPF internals — bindings, DataContext, ViewModel state — if you **install their in-process probe into the app you want to inspect**. This server takes the Snoop route instead: it **injects at runtime**, so it reads the *real* visual tree and diagnoses binding errors and DataContext **with zero changes to the target app** — nothing to add to your build, nothing to ship into production.
@@ -107,7 +107,7 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 | Interaction surface | click (UIA + physical, double/right), set-text w/ read-back, send-keys, **select-item (virtualized)** | click / type / select | usually invoke-only |
 | Wait for element conditions | ✅ `wpf_wait_for` | ✅ | ❌ |
 | Popup / dropdown / context-menu screenshots | ✅ screen mode | partial | screenshot only |
-| Cross-architecture injection (x64 ⇄ x86) | ✅ | n/a | ❌ |
+| Cross-architecture injection (x64 server → x86 target) | ✅ | n/a | ❌ |
 | Dual-mode: MCP server **and** one-shot CLI | ✅ | ❌ | ❌ |
 | Distribution | NuGet (`dnx`/tool) + official MCP registry | varies | varies |
 
@@ -120,6 +120,8 @@ In short: UIA-based tools see what accessibility exposes, and computer-use agent
 - Windows 10/11
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
 - A WPF application to inspect
+- Visual Studio 2022 C++ build tools when building the auto-injection payload from source
+- x86 .NET 8 Windows Desktop runtime when running the cross-bitness integration tests
 
 ### Installation
 
@@ -149,8 +151,13 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 ```bash
 git clone https://github.com/faze79/WpfVisualTreeMcp.git
 cd WpfVisualTreeMcp
-dotnet build -c Release
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
+dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
 ```
+
+The native steps require Visual Studio Build Tools with Desktop development
+with C++. A managed `dotnet build` is sufficient when Auto-injection is not needed.
 
 ### Configuration
 
@@ -208,7 +215,8 @@ Add to `~/.claude/settings.json`:
 **Important Notes:**
 - Use absolute paths to the built `.exe` file
 - Use forward slashes (`/`) in paths on Windows
-- Build in Release mode for production: `dotnet build -c Release`
+- Use the Release publish output for production; source-built Auto-injection also
+  requires both native bootstrapper builds shown above
 - Restart Claude Code after configuration changes
 
 #### Cursor
@@ -226,7 +234,36 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 }
 ```
 
-### Self-Hosted Mode (Recommended)
+### Auto-Injection Mode
+
+Auto-injection loads the Inspector into an already-running WPF process without
+source changes. Set `auto_inject=true` when calling `wpf_attach`, or run:
+
+```powershell
+wpfinspect attach --pid <process-id> --auto-inject
+```
+
+Auto-injection has these constraints:
+
+- It requires permission to open the target process, write memory, and create a
+  remote thread. Elevated, protected, sandboxed, or security-hardened processes
+  may reject it, and endpoint security may block it as DLL injection.
+- The matching x64 or x86 native bootstrapper and the complete Inspector
+  dependency set must be present. A 64-bit server additionally needs the
+  bundled x86 helper and the x86 .NET 8 runtime to inject into a 32-bit target.
+  Native ARM64 targets are not supported.
+- Injection occurs after process startup, so it cannot recover earlier binding
+  errors or initialization activity. A restarted application must be injected
+  again under its new process ID.
+- The target must have an initialized WPF `Application` and a responsive UI
+  dispatcher. The injected Inspector remains loaded until the target exits.
+- Loading native and managed code into the target can conflict with its runtime,
+  assembly versions, or process-hardening policy.
+
+See the [injector documentation](src/WpfVisualTreeMcp.Injector/README.md) for the
+implementation, runtime requirements, diagnostics, and detailed limitations.
+
+### Self-Hosted Mode
 
 For your WPF application to be inspectable, add a reference to the Inspector DLL and initialize it on startup:
 
@@ -258,6 +295,8 @@ public partial class App : Application
 ```
 
 This enables the MCP server to connect to your application via named pipes for real-time inspection.
+The Inspector multi-targets .NET Framework 4.7.2, .NET Framework 4.8, and
+.NET 8 for Windows, so project references select a compatible build.
 
 ## Usage Examples
 
@@ -334,7 +373,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_element_properties` | Get all dependency properties of an element |
 | `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
-| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
+| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `full_content=true` captures complete ScrollViewer content; `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |
@@ -357,7 +396,21 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_layout_info` | Get layout information |
 | `wpf_export_tree` | Export visual tree to XAML or JSON |
 
-For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md).
+Screenshot capture covers the element's current arranged bounds by default. Set
+`full_content=true` with render mode to capture all content in a `ScrollViewer`.
+Non-virtualized content is rendered directly; virtualized content is paged and
+stitched, then the original scroll position is restored. Logically scrolling,
+virtualized controls with horizontal overflow are not currently supported by
+full-content capture. Increase `max_height` when a long image would otherwise be
+downscaled too far. Full-content output is area-downscaled to at most 8,388,608
+pixels. Capture fails safely if retained frames plus the final image exceed the
+67,108,864-pixel raw-bitmap budget, the encoded PNG exceeds 33,554,432 bytes, or
+chunked render, composition, and encoding work reaches its 25-second cooperative
+execution deadline.
+
+For detailed examples of the original inspection tools, see
+[docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md); run `wpfinspect help` for
+complete CLI documentation.
 
 ## Roadmap
 
@@ -374,7 +427,7 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Binding analysis and error detection
 - [x] Resource dictionary enumeration
 - [x] Style and template inspection
-- [x] Property change monitoring (with notifications)
+- [x] Property watch registration and initial-value capture
 
 ### Phase 3: Interaction & Diagnostics ✅
 - [x] Element highlighting overlay
@@ -450,13 +503,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 3. Build and run tests:
    ```bash
-   dotnet build
-   dotnet test
+   dotnet build WpfVisualTreeMcp.sln -c Release
+   dotnet test WpfVisualTreeMcp.sln -c Release
+
+   # Full 12-case self-hosted/auto-injection matrix (Windows PowerShell)
+   ./tests/run-integration-tests.ps1
    ```
 
 4. Run the sample WPF app for testing:
    ```bash
-   dotnet run --project samples/SampleWpfApp
+   dotnet run --project samples/SampleWpfApp --framework net8.0-windows
    ```
 
 ### Project Structure
@@ -466,18 +522,20 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 20 WPF tools (17 inspection + click/set-text/send-keys)
+│   │   ├── WpfTools.cs                 # 28 WPF tools (22 inspection + 6 state-changing)
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
-│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.8)
-│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; net48 + net8.0)
+│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
+│   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; .NET 8)
 │   ├── WpfVisualTreeMcp.InjectorHelper/# x86 .NET 8 helper exe for cross-arch injection (v0.6.0)
 │   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting
 │   └── WpfVisualTreeMcp.Shared/        # Shared models & IPC contracts
 ├── samples/
 │   └── SampleWpfApp/                   # Test application
 ├── tests/
-│   └── WpfVisualTreeMcp.Tests/         # Unit tests (48 tests)
+│   ├── WpfVisualTreeMcp.Tests/         # Server, CLI and injector unit tests
+│   ├── WpfVisualTreeMcp.Shared.Tests/  # Shared contract tests across all target frameworks
+│   └── WpfVisualTreeMcp.IntegrationTests/ # 3 frameworks × 2 architectures × 2 modes
 ├── publish/                            # Published server + native DLLs
 │   └── native/{x64,x86}/              # Architecture-specific bootstrapper
 └── docs/                               # Documentation
@@ -487,7 +545,7 @@ WpfVisualTreeMcp/
 
 - **MCP SDK**: Built with the [official C# MCP SDK](https://github.com/modelcontextprotocol/csharp-sdk) from Microsoft/Anthropic
 - **Protocol**: JSON-RPC 2.0 over stdio transport
-- **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
+- **Target Framework**: .NET 8.0 (Server/Injector) / .NET Framework 4.7.2, 4.8 + .NET 8.0-windows (Inspector)
 - **IPC**: Named Pipes for server-to-application communication
 - **Tools**: 28 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)

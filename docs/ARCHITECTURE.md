@@ -27,9 +27,9 @@ The MCP Server is the main entry point that communicates with AI agents via the 
 
 ### 2. Inspector DLL (`WpfVisualTreeMcp.Inspector`)
 
-The Inspector is a .NET Framework library that gets loaded into target WPF applications to perform inspection operations.
+The Inspector is loaded into target WPF applications to perform inspection and interaction operations.
 
-**Technology:** .NET Framework 4.8 (for maximum compatibility with WPF apps)
+**Technology:** .NET Framework 4.7.2, .NET Framework 4.8, and .NET 8 for Windows
 
 **Responsibilities:**
 - Access `VisualTreeHelper` and `LogicalTreeHelper`
@@ -48,7 +48,7 @@ The Inspector is a .NET Framework library that gets loaded into target WPF appli
 
 The Injector is responsible for loading the Inspector DLL into target WPF processes.
 
-**Technology:** C++/CLI or managed code
+**Technology:** .NET 8 managed injection logic, native C++ bootstrapper, and an x86 .NET 8 helper
 
 **Responsibilities:**
 - Enumerate running WPF processes
@@ -170,18 +170,18 @@ public async Task<VisualTreeNode> GetVisualTreeAsync(ElementHandle root)
 
 ### Process Isolation
 - The MCP Server runs in a separate process from target applications
-- Inspector DLL has read-only access to the visual tree
-- No modification of application state is possible through inspection
+- The Inspector runs in-process and can inspect the visual tree
+- Interaction and live-property tools intentionally modify application state
 
 ### Named Pipe Security
-- Pipes are created with appropriate ACLs
-- Only the MCP Server process can connect
-- Pipe names include process IDs to prevent collisions
+- Pipes are local to the machine and their names include process IDs
+- The protocol does not authenticate the connecting client
 
 ### Injection Safety
-- Only .NET Framework WPF applications can be inspected
-- Injection uses safe managed code techniques
-- Target application stability is preserved
+- .NET Framework and .NET 8 WPF applications are supported
+- Auto-injection loads native and managed code by creating a remote thread
+- .NET Framework private dependencies are resolved only for the Inspector payload chain in the Inspector directory
+- Process permissions, endpoint security, runtime conflicts, or blocked UI threads can prevent injection or affect the target
 
 ## Error Handling
 

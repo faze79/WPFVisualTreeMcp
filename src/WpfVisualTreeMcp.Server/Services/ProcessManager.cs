@@ -128,12 +128,20 @@ public class ProcessManager : IProcessManager
         _logger.LogInformation("Attached to process {ProcessId} ({ProcessName})",
             targetProcess.Id, targetProcess.ProcessName);
 
-        // Check if Inspector is already loaded (self-hosted mode)
-        var inspectorLoaded = IsInspectorLoaded(targetProcess);
+        // The named pipe is the readiness signal. A loaded module alone does not
+        // prove that Inspector initialization completed successfully.
+        var inspectorAvailable = await IsInspectorPipeAvailableAsync(targetProcess.Id);
+        var inspectorLoaded = !inspectorAvailable && IsInspectorLoaded(targetProcess);
         if (inspectorLoaded)
         {
-            _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");
-            session.InspectorStatus = "Loaded (self-hosted)";
+            _logger.LogWarning(
+                "Inspector module is loaded in target process, but its named pipe is unavailable");
+        }
+
+        if (inspectorAvailable)
+        {
+            _logger.LogInformation("Inspector already running in target process");
+            session.InspectorStatus = "Loaded (existing)";
         }
         else if (autoInject)
         {
@@ -141,7 +149,7 @@ public class ProcessManager : IProcessManager
             _logger.LogInformation("Inspector not loaded, attempting injection...");
             try
             {
-                var inspectorPath = _injector.GetInspectorDllPath();
+                var inspectorPath = _injector.GetInspectorDllPath(targetProcess);
                 var result = _injector.InjectIntoProcess(targetProcess.Id, inspectorPath);
 
                 if (result)
@@ -150,13 +158,19 @@ public class ProcessManager : IProcessManager
                     var pipeConnected = await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromSeconds(10));
                     if (pipeConnected)
                     {
-                        _logger.LogInformation("Inspector successfully injected and initialized");
-                        session.InspectorStatus = "Loaded (injected)";
+                        _logger.LogInformation(
+                            inspectorLoaded
+                                ? "Existing Inspector finished initializing"
+                                : "Inspector successfully injected and initialized");
+                        session.InspectorStatus = GetReadyInspectorStatus(inspectorLoaded);
                     }
                     else
                     {
-                        _logger.LogWarning("Inspector injected but named pipe not available");
-                        session.InspectorStatus = "Injected - pipe timeout";
+                        _logger.LogWarning(
+                            inspectorLoaded
+                                ? "Inspector already loaded but named pipe not available"
+                                : "Inspector injected but named pipe not available");
+                        session.InspectorStatus = GetPipeTimeoutInspectorStatus(inspectorLoaded);
                     }
                 }
                 else
@@ -185,6 +199,39 @@ public class ProcessManager : IProcessManager
         }
 
         return session;
+    }
+
+    internal static string GetReadyInspectorStatus(bool inspectorWasAlreadyLoaded)
+    {
+        return inspectorWasAlreadyLoaded ? "Loaded (existing)" : "Loaded (injected)";
+    }
+
+    internal static string GetPipeTimeoutInspectorStatus(bool inspectorWasAlreadyLoaded)
+    {
+        return inspectorWasAlreadyLoaded ? "Loaded (existing) - pipe timeout" : "Injected - pipe timeout";
+    }
+
+    /// <summary>
+    /// Quickly checks whether an existing Inspector pipe accepts connections.
+    /// </summary>
+    private async Task<bool> IsInspectorPipeAvailableAsync(int processId)
+    {
+        var pipeName = $"wpf_inspector_{processId}";
+
+        try
+        {
+            using var pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            await pipeClient.ConnectAsync(100);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

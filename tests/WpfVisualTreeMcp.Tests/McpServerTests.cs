@@ -662,6 +662,77 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfCaptureScreenshot_WithFullContent_PassesOptionAndReturnsImage()
+    {
+        // Arrange
+        var expectedResult = new ScreenshotResult
+        {
+            ImageBase64 = "iVBORw0KGgo=",
+            Width = 320,
+            Height = 1200,
+            ElementType = "ScrollViewer"
+        };
+        _ipcBridgeMock
+            .Setup(x => x.CaptureScreenshotAsync("elem_1", 800, 4000, "render", true))
+            .ReturnsAsync(expectedResult);
+
+        // Act
+        var result = await _tools.WpfCaptureScreenshot(
+            element_handle: "elem_1",
+            max_width: 800,
+            max_height: 4000,
+            full_content: true);
+
+        // Assert
+        result.Content.Should().HaveCount(2);
+        _ipcBridgeMock.Verify(
+            x => x.CaptureScreenshotAsync("elem_1", 800, 4000, "render", true),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfCaptureScreenshot_WithScreenMode_PassesExistingModeWithoutFullContent()
+    {
+        // Arrange
+        _ipcBridgeMock
+            .Setup(x => x.CaptureScreenshotAsync("elem_1", 1920, 1080, "screen", false))
+            .ReturnsAsync(new ScreenshotResult
+            {
+                ImageBase64 = "iVBORw0KGgo=",
+                Width = 1920,
+                Height = 1080,
+                ElementType = "Window"
+            });
+
+        // Act
+        var result = await _tools.WpfCaptureScreenshot(
+            element_handle: "elem_1",
+            mode: "screen");
+
+        // Assert
+        result.Content.Should().HaveCount(2);
+        _ipcBridgeMock.Verify(
+            x => x.CaptureScreenshotAsync("elem_1", 1920, 1080, "screen", false),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task WpfCaptureScreenshot_FullContentScreenMode_ThrowsArgumentException()
+    {
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _tools.WpfCaptureScreenshot(mode: "screen", full_content: true));
+        _ipcBridgeMock.Verify(
+            x => x.CaptureScreenshotAsync(
+                It.IsAny<string?>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<string>(),
+                It.IsAny<bool>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task WpfWatchProperty_WithValidParameters_ReturnsWatchId()
     {
         // Arrange

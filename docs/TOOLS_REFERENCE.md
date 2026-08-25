@@ -1,6 +1,8 @@
 # Tools Reference
 
-Complete reference for all MCP tools provided by WpfVisualTreeMcp.
+Detailed reference for the original inspection tools provided by
+WpfVisualTreeMcp. For the current list of all 28 tools, see the
+[README](../README.md#available-tools) or run `wpfinspect help`.
 
 ## Process Management
 
@@ -418,7 +420,9 @@ Monitor a property for changes.
 }
 ```
 
-**Note:** Property changes are reported as MCP notifications.
+**Note:** The watch is registered and returns its initial value, but the current
+external transports do not forward later changes. Re-read the property to observe
+updates; streaming notifications are planned.
 
 **Example Usage:**
 ```

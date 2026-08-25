@@ -1,12 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!--
-      Multi-targeted so the x86 InjectorHelper (net8.0) can reference us without
-      a cross-TFM warning. .NET Framework 4.8 stays around so the existing server
-      build path is unchanged.
-    -->
-    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>WpfVisualTreeMcp.Injector</RootNamespace>
     <AssemblyName>WpfVisualTreeMcp.Injector</AssemblyName>
@@ -14,9 +9,5 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
-  </ItemGroup>
 
 </Project>

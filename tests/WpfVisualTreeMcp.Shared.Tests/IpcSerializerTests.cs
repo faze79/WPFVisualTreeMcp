@@ -110,6 +110,12 @@ public class IpcSerializerTests
         var shotBack = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(
             IpcSerializer.DeserializeRequest(shotJson)!.Value.data);
         shotBack!.Mode.Should().Be("screen");
+
+        var fullShot = new CaptureScreenshotRequest { FullContent = true };
+        var fullShotJson = IpcSerializer.SerializeRequest(fullShot);
+        var fullShotBack = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(
+            IpcSerializer.DeserializeRequest(fullShotJson)!.Value.data);
+        fullShotBack!.FullContent.Should().BeTrue();
     }
 
     [Fact]

@@ -1,5 +1,11 @@
 # Release Notes
 
+> **v0.12.0 packaging note:** the published NuGet tool and official ZIP omit the
+> native bootstrapper and managed Auto-injection dependency closure. The release
+> description below reflects the intended feature set, but Auto-injection from
+> those artifacts is incomplete. Use a later release containing the packaging
+> repair, a verified current source build, or self-hosted mode.
+
 ## v0.12.0 — Trigger & style diagnostics (2026-07-24)
 
 If you've debugged WPF, you've done this by hand: crack open the visual tree, hunt through a `Style` or `ControlTemplate`, and try to work out why a trigger isn't reacting — or which setter, in which style or trigger, actually produced a value. This release does it for you.

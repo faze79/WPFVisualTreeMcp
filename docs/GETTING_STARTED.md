@@ -21,17 +21,23 @@ Before you begin, ensure you have:
    cd WpfVisualTreeMcp
    ```
 
-2. Build the solution:
-   ```bash
-   dotnet build
+2. For a complete Auto-injection publish, build both native bootstrappers and
+   publish the server:
+   ```powershell
+   msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+   msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
+   dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -o ./publish
    ```
+
+   The native steps require Visual Studio Build Tools with Desktop development
+   with C++. A managed `dotnet build` is sufficient when Auto-injection is not needed.
 
 3. The MCP server will be available at:
    ```
-   src/WpfVisualTreeMcp.Server/bin/Debug/net8.0/WpfVisualTreeMcp.Server.exe
+   publish/WpfVisualTreeMcp.Server.exe
    ```
 
-### Option 2: .NET Tool Installation (Coming Soon)
+### Option 2: .NET Tool Installation
 
 ```bash
 dotnet tool install -g WpfVisualTreeMcp
@@ -48,7 +54,7 @@ There are multiple ways to configure the MCP server in Claude Code:
 Use the `claude mcp add` command for quick setup:
 
 ```bash
-# Build the server first
+# Build the server first (use the complete source-publish steps above for Auto-injection)
 cd WpfVisualTreeMcp
 dotnet build -c Release
 
@@ -122,7 +128,7 @@ Restart Claude Code or reload the window after making changes.
 
 ## Setting Up Your WPF Application (Self-Hosted Mode)
 
-For the MCP server to inspect your WPF application, you need to add the Inspector DLL to your project. This is called "self-hosted mode" and is the recommended approach.
+For the MCP server to inspect your WPF application without runtime injection, add the Inspector DLL to your project. This is called "self-hosted mode."
 
 ### Step 1: Add Project Reference
 
@@ -133,6 +139,9 @@ Add a reference to `WpfVisualTreeMcp.Inspector` in your WPF project:
   <ProjectReference Include="path/to/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj" />
 </ItemGroup>
 ```
+
+The Inspector supports WPF applications targeting .NET Framework 4.7.2,
+.NET Framework 4.8, and .NET 8 for Windows.
 
 ### Step 2: Initialize the Inspector
 
@@ -175,7 +184,7 @@ Either start your own WPF application (with the Inspector set up as above) or us
 
 ```bash
 cd WpfVisualTreeMcp
-dotnet run --project samples/SampleWpfApp
+dotnet run --project samples/SampleWpfApp --framework net8.0-windows
 ```
 
 The sample app already has the Inspector configured.
@@ -255,7 +264,7 @@ What styles are defined in this application?
 ### "No WPF applications found"
 
 - Ensure the target application is running
-- Check that it's a .NET Framework WPF application
+- Check that it is a supported .NET Framework or .NET 8 WPF application
 - The application must have a main window visible
 
 ### "Failed to attach to process" or "Inspector not loaded"
@@ -291,7 +300,8 @@ What styles are defined in this application?
 
 ## Next Steps
 
-- Read the [Tools Reference](TOOLS_REFERENCE.md) for complete API documentation
+- See the [current tool list](../README.md#available-tools) and the
+  [Tools Reference](TOOLS_REFERENCE.md) for detailed examples of the original tools
 - Explore the [Architecture](ARCHITECTURE.md) to understand how it works
 - Try the sample application with intentional binding errors
 - Integrate into your development workflow

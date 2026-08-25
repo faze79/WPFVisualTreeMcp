@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfVisualTreeMcp.Shared.Ipc;
@@ -13,6 +15,7 @@ namespace WpfVisualTreeMcp.Inspector;
 /// </summary>
 public class InspectorService : IDisposable
 {
+    private static readonly TimeSpan FullContentCaptureTimeout = TimeSpan.FromSeconds(25);
     private readonly IpcServer _ipcServer;
     private readonly TreeWalker _treeWalker;
     private readonly PropertyReader _propertyReader;
@@ -28,6 +31,22 @@ public class InspectorService : IDisposable
     private bool _disposed;
 
     private static readonly object _initLock = new();
+    private static readonly AsyncLocal<int> _privateDependencyResolutionScopeDepth = new();
+    private static readonly HashSet<string> _privateDependencyNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Microsoft.Bcl.AsyncInterfaces",
+        "System.Buffers",
+        "System.Memory",
+        "System.Numerics.Vectors",
+        "System.Runtime.CompilerServices.Unsafe",
+        "System.Text.Encodings.Web",
+        "System.Text.Json",
+        "System.Threading.Tasks.Extensions",
+        "System.ValueTuple",
+    };
+#if NETFRAMEWORK
+    private static bool _dependencyResolverRegistered;
+#endif
     public static InspectorService? Instance { get; private set; }
 
     /// <summary>
@@ -105,6 +124,10 @@ public class InspectorService : IDisposable
             try
             {
                 DebugLog($"Inspector.Initialize called for PID={processId}");
+#if NETFRAMEWORK
+                RegisterDependencyResolver();
+                using var dependencyResolutionScope = EnterPrivateDependencyResolutionScope();
+#endif
                 Instance = new InspectorService(processId);
                 DebugLog("Inspector instance created, calling Start()");
                 Instance.Start();
@@ -116,6 +139,97 @@ public class InspectorService : IDisposable
                 DebugLog($"ERROR in Initialize: {ex.Message}\n{ex.StackTrace}");
                 throw;
             }
+        }
+    }
+
+#if NETFRAMEWORK
+    private static void RegisterDependencyResolver()
+    {
+        if (_dependencyResolverRegistered) return;
+
+        var inspectorDirectory = Path.GetDirectoryName(typeof(InspectorService).Assembly.Location);
+        if (string.IsNullOrEmpty(inspectorDirectory)) return;
+
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+        {
+            var assemblyName = new AssemblyName(args.Name).Name;
+            var requestingAssembly = args.RequestingAssembly;
+            var requestingAssemblyName = requestingAssembly?.GetName().Name;
+            var requestingAssemblyDirectory = requestingAssembly == null || requestingAssembly.IsDynamic
+                ? null
+                : Path.GetDirectoryName(requestingAssembly.Location);
+            if (!ShouldResolvePrivateDependency(
+                assemblyName,
+                requestingAssemblyName,
+                requestingAssemblyDirectory,
+                inspectorDirectory,
+                _privateDependencyResolutionScopeDepth.Value > 0))
+                return null;
+
+            var assemblyPath = Path.Combine(inspectorDirectory, assemblyName + ".dll");
+            return File.Exists(assemblyPath) ? Assembly.LoadFrom(assemblyPath) : null;
+        };
+        _dependencyResolverRegistered = true;
+    }
+#endif
+
+    internal static bool ShouldResolvePrivateDependency(
+        string? requestedAssemblyName,
+        string? requestingAssemblyName,
+        string? requestingAssemblyDirectory,
+        string inspectorDirectory,
+        bool allowUnknownRequester = false)
+    {
+        if (requestedAssemblyName is not { Length: > 0 } ||
+            !_privateDependencyNames.Contains(requestedAssemblyName))
+        {
+            return false;
+        }
+
+        if (requestingAssemblyName is not { Length: > 0 } ||
+            requestingAssemblyDirectory is not { Length: > 0 })
+        {
+            return allowUnknownRequester;
+        }
+
+        var isPayloadRequester =
+            string.Equals(
+                requestingAssemblyName,
+                typeof(InspectorService).Assembly.GetName().Name,
+                StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(
+                requestingAssemblyName,
+                typeof(IpcRequest).Assembly.GetName().Name,
+                StringComparison.OrdinalIgnoreCase) ||
+            _privateDependencyNames.Contains(requestingAssemblyName);
+        return isPayloadRequester && string.Equals(
+            Path.GetFullPath(requestingAssemblyDirectory).TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(inspectorDirectory).TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static IDisposable EnterPrivateDependencyResolutionScope()
+    {
+        return new PrivateDependencyResolutionScope();
+    }
+
+    internal static bool IsPrivateDependencyResolutionScopeActive => _privateDependencyResolutionScopeDepth.Value > 0;
+
+    private sealed class PrivateDependencyResolutionScope : IDisposable
+    {
+        private readonly int _previousDepth;
+
+        public PrivateDependencyResolutionScope()
+        {
+            _previousDepth = _privateDependencyResolutionScopeDepth.Value;
+            _privateDependencyResolutionScopeDepth.Value = _previousDepth + 1;
+        }
+
+        public void Dispose()
+        {
+            _privateDependencyResolutionScopeDepth.Value = _previousDepth;
         }
     }
 
@@ -181,6 +295,13 @@ public class InspectorService : IDisposable
                 return await HandleWaitForElementAsync(data);
             }
 
+            // Start before Dispatcher scheduling so queue delay and capture work share
+            // one budget below the named-pipe request timeout (30s).
+            using var fullContentCaptureCts = requestType == "CaptureScreenshot"
+                ? new CancellationTokenSource(FullContentCaptureTimeout)
+                : null;
+            var fullContentCaptureToken = fullContentCaptureCts?.Token ?? CancellationToken.None;
+
             // Use Task.Run to avoid blocking the named pipe thread
             var result = await Task.Run(() =>
             {
@@ -190,23 +311,31 @@ public class InspectorService : IDisposable
                 return Application.Current.Dispatcher.Invoke(() =>
                 {
                     DebugLog($"Inside Dispatcher callback, UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-                    return HandleRequest(requestType, data);
+                    return HandleRequest(requestType, data, fullContentCaptureToken);
                 }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(10));
             });
 
             DebugLog($"HandleRequest completed successfully");
             return result;
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex)
         {
-            DebugLog($"TIMEOUT in HandleRequestAsync: Dispatcher is busy or blocked");
-            return new GetVisualTreeResponse { Success = false, Error = "Request timeout: UI thread is busy" };
+            var error = GetTimeoutErrorMessage(ex);
+            DebugLog($"TIMEOUT in HandleRequestAsync: {error}");
+            return new GetVisualTreeResponse { Success = false, Error = error };
         }
         catch (Exception ex)
         {
             DebugLog($"ERROR in HandleRequestAsync: {ex.Message}\n{ex.StackTrace}");
             return new GetVisualTreeResponse { Success = false, Error = ex.Message };
         }
+    }
+
+    internal static string GetTimeoutErrorMessage(TimeoutException exception)
+    {
+        return exception is FullContentCaptureTimeoutException
+            ? exception.Message
+            : "Request timeout: UI thread is busy";
     }
 
     private static void DebugLog(string message)
@@ -222,7 +351,8 @@ public class InspectorService : IDisposable
         }
     }
 
-    private IpcResponse HandleRequest(string requestType, JsonElement data)
+    private IpcResponse HandleRequest(
+        string requestType, JsonElement data, CancellationToken fullContentCaptureToken)
     {
         return requestType switch
         {
@@ -238,7 +368,7 @@ public class InspectorService : IDisposable
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
-            "CaptureScreenshot" => HandleCaptureScreenshot(data),
+            "CaptureScreenshot" => HandleCaptureScreenshot(data, fullContentCaptureToken),
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "SetProperty" => HandleSetProperty(data),
@@ -1049,7 +1179,8 @@ public class InspectorService : IDisposable
         };
     }
 
-    private IpcResponse HandleCaptureScreenshot(JsonElement data)
+    private IpcResponse HandleCaptureScreenshot(
+        JsonElement data, CancellationToken fullContentCaptureToken)
     {
         var request = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data);
 
@@ -1099,14 +1230,25 @@ public class InspectorService : IDisposable
                     Error = $"Unknown screenshot mode '{request?.Mode}'. Expected 'render' or 'screen'."
                 };
             }
+            if (request?.FullContent == true && mode == "screen")
+            {
+                return new CaptureScreenshotResponse
+                {
+                    Success = false,
+                    Error = "Full-content capture is supported by render mode only."
+                };
+            }
 
             var screenshotCapture = new ScreenshotCapture();
             var maxWidth = request?.MaxWidth ?? 1920;
             var maxHeight = request?.MaxHeight ?? 1080;
 
-            var (base64, width, height) = mode == "screen"
-                ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
-                : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
+            var (base64, width, height) = request?.FullContent == true
+                ? screenshotCapture.CaptureFullContent(
+                    element, maxWidth, maxHeight, fullContentCaptureToken)
+                : mode == "screen"
+                    ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
+                    : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
 
             return new CaptureScreenshotResponse
             {

@@ -22,18 +22,26 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.3
+      uses: microsoft/setup-msbuild@v3
+
+    - name: Build native bootstrapper
+      run: |
+        msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=x64
+        msbuild src/WpfVisualTreeMcp.Bootstrapper/WpfVisualTreeMcp.Bootstrapper.vcxproj /m /p:Configuration=Release /p:Platform=Win32
 
     - name: Restore dependencies
       run: dotnet restore WpfVisualTreeMcp.sln
+
+    - name: Publish MCP Server from clean checkout
+      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-restore --configuration Release --output ./publish/server
 
     - name: Build Release
       run: dotnet build WpfVisualTreeMcp.sln --no-restore --configuration Release
@@ -41,8 +49,34 @@ jobs:
     - name: Test
       run: dotnet test WpfVisualTreeMcp.sln --no-build --configuration Release --verbosity normal
 
-    - name: Publish MCP Server
-      run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish/server
+    - name: Verify auto-injection payload
+      shell: pwsh
+      run: |
+        $netFxInspectorDlls = Get-ChildItem ./src/WpfVisualTreeMcp.Inspector/bin/Release/net48/*.dll
+        $requiredPayloadFiles = @(
+          './publish/server/native/x64/WpfInspectorBootstrapper.dll'
+          './publish/server/native/x86/WpfInspectorBootstrapper.dll'
+          './publish/server/native/x86/WpfInjectorHelper.exe'
+          './publish/server/native/x86/WpfInjectorHelper.dll'
+          './publish/server/native/x86/WpfInjectorHelper.deps.json'
+          './publish/server/native/x86/WpfInjectorHelper.runtimeconfig.json'
+          './publish/server/native/x86/WpfVisualTreeMcp.Injector.dll'
+          './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Inspector.dll'
+          './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json'
+          './publish/server/native/x64/coreclr/WpfVisualTreeMcp.Shared.dll'
+          './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Inspector.dll'
+          './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json'
+          './publish/server/native/x86/coreclr/WpfVisualTreeMcp.Shared.dll'
+          foreach ($architecture in @('x64', 'x86')) {
+            foreach ($dll in $netFxInspectorDlls) {
+              "./publish/server/native/$architecture/$($dll.Name)"
+            }
+          }
+        )
+        $missingPayloadFiles = @($requiredPayloadFiles | Where-Object { -not (Test-Path -LiteralPath $_) })
+        if ($missingPayloadFiles.Count -gt 0) {
+          throw "Missing auto-injection payload files: $($missingPayloadFiles -join ', ')"
+        }
 
     - name: Publish Inspector DLL
       run: dotnet publish src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj --configuration Release --framework net8.0-windows --output ./publish/inspector
@@ -53,6 +87,49 @@ jobs:
 
     - name: Pack NuGet package
       run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
+
+    - name: Verify NuGet auto-injection payload
+      shell: pwsh
+      run: |
+        $package = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
+        if ($null -eq $package) { throw 'NuGet package was not created.' }
+
+        $netFxInspectorDllNames = Get-ChildItem ./src/WpfVisualTreeMcp.Inspector/bin/Release/net48/*.dll |
+          Select-Object -ExpandProperty Name
+        $requiredEntrySuffixes = @(
+          foreach ($architecture in @('x64', 'x86')) {
+            "/native/$architecture/WpfInspectorBootstrapper.dll"
+            "/native/$architecture/coreclr/WpfVisualTreeMcp.Inspector.dll"
+            "/native/$architecture/coreclr/WpfVisualTreeMcp.Inspector.runtimeconfig.json"
+            "/native/$architecture/coreclr/WpfVisualTreeMcp.Shared.dll"
+            foreach ($dllName in $netFxInspectorDllNames) {
+              "/native/$architecture/$dllName"
+            }
+          }
+          '/native/x86/WpfInjectorHelper.exe'
+          '/native/x86/WpfInjectorHelper.dll'
+          '/native/x86/WpfInjectorHelper.deps.json'
+          '/native/x86/WpfInjectorHelper.runtimeconfig.json'
+          '/native/x86/WpfVisualTreeMcp.Injector.dll'
+        )
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+        try {
+          $entryNames = @($archive.Entries.FullName)
+          $missingEntrySuffixes = @($requiredEntrySuffixes | Where-Object {
+            $requiredSuffix = $_
+            -not ($entryNames | Where-Object {
+              $_.EndsWith($requiredSuffix, [StringComparison]::OrdinalIgnoreCase)
+            })
+          })
+          if ($missingEntrySuffixes.Count -gt 0) {
+            throw "NuGet package is missing auto-injection payload entries: $($missingEntrySuffixes -join ', ')"
+          }
+        }
+        finally {
+          $archive.Dispose()
+        }
 
     # Trusted publishing (OIDC): requires a policy at nuget.org/account/trustedpublishing
     # for repo faze79/WPFVisualTreeMcp, workflow release.yml, package WpfVisualTreeMcp,
@@ -94,7 +171,7 @@ jobs:
         }
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       with:
         body_path: release-notes.md
         files: |

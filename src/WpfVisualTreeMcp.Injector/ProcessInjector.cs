@@ -362,9 +362,29 @@ public class ProcessInjector
     /// </summary>
     public string GetInspectorDllPath()
     {
+        return GetInspectorDllPath(Environment.Is64BitProcess);
+    }
+
+    /// <summary>
+    /// Gets the path where the Inspector DLL should be located for the target process.
+    /// </summary>
+    public string GetInspectorDllPath(Process targetProcess)
+    {
+        ArgumentNullException.ThrowIfNull(targetProcess);
+        return GetInspectorDllPath(IsProcess64Bit(targetProcess));
+    }
+
+    private string GetInspectorDllPath(bool targetIs64Bit)
+    {
         var assemblyLocation = typeof(ProcessInjector).Assembly.Location;
-        var directory = Path.GetDirectoryName(assemblyLocation);
-        return Path.Combine(directory!, "WpfVisualTreeMcp.Inspector.dll");
+        var directory = Path.GetDirectoryName(assemblyLocation)!;
+        var fileName = "WpfVisualTreeMcp.Inspector.dll";
+        var sameDirPath = Path.Combine(directory, fileName);
+        if (File.Exists(sameDirPath))
+            return sameDirPath;
+
+        var arch = targetIs64Bit ? "x64" : "x86";
+        return Path.Combine(directory, "native", arch, fileName);
     }
 
     /// <summary>

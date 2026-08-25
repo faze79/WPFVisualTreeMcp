@@ -473,23 +473,28 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window. mode='render' (default) re-renders the visual off-screen — works even if the window is covered, but CANNOT see open Popups, ComboBox dropdowns, context menus or tooltips. mode='screen' captures the actual on-screen pixels (GDI) and DOES include them — use it right after clicking something that opened a popup/menu; requires the window to be visible and unobstructed.")]
+    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window. mode='render' (default) re-renders the visual off-screen — works even if the window is covered, but CANNOT see open Popups, ComboBox dropdowns, context menus or tooltips. mode='screen' captures the actual on-screen pixels (GDI) and DOES include them — use it right after clicking something that opened a popup/menu; requires the window to be visible and unobstructed. Set full_content=true with render mode to capture all content in a ScrollViewer, including unscrolled and virtualized content; the original scroll position is restored.")]
     public async Task<CallToolResult> WpfCaptureScreenshot(
         string? element_handle = null,
         int max_width = 1920,
         int max_height = 1080,
-        string mode = "render")
+        string mode = "render",
+        bool full_content = false)
     {
         if (max_width < 1) max_width = 1;
-        if (max_width > 3840) max_width = 3840;
+        if (max_width > (full_content ? 16384 : 3840)) max_width = full_content ? 16384 : 3840;
         if (max_height < 1) max_height = 1;
-        if (max_height > 2160) max_height = 2160;
+        if (max_height > (full_content ? 16384 : 2160)) max_height = full_content ? 16384 : 2160;
         if (mode != "render" && mode != "screen")
         {
             throw new ArgumentException("mode must be 'render' or 'screen'");
         }
+        if (full_content && mode == "screen")
+        {
+            throw new ArgumentException("full_content is supported with mode='render' only");
+        }
 
-        var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height, mode);
+        var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height, mode, full_content);
 
         var content = new List<ContentBlock>
         {
