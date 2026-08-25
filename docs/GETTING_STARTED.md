@@ -300,7 +300,8 @@ What styles are defined in this application?
 
 ## Next Steps
 
-- Read the [Tools Reference](TOOLS_REFERENCE.md) for complete API documentation
+- See the [current tool list](../README.md#available-tools) and the
+  [Tools Reference](TOOLS_REFERENCE.md) for detailed examples of the original tools
 - Explore the [Architecture](ARCHITECTURE.md) to understand how it works
 - Try the sample application with intentional binding errors
 - Integrate into your development workflow

@@ -35,7 +35,13 @@ public class IpcServer : IDisposable
         if (_serverTask != null) return;
 
         _cts = new CancellationTokenSource();
-        _serverTask = Task.Run(() => RunServerAsync(_cts.Token));
+        _serverTask = StartServerTask(() => RunServerAsync(_cts.Token));
+    }
+
+    internal static Task StartServerTask(Func<Task> serverLoop)
+    {
+        using (ExecutionContext.SuppressFlow())
+            return Task.Run(serverLoop);
     }
 
     public void Stop()
@@ -105,8 +111,6 @@ public class IpcServer : IDisposable
 
             while (pipeServer.IsConnected && !cancellationToken.IsCancellationRequested)
             {
-                using var dependencyResolutionScope =
-                    InspectorService.EnterPrivateDependencyResolutionScope();
                 try
                 {
                     stringBuilder.Clear();
@@ -145,7 +149,11 @@ public class IpcServer : IDisposable
 
                             // Process the request
                             DebugLog("HandleClientAsync: Processing request...");
-                            var response = await ProcessRequestAsync(line);
+                            string response;
+                            using (InspectorService.EnterPrivateDependencyResolutionScope())
+                            {
+                                response = await ProcessRequestAsync(line);
+                            }
                             DebugLog($"HandleClientAsync: Response ready (length={response.Length})");
 
                             // Send response

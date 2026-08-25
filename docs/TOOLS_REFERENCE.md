@@ -420,7 +420,9 @@ Monitor a property for changes.
 }
 ```
 
-**Note:** Property changes are reported as MCP notifications.
+**Note:** The watch is registered and returns its initial value, but the current
+external transports do not forward later changes. Re-read the property to observe
+updates; streaming notifications are planned.
 
 **Example Usage:**
 ```

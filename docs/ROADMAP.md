@@ -24,10 +24,10 @@ the top priority.
 
 ## Priority 1 — Live tweak & measure
 
-The headline theme. Today the agent can **read** properties (`wpf_get_element_properties`,
-`wpf_watch_property`) but cannot **write** an arbitrary one. Adding live editing, paired
-with a way to *measure* the effect, lets an agent answer "will this change work?" in
-seconds instead of an edit-rebuild-relaunch cycle.
+The headline theme. The agent can **read** properties (`wpf_get_element_properties`,
+`wpf_watch_property`), **write** an arbitrary one, and measure the result. The shipped
+live-editing and snapshot tools let an agent answer "will this change work?" in seconds
+instead of an edit-rebuild-relaunch cycle.
 
 ### 1a. `wpf_set_property` — live property editing ✅ *(v0.9.0)*
 
@@ -161,7 +161,8 @@ desktop work is going. Large because the visual-tree/injection specifics differ.
 1. ~~**`wpf_set_property` + `wpf_revert_*`** (1a)~~ — ✅ shipped in v0.9.0.
 2. ~~**`wpf_snapshot` + `wpf_diff`** (1b)~~ — ✅ shipped in v0.10.0. The "change → measure →
    is it effective?" loop is now fully automated (live-edit, then diff a before/after snapshot).
-3. **`wpf_evaluate_binding`** (1c) and **`wpf_report`** (2b) — cheap diagnostics wins.
+3. ~~**`wpf_evaluate_binding`** (1c)~~ — ✅ shipped in v0.11.0; **`wpf_report`** (2b)
+   is the next cheap diagnostics win.
 4. **`wpf_record` → `wpf_export_test`** (2a) — the big competitive play; batch actions
    (backlog) as a prerequisite.
 5. **Streaming** (3a) and **reach** (3b/3c) — larger architectural investments once the

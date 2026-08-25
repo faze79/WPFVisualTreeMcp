@@ -72,4 +72,21 @@ public class InspectorServiceDependencyResolverTests
 
         result.Should().Be(expected);
     }
+
+    [Fact]
+    public async Task StartServerTask_InsideDependencyResolutionScope_DoesNotInheritScope()
+    {
+        var inheritedScope = true;
+        using (InspectorService.EnterPrivateDependencyResolutionScope())
+        {
+            await IpcServer.StartServerTask(() =>
+            {
+                inheritedScope = InspectorService.IsPrivateDependencyResolutionScopeActive;
+                return Task.CompletedTask;
+            });
+            InspectorService.IsPrivateDependencyResolutionScopeActive.Should().BeTrue();
+        }
+
+        inheritedScope.Should().BeFalse();
+    }
 }

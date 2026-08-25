@@ -64,7 +64,7 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 ### Search & Monitoring
 - **Element Search** - Find elements by type, name, or property values
 - **Deep Search** - Search entire tree including AdornerLayer and Popup elements
-- **Property Watching** - Monitor property changes in real-time
+- **Property Watching** - Register property watches and read their initial values (streaming client notifications are planned)
 
 ### Interaction & Export
 - **Screenshot Capture** - Capture window/element screenshots, including complete ScrollViewer content and virtualized items
@@ -427,7 +427,7 @@ complete CLI documentation.
 - [x] Binding analysis and error detection
 - [x] Resource dictionary enumeration
 - [x] Style and template inspection
-- [x] Property change monitoring (with notifications)
+- [x] Property watch registration and initial-value capture
 
 ### Phase 3: Interaction & Diagnostics ✅
 - [x] Element highlighting overlay
