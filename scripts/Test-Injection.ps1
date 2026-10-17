@@ -1,0 +1,13 @@
+param([Parameter(Mandatory)][string]$ServerDirectory)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+foreach ($architecture in @('x64', 'x86')) {
+    $sampleDirectory = Join-Path $root "TestResults/injection-sample/$architecture"
+    $sampleSource = Join-Path $sampleDirectory 'src'
+    New-Item -ItemType Directory -Force $sampleSource | Out-Null
+    Get-ChildItem "$root/samples/SampleWpfApp/*" -Include *.cs,*.xaml,*.csproj | Copy-Item -Destination $sampleSource
+    dotnet build "$sampleSource/SampleWpfApp.csproj" -c Release "/p:PlatformTarget=$architecture" "/p:EnableInspectorSelfHosting=false" --output "$sampleDirectory/bin" --verbosity quiet
+    if ($LASTEXITCODE -ne 0) { throw "Sample build failed: $architecture" }
+    python "$PSScriptRoot/test_injection.py" --server $ServerDirectory --sample "$sampleDirectory/bin/SampleWpfApp.exe" --architecture $architecture
+    if ($LASTEXITCODE -ne 0) { throw "Injection smoke test failed: $architecture" }
+}

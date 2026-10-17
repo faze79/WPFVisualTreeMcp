@@ -64,7 +64,8 @@ public class ProcessInjector
         {
             throw new FileNotFoundException(
                 $"Bootstrapper DLL not found ({(targetIs64Bit ? "x64" : "x86")}). " +
-                "Build the native bootstrapper first or run 'dotnet publish' to include it.",
+                "Run scripts/Build-NativeBootstrapper.ps1 from a Visual Studio developer shell " +
+                "before building/publishing the server, or install a complete release package.",
                 bootstrapperPath);
         }
 
@@ -364,7 +365,13 @@ public class ProcessInjector
     {
         var assemblyLocation = typeof(ProcessInjector).Assembly.Location;
         var directory = Path.GetDirectoryName(assemblyLocation);
-        return Path.Combine(directory!, "WpfVisualTreeMcp.Inspector.dll");
+        var legacyPath = Path.Combine(directory!, "WpfVisualTreeMcp.Inspector.dll");
+        if (File.Exists(legacyPath))
+            return legacyPath;
+        // The native bootstrapper chooses the target runtime's actual assembly.
+        // This path only validates that the packaged managed payload is present.
+        return Path.Combine(directory!, "native", Environment.Is64BitProcess ? "x64" : "x86",
+            "WpfVisualTreeMcp.Inspector.dll");
     }
 
     /// <summary>

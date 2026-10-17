@@ -109,6 +109,47 @@ public class WpfToolsTests
         await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfAttach());
     }
 
+    [Theory]
+    [InlineData(false, "Injection failed - WpfInspectorBootstrapper.dll not found")]
+    [InlineData(false, "Injected - pipe timeout")]
+    [InlineData(false, "Not loaded - use autoInject or self-hosted mode")]
+    [InlineData(true, "Loaded (injected)")]
+    [InlineData(true, "Loaded (existing inspector)")]
+    public async Task WpfAttach_ReportsReadiness(bool ready, string status)
+    {
+        _processManagerMock.Setup(x => x.AttachToProcessAsync(1234, null, true))
+            .ReturnsAsync(new InspectionSession
+            {
+                ProcessId = 1234, InspectorReady = ready, InspectorStatus = status
+            });
+
+        var result = System.Text.Json.JsonSerializer.SerializeToElement(
+            await _tools.WpfAttach(process_id: 1234, auto_inject: true));
+
+        result.GetProperty("success").GetBoolean().Should().Be(ready);
+        result.GetProperty("inspector_ready").GetBoolean().Should().Be(ready);
+        result.GetProperty("inspector_status").GetString().Should().Be(status);
+    }
+
+    [Fact]
+    public async Task InspectionAfterFailedAttach_ReportsProcessAndOriginalCause()
+    {
+        _processManagerMock.SetupGet(x => x.CurrentSession).Returns(new InspectionSession
+        {
+            ProcessId = 31792,
+            InspectorStatus = "Injection failed - WpfInspectorBootstrapper.dll not found"
+        });
+        var bridge = new NamedPipeBridge(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<NamedPipeBridge>.Instance,
+            _processManagerMock.Object);
+
+        var act = () => bridge.FindElementsAsync(null, null, null, "Save", null);
+
+        // McpException is intentional: the SDK exposes its message to clients.
+        await act.Should().ThrowAsync<ModelContextProtocol.McpException>()
+            .WithMessage("*31792*WpfInspectorBootstrapper.dll not found*");
+    }
+
     [Fact]
     public async Task WpfGetVisualTree_ReturnsTree()
     {

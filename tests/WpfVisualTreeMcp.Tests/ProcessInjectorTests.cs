@@ -76,44 +76,8 @@ public class ProcessInjectorTests
             .WithMessage("*not found*");
     }
 
-    [Fact]
-    public void InjectIntoProcess_WithValidManagedProcess_RequiresBootstrapperDll()
-    {
-        // This test verifies that injection is implemented and either:
-        // - Throws FileNotFoundException if bootstrapper DLL is missing
-        // - Proceeds to actual injection if bootstrapper is found (may fail for other reasons)
-
-        // Arrange
-        var process = Process.GetCurrentProcess();
-        var dllPath = _injector.GetInspectorDllPath();
-
-        // Skip if Inspector DLL doesn't exist (build required)
-        if (!System.IO.File.Exists(dllPath))
-        {
-            return; // Skip test if Inspector DLL not built
-        }
-
-        var bootstrapperPath = _injector.GetBootstrapperDllPath();
-        var bootstrapperExists = System.IO.File.Exists(bootstrapperPath);
-
-        // Act & Assert
-        var act = () => _injector.InjectIntoProcess(process.Id, dllPath);
-
-        if (!bootstrapperExists)
-        {
-            // Bootstrapper not built: should throw FileNotFoundException
-            act.Should().Throw<FileNotFoundException>(
-                "Should throw FileNotFoundException for missing bootstrapper DLL")
-                .WithMessage("*Bootstrapper*");
-        }
-        else
-        {
-            // Bootstrapper exists: injection will proceed but may fail (we're injecting into ourselves)
-            // Just verify it doesn't throw NotImplementedException
-            act.Should().NotThrow<NotImplementedException>(
-                "Injection should be implemented, not stubbed");
-        }
-    }
+    // Real injection is exercised against isolated WPF processes by
+    // scripts/Test-Injection.ps1, never against the xUnit host itself.
 
     [Fact]
     public void GetBootstrapperDllPath_ReturnsValidPath()

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-10-17
+
+### Fixed
+
+- Build and package the x86/x64 native bootstrapper in CI and releases. Publish
+  and NuGet pack now fail when required injection payloads are missing (#14).
+- Collect managed injection files after builds complete, including all net48
+  dependencies, and resolve those dependencies in injected applications without
+  requiring changes to the host's binding redirects (#14).
+- Anchor native output paths to the bootstrapper project directory for consistent
+  standalone and solution builds (#15).
+- Report `success: false` and `inspector_ready: false` when attach cannot reach
+  the Inspector. Subsequent MCP errors retain the PID and original cause; CLI
+  attach returns exit code 1. Existing inspectors are detected through their pipe (#16).
+- Replace the stale injector README with the implementation, payload layout,
+  runtime/architecture requirements, build instructions, and troubleshooting (#17).
+
+### Tests
+
+- Published-package smoke tests exercise real injection into isolated x64 and x86
+  .NET Framework WPF processes without a self-hosted Inspector. They also cover
+  missing bootstrapper diagnostics, CLI exit codes, and reconnecting.
+- Verify native files and the helper in the NuGet archive before release.
+
+Thanks to @gentledepp for the detailed reports and reproduction steps.
+
 ## [0.12.0] - 2026-07-24
 
 ### Added

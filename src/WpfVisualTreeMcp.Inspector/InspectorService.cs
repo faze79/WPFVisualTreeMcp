@@ -30,6 +30,46 @@ public class InspectorService : IDisposable
     private static readonly object _initLock = new();
     public static InspectorService? Instance { get; private set; }
 
+#if NET48
+    static InspectorService()
+    {
+        // Injected applications do not inherit our NuGet binding redirects.
+        // Resolve version differences only for requests originating in this
+        // payload directory; leave the host application's dependencies alone.
+        var directory = Path.GetDirectoryName(typeof(InspectorService).Assembly.Location);
+        bool IsPayloadAssembly(System.Reflection.Assembly? assembly) =>
+            assembly != null && !assembly.IsDynamic &&
+            string.Equals(Path.GetDirectoryName(assembly.Location), directory, StringComparison.OrdinalIgnoreCase);
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) =>
+        {
+            // Runtime-generated bindings (e.g. System.Memory -> Unsafe) may
+            // omit RequestingAssembly. In that case require a payload caller.
+            var fromPayload = IsPayloadAssembly(args.RequestingAssembly) ||
+                (args.RequestingAssembly == null && System.Linq.Enumerable.Any(
+                    new System.Diagnostics.StackTrace().GetFrames() ?? Array.Empty<System.Diagnostics.StackFrame>(),
+                    frame => IsPayloadAssembly(frame.GetMethod()?.Module.Assembly) &&
+                        frame.GetMethod()?.DeclaringType != typeof(InspectorService) &&
+                        frame.GetMethod()?.DeclaringType?.DeclaringType != typeof(InspectorService)));
+            if (!fromPayload)
+                return null;
+
+            var requested = new System.Reflection.AssemblyName(args.Name);
+            var path = Path.Combine(directory!, requested.Name + ".dll");
+            if (!File.Exists(path)) return null;
+            var available = System.Reflection.AssemblyName.GetAssemblyName(path);
+            if (!string.Equals(available.Name, requested.Name, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(available.CultureName, requested.CultureName, StringComparison.OrdinalIgnoreCase) ||
+                !System.Linq.Enumerable.SequenceEqual(available.GetPublicKeyToken() ?? Array.Empty<byte>(),
+                    requested.GetPublicKeyToken() ?? Array.Empty<byte>()) ||
+                available.Version < requested.Version)
+                return null;
+
+            DebugLog($"Resolving Inspector dependency {args.Name} from {path}");
+            return System.Reflection.Assembly.LoadFrom(path);
+        };
+    }
+#endif
+
     /// <summary>
     /// Initialize the Inspector service with the current process ID.
     /// This overload is called by the CLR hosting API (ExecuteInDefaultAppDomain)

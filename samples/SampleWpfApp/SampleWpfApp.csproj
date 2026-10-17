@@ -8,9 +8,11 @@
     <AssemblyName>SampleWpfApp</AssemblyName>
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
+    <EnableInspectorSelfHosting Condition="'$(EnableInspectorSelfHosting)' == ''">true</EnableInspectorSelfHosting>
+    <DefineConstants Condition="'$(EnableInspectorSelfHosting)' == 'true'">$(DefineConstants);INSPECTOR_SELF_HOST</DefineConstants>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(EnableInspectorSelfHosting)' == 'true'">
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
   </ItemGroup>
 

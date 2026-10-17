@@ -149,8 +149,14 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 ```bash
 git clone https://github.com/faze79/WpfVisualTreeMcp.git
 cd WpfVisualTreeMcp
+# Visual Studio Developer PowerShell (C++ v143 toolset + Windows SDK)
+./scripts/Build-NativeBootstrapper.ps1
 dotnet build -c Release
 ```
+
+For injection build requirements, package layout, and troubleshooting, see the
+[Injector README](src/WpfVisualTreeMcp.Injector/README.md). Injecting into x86 apps
+requires the x86 .NET 8 runtime for the helper.
 
 ### Configuration
 

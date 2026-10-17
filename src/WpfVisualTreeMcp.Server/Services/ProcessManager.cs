@@ -48,7 +48,8 @@ public class ProcessManager : IProcessManager
                     // A more robust check would involve querying loaded modules
                     if (IsLikelyWpfProcess(process))
                     {
-                        var isAttached = _currentSession?.ProcessId == process.Id;
+                        var currentSession = CurrentSession;
+                        var isAttached = currentSession?.ProcessId == process.Id && currentSession.InspectorReady;
 
                         wpfProcesses.Add(new WpfProcessInfo
                         {
@@ -125,15 +126,24 @@ public class ProcessManager : IProcessManager
             _currentSession = session;
         }
 
-        _logger.LogInformation("Attached to process {ProcessId} ({ProcessName})",
+        _logger.LogInformation("Attaching to process {ProcessId} ({ProcessName})",
             targetProcess.Id, targetProcess.ProcessName);
 
-        // Check if Inspector is already loaded (self-hosted mode)
+        // A loaded assembly does not guarantee that initialization succeeded.
+        // Probe the pipe first; this also detects managed assemblies that are
+        // absent from Process.Modules (notably in CoreCLR processes).
         var inspectorLoaded = IsInspectorLoaded(targetProcess);
-        if (inspectorLoaded)
+        session.InspectorReady = await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromMilliseconds(500));
+        if (session.InspectorReady)
         {
-            _logger.LogInformation("Inspector DLL already loaded in target process (self-hosted mode)");
-            session.InspectorStatus = "Loaded (self-hosted)";
+            session.InspectorStatus = "Loaded (existing inspector)";
+        }
+        else if (inspectorLoaded)
+        {
+            session.InspectorReady = await WaitForInspectorPipeAsync(targetProcess.Id, TimeSpan.FromSeconds(10));
+            session.InspectorStatus = session.InspectorReady
+                ? "Loaded (existing inspector)"
+                : "Inspector assembly loaded but named pipe unavailable (initialization timeout)";
         }
         else if (autoInject)
         {
@@ -152,6 +162,7 @@ public class ProcessManager : IProcessManager
                     {
                         _logger.LogInformation("Inspector successfully injected and initialized");
                         session.InspectorStatus = "Loaded (injected)";
+                        session.InspectorReady = true;
                     }
                     else
                     {
@@ -168,7 +179,7 @@ public class ProcessManager : IProcessManager
             catch (FileNotFoundException ex)
             {
                 _logger.LogError(ex, "Injection failed - required DLL not found: {FileName}", ex.FileName);
-                session.InspectorStatus = $"Injection failed - {ex.FileName} not found";
+                session.InspectorStatus = $"Injection failed: {ex.Message} ({ex.FileName})";
             }
             catch (Exception ex)
             {

@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.12.1 — Injection packaging and attach diagnostics (2026-10-17)
+
+Fixes #14–#17 reported by @gentledepp. Releases now include the native x86/x64
+bootstrapper and complete managed payload; publishing fails if required files
+are missing. Attach reports actual Inspector readiness, and subsequent MCP
+errors preserve the original failure. The injector documentation now describes
+the implemented architecture and build requirements.
+
+CI tests real injection against x86/x64 sample apps without a hosted Inspector
+and checks the NuGet archive. For x86 targets, install the x86 .NET 8 runtime
+required by the helper.
+
 ## v0.12.0 — Trigger & style diagnostics (2026-07-24)
 
 If you've debugged WPF, you've done this by hand: crack open the visual tree, hunt through a `Style` or `ControlTemplate`, and try to work out why a trigger isn't reacting — or which setter, in which style or trigger, actually produced a value. This release does it for you.

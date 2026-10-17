@@ -52,11 +52,12 @@ public class WpfTools
         var session = await _processManager.AttachToProcessAsync(process_id, process_name, auto_inject);
         return new
         {
-            success = true,
+            success = session.InspectorReady,
             process_id = session.ProcessId,
             session_id = session.SessionId,
             main_window_handle = session.MainWindowHandle,
-            inspector_status = session.InspectorStatus
+            inspector_status = session.InspectorStatus,
+            inspector_ready = session.InspectorReady
         };
     }
 

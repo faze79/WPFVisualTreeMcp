@@ -175,7 +175,7 @@ public class IpcServer : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    DebugLog($"HandleClientAsync: Exception - {ex.Message}\nStack: {ex.StackTrace}");
+                    DebugLog($"HandleClientAsync: Exception - {ex}");
                     try
                     {
                         var errorResponse = new GetVisualTreeResponse

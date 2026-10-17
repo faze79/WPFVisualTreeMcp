@@ -88,13 +88,14 @@ public static class CliRunner
                     var session = await AttachAsync(processManager, cli, cli.Flags.Contains("auto-inject"));
                     WriteJson(new
                     {
-                        success = true,
+                        success = session.InspectorReady,
                         processId = session.ProcessId,
                         sessionId = session.SessionId,
                         mainWindowHandle = session.MainWindowHandle,
                         inspectorStatus = session.InspectorStatus,
+                        inspectorReady = session.InspectorReady,
                     }, cli);
-                    break;
+                    return session.InspectorReady ? 0 : 1;
                 }
 
                 case "tree":

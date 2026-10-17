@@ -42,6 +42,7 @@ Attach to a WPF application by process ID or name.
 |------|------|----------|-------------|
 | `process_id` | integer | No* | Process ID to attach to |
 | `process_name` | string | No* | Process name to attach to |
+| `auto_inject` | boolean | No | Inject if needed (default `false`) |
 
 *At least one of `process_id` or `process_name` must be provided.
 
@@ -51,9 +52,18 @@ Attach to a WPF application by process ID or name.
   "success": true,
   "process_id": 1234,
   "session_id": "abc123",
-  "main_window_handle": "window_0x12345"
+  "main_window_handle": "window_0x12345",
+  "inspector_ready": true,
+  "inspector_status": "Loaded (injected)"
 }
 ```
+
+`success` and `inspector_ready` are `false` if injection fails, initialization
+times out, or no Inspector is running with `auto_inject=false`. Check them
+before calling inspection tools. `inspector_status` explains the failure;
+subsequent tools report the process ID and this cause. Retry attach after
+fixing the problem. CLI `attach` exposes `inspectorReady` and exits with code 1
+on failure.
 
 **Example Usage:**
 ```

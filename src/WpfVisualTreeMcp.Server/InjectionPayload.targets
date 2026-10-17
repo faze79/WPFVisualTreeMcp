@@ -1,0 +1,47 @@
+<Project>
+  <!-- Resolve project references before expanding globs: a clean build must
+       include the same payload as an incremental build. These files are also
+       consumed by dotnet-tool packing through ComputeFilesToPublish. -->
+  <Target Name="CollectInjectionPayload"
+          BeforeTargets="GetCopyToOutputDirectoryItems;GetCopyToPublishDirectoryItems"
+          DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <_FrameworkPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\*.dll" />
+      <_CoreClrPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\*.dll" />
+      <_CoreClrPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json" />
+      <_HelperPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.*"
+                      Exclude="**\*.pdb" />
+      <_HelperPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfVisualTreeMcp.Injector.dll" />
+      <ContentWithTargetPath Include="@(_FrameworkPayload)" TargetPath="native\x64\%(Filename)%(Extension)" />
+      <ContentWithTargetPath Include="@(_FrameworkPayload)" TargetPath="native\x86\%(Filename)%(Extension)" />
+      <ContentWithTargetPath Include="@(_CoreClrPayload)" TargetPath="native\x64\coreclr\%(Filename)%(Extension)" />
+      <ContentWithTargetPath Include="@(_CoreClrPayload)" TargetPath="native\x86\coreclr\%(Filename)%(Extension)" />
+      <ContentWithTargetPath Include="@(_HelperPayload)" TargetPath="native\x86\%(Filename)%(Extension)" />
+      <ContentWithTargetPath Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\x64\$(Configuration)\WpfInspectorBootstrapper.dll"
+                             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\x64\$(Configuration)\WpfInspectorBootstrapper.dll')"
+                             TargetPath="native\x64\WpfInspectorBootstrapper.dll" />
+      <ContentWithTargetPath Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\Win32\$(Configuration)\WpfInspectorBootstrapper.dll"
+                             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\Win32\$(Configuration)\WpfInspectorBootstrapper.dll')"
+                             TargetPath="native\x86\WpfInspectorBootstrapper.dll" />
+      <ContentWithTargetPath Update="@(ContentWithTargetPath)" Condition="$([System.String]::Copy('%(TargetPath)').StartsWith('native\'))">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ContentWithTargetPath>
+    </ItemGroup>
+  </Target>
+
+  <!-- Applies even when publishing/packing without a build. Missing native files must never
+       silently produce a release that cannot inject. Ordinary managed builds
+       can still be used for self-hosted development without the C++ toolchain. -->
+  <Target Name="ValidateInjectionPayload" BeforeTargets="ComputeFilesToPublish;GenerateNuspec">
+    <ItemGroup>
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\x64\$(Configuration)\WpfInspectorBootstrapper.dll" />
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\Win32\$(Configuration)\WpfInspectorBootstrapper.dll" />
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\WpfVisualTreeMcp.Inspector.dll" />
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\WpfVisualTreeMcp.Inspector.dll" />
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(_RequiredInjectionFile.Identity)')"
+           Text="Missing injection payload: %(_RequiredInjectionFile.Identity). Run scripts/Build-NativeBootstrapper.ps1 -Configuration $(Configuration), then dotnet build WpfVisualTreeMcp.sln -c $(Configuration), before publishing or packing." />
+  </Target>
+</Project>

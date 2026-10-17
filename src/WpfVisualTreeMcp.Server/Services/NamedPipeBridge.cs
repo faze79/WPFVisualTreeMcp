@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using WpfVisualTreeMcp.Shared.Ipc;
 using WpfVisualTreeMcp.Shared.Models;
 
@@ -720,7 +721,13 @@ public class NamedPipeBridge : IIpcBridge
         var session = _processManager.CurrentSession;
         if (session == null)
         {
-            throw new InvalidOperationException("Not attached to any WPF process. Use wpf_attach first.");
+            throw new McpException("Not attached to any WPF process. Use wpf_attach first.");
+        }
+        if (!session.InspectorReady)
+        {
+            throw new McpException(
+                $"Inspector unavailable in process {session.ProcessId}: {session.InspectorStatus}. " +
+                "Resolve the attach failure and retry wpf_attach before calling inspection tools.");
         }
         return session;
     }

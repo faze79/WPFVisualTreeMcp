@@ -24,6 +24,13 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.3
+
+    - name: Build native bootstrapper (x86 and x64)
+      shell: pwsh
+      run: ./scripts/Build-NativeBootstrapper.ps1
+
     - name: Restore dependencies
       run: dotnet restore WpfVisualTreeMcp.sln
 
@@ -42,6 +49,17 @@ jobs:
 
     - name: Publish MCP Server
       run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish
+
+    - name: Install x86 .NET runtime for injection helper
+      shell: pwsh
+      run: |
+        Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
+        & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
+        "DOTNET_ROOT_X86=$env:RUNNER_TEMP/dotnet-x86" >> $env:GITHUB_ENV
+
+    - name: Test published injection (x64 and x86)
+      shell: pwsh
+      run: ./scripts/Test-Injection.ps1 -ServerDirectory ./publish
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

@@ -23,6 +23,7 @@ public class InspectionSession
     public string MainWindowHandle { get; set; } = string.Empty;
     public DateTime AttachedAt { get; set; }
     public string InspectorStatus { get; set; } = "Unknown";
+    public bool InspectorReady { get; set; }
 }
 
 /// <summary>
