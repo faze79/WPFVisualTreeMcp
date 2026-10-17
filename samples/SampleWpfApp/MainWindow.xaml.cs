@@ -11,4 +11,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
     }
+
+    private void OpenDragDemo(object sender, RoutedEventArgs e) => new DragDemoWindow { Owner = this }.Show();
+    private void OpenTouchDemo(object sender, RoutedEventArgs e) => new TouchDemoWindow { Owner = this }.Show();
 }

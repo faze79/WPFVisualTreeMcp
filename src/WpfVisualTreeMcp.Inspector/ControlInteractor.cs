@@ -10,6 +10,8 @@ using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
+using WpfVisualTreeMcp.Shared.Models;
 
 namespace WpfVisualTreeMcp.Inspector;
 
@@ -171,6 +173,102 @@ internal sealed class ControlInteractor
             fe.BringIntoView();
             fe.UpdateLayout();
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Drag preparation (UI thread only; the sequence runs on a worker).
+    // ---------------------------------------------------------------------
+
+    public MouseDragPlan PrepareDrag(UIElement source, UIElement? target, DragOptions options)
+    {
+        options.Validate();
+        EnsureInteractable(source, "dragged");
+        if (target != null) EnsureInteractable(target, "used as a drag target");
+        Window.GetWindow(source)?.Activate();
+        // Scroll before resolving either endpoint: bringing one element into view
+        // can move the other. Both must still pass hit testing after layout.
+        if (target != null) ScrollIntoView(target);
+        ScrollIntoView(source);
+
+        var localStart = LocalPoint(source, options.StartX, options.StartY);
+        var start = source.PointToScreen(localStart);
+        var end = target != null
+            ? target.PointToScreen(LocalPoint(target, options.TargetX, options.TargetY))
+            : source.PointToScreen(new Point(localStart.X + options.DeltaX.GetValueOrDefault(),
+                localStart.Y + options.DeltaY.GetValueOrDefault()));
+        EnsureHit(source, start);
+        if (target != null) EnsureHit(target, end);
+        var plan = new MouseDragPlan(
+            checked((int)Math.Round(start.X)), checked((int)Math.Round(start.Y)),
+            checked((int)Math.Round(end.X)), checked((int)Math.Round(end.Y)),
+            options.Button, options.DurationMs, source.GetType().Name,
+            (PresentationSource.FromVisual(source) as System.Windows.Interop.HwndSource)?.Handle ?? IntPtr.Zero,
+            target == null ? IntPtr.Zero :
+                (PresentationSource.FromVisual(target) as System.Windows.Interop.HwndSource)?.Handle ?? IntPtr.Zero);
+        if (plan.StartX == plan.EndX && plan.StartY == plan.EndY)
+            throw new InvalidOperationException("Drag endpoints resolve to the same screen pixel.");
+        return plan;
+    }
+
+    public TouchGesturePlan PrepareTouch(UIElement element, TouchGestureOptions options)
+    {
+        options.Validate();
+        EnsureInteractable(element, "touched");
+        Window.GetWindow(element)?.Activate();
+        ScrollIntoView(element);
+        var center = LocalPoint(element, options.X, options.Y);
+        var size = element.RenderSize;
+        double space = Math.Min(Math.Min(center.X, size.Width - center.X), Math.Min(center.Y, size.Height - center.Y));
+        double radius = options.Radius ?? space / (2 * Math.Max(1, options.Scale ?? 1));
+        int steps = Math.Max(2, (int)Math.Ceiling(options.EffectiveDurationMs / 16.0));
+        var frames = new TouchContactPoint[steps + 1][];
+        for (int index = 0; index <= steps; index++)
+        {
+            var positions = TouchGesturePath.Frame(options, center.X, center.Y, radius, (double)index / steps);
+            frames[index] = new TouchContactPoint[positions.Length];
+            for (int finger = 0; finger < positions.Length; finger++)
+            {
+                var local = positions[finger];
+                if (local.X < 0 || local.Y < 0 || local.X >= size.Width || local.Y >= size.Height)
+                    throw new ArgumentException("The entire touch path must stay inside the element's rendered bounds. Adjust the center, displacement, radius or scale.");
+                var screen = element.PointToScreen(new Point(local.X, local.Y));
+                EnsureHit(element, screen);
+                frames[index][finger] = new TouchContactPoint { X = checked((int)Math.Round(screen.X)), Y = checked((int)Math.Round(screen.Y)) };
+            }
+            if (positions.Length == 2)
+            {
+                double dx = (double)frames[index][0].X - frames[index][1].X;
+                double dy = (double)frames[index][0].Y - frames[index][1].Y;
+                if (dx * dx + dy * dy < 64)
+                    throw new ArgumentException("Touch contacts must stay at least 8 screen pixels apart. Increase the radius or use a larger element.");
+            }
+        }
+        return new TouchGesturePlan(options.Gesture, options.EffectiveDurationMs, element.GetType().Name,
+            (PresentationSource.FromVisual(element) as System.Windows.Interop.HwndSource)?.Handle ?? IntPtr.Zero, frames);
+    }
+
+    private static Point LocalPoint(UIElement element, double? x, double? y)
+    {
+        var size = element.RenderSize;
+        if (size.Width <= 0 || size.Height <= 0 || !element.IsHitTestVisible)
+            throw new InvalidOperationException("Input elements must have a positive size and be hit-test visible.");
+        var point = new Point(x ?? size.Width / 2, y ?? size.Height / 2);
+        if (point.X >= size.Width || point.Y >= size.Height)
+            throw new ArgumentException("The local input point lies outside the element's rendered bounds.");
+        return point;
+    }
+
+    private static void EnsureHit(UIElement element, Point screenPoint)
+    {
+        var root = PresentationSource.FromVisual(element)?.RootVisual as UIElement;
+        DependencyObject? hit = root?.InputHitTest(root.PointFromScreen(screenPoint)) as DependencyObject;
+        while (hit != null)
+        {
+            if (ReferenceEquals(hit, element)) return;
+            hit = hit is Visual || hit is System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(hit) : LogicalTreeHelper.GetParent(hit);
+        }
+        throw new InvalidOperationException("The input point is clipped or covered by another element. Make the input path visible first.");
     }
 
     // ---------------------------------------------------------------------

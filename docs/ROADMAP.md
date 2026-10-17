@@ -8,6 +8,11 @@ Status: 💡 idea · 📋 designed · 🚧 in progress · ✅ done.
 
 ## Guiding principle
 
+**Shipped in v0.13.0:** `wpf_drag` and `wpf_touch_gesture`, including CLI commands,
+native mouse/touch sequences, pinch/rotation, sample demos and desktop verification.
+Workflow recording/export (#13) remains a separate planned feature; future recording
+should capture these actions using stable selectors and local gesture parameters.
+
 The project's edge is the **insider view** — real visual tree, dependency properties,
 bindings and DataContext via injection, with no probe installed in the target app —
 **plus the hands to act on it**. Every new capability should deepen one of two loops:

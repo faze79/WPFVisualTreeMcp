@@ -11,6 +11,14 @@ namespace SampleWpfApp;
 /// </summary>
 public partial class App : Application
 {
+    static App()
+    {
+        // The sample explicitly opts into WPF's WM_POINTER stack before any
+        // windows are created, so synthetic touch is observable without a digitizer.
+        // The Inspector never changes this compatibility switch in target apps.
+        System.AppContext.SetSwitch("Switch.System.Windows.Input.Stylus.EnablePointerSupport", true);
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);

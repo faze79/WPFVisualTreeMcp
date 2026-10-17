@@ -24,6 +24,8 @@ public class InspectorService : IDisposable
     private readonly PropertyWatcher _propertyWatcher;
     private readonly ResourceInspector _resourceInspector;
     private readonly ControlInteractor _interactor;
+    private readonly System.Threading.SemaphoreSlim _interactionGate = new(1, 1);
+    private readonly System.Threading.CancellationTokenSource _inputShutdown = new();
     private bool _isRunning;
     private bool _disposed;
 
@@ -202,6 +204,7 @@ public class InspectorService : IDisposable
 
     private async Task<IpcResponse> HandleRequestAsync(string requestType, JsonElement data)
     {
+        bool ownsInteraction = false;
         try
         {
             DebugLog($"HandleRequestAsync: requestType={requestType}");
@@ -220,6 +223,21 @@ public class InspectorService : IDisposable
             {
                 return await HandleWaitForElementAsync(data);
             }
+
+            // Input sequences share the OS mouse. Fail fast instead of interleaving
+            // concurrent mutations or queuing them past the IPC timeout.
+            if (requestType is "Drag" or "TouchGesture" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
+                or "SetProperty" or "RevertProperty")
+            {
+                ownsInteraction = _interactionGate.Wait(0);
+                if (!ownsInteraction)
+                    return new DragResponse { Success = false, Error = "Another interaction is in progress. Retry after it completes." };
+            }
+
+            if (requestType == "Drag")
+                return await HandleDragAsync(data).ConfigureAwait(false);
+            if (requestType == "TouchGesture")
+                return await HandleTouchGestureAsync(data).ConfigureAwait(false);
 
             // Use Task.Run to avoid blocking the named pipe thread
             var result = await Task.Run(() =>
@@ -247,6 +265,55 @@ public class InspectorService : IDisposable
             DebugLog($"ERROR in HandleRequestAsync: {ex.Message}\n{ex.StackTrace}");
             return new GetVisualTreeResponse { Success = false, Error = ex.Message };
         }
+        finally
+        {
+            if (ownsInteraction) _interactionGate.Release();
+        }
+    }
+
+    private async Task<IpcResponse> HandleDragAsync(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<DragRequest>(data)
+            ?? throw new ArgumentException("Drag request is required.");
+        if (request.Options == null) throw new ArgumentException("Drag options are required.");
+        request.Options.Validate();
+        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var plan = await Task.Run(() => Application.Current.Dispatcher.Invoke(() =>
+        {
+            UIElement Resolve(string handle)
+            {
+                var element = _treeWalker.ResolveHandle(handle);
+                if (element == null) throw new InvalidOperationException(StaleHandleError(handle));
+                return element as UIElement ?? throw new InvalidOperationException(WrongElementTypeError(handle, element, "UIElement"));
+            }
+            return _interactor.PrepareDrag(Resolve(request.Options.ElementHandle),
+                request.Options.TargetHandle == null ? null : Resolve(request.Options.TargetHandle), request.Options);
+        }, System.Windows.Threading.DispatcherPriority.Normal, timeout.Token, TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+
+        var result = await MouseDragExecutor.RunAsync(plan, new NativeMouseInput(), timeout.Token).ConfigureAwait(false);
+        return new DragResponse { RequestId = request.RequestId, Result = result };
+    }
+
+    private async Task<IpcResponse> HandleTouchGestureAsync(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<TouchGestureRequest>(data)
+            ?? throw new ArgumentException("Touch gesture request is required.");
+        if (request.Options == null) throw new ArgumentException("Touch gesture options are required.");
+        request.Options.Validate();
+        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var plan = await Task.Run(() => Application.Current.Dispatcher.Invoke(() =>
+        {
+            var handle = request.Options.ElementHandle;
+            var resolved = _treeWalker.ResolveHandle(handle);
+            if (resolved == null) throw new InvalidOperationException(StaleHandleError(handle));
+            if (resolved is not UIElement element)
+                throw new InvalidOperationException(WrongElementTypeError(handle, resolved, "UIElement"));
+            return _interactor.PrepareTouch(element, request.Options);
+        }, System.Windows.Threading.DispatcherPriority.Normal, timeout.Token, TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+        var result = await TouchGestureExecutor.RunAsync(plan, new NativeTouchInput(), timeout.Token).ConfigureAwait(false);
+        return new TouchGestureResponse { RequestId = request.RequestId, Result = result };
     }
 
     private static void DebugLog(string message)
@@ -1430,6 +1497,7 @@ public class InspectorService : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        _inputShutdown.Cancel();
         Stop();
         _propertyWatcher.Dispose();
         _ipcServer.Dispose();

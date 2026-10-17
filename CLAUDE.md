@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (28 tools)
+    ├─ WpfTools (30 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -49,15 +49,15 @@ Target WPF Application (.NET Framework)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property`**, which drive controls or edit property values and change application state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
+**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property`**, which drive controls or edit property values and change application state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
 
 ## Key Source Locations
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 28 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (28 commands) |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 30 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (30 commands) |
 | Trigger / Style Diagnostics | `ResourceInspector.ExplainTriggers` | Evaluate Style + ControlTemplate triggers vs current state (active/inactive + setters); attribute a property value to its style setter / active trigger |
 | Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks, text input, and keyboard shortcuts (UI Automation + SendInput physical fallback) |
 | Property Writer | `src/WpfVisualTreeMcp.Inspector/PropertyWriter.cs` | Live-edits dependency properties (TypeConverter coercion) with a per-session undo stack (restores prior binding/local/default) |
@@ -86,6 +86,29 @@ Target WPF Application (.NET Framework)
   Its timeout is clamped to 25s to stay under the 30s IPC request timeout.
 
 ## Important Implementation Notes
+
+### Physical mouse drag
+
+- `wpf_drag` / CLI `drag` accept `DragOptions`: source handle plus either a target
+  handle or a displacement in source-local WPF DIPs; optional start/target points.
+- `ControlInteractor.PrepareDrag` resolves visible, hit-testable endpoints on the
+  Dispatcher. `MouseDragExecutor` then sends the timed sequence on a worker so WPF
+  mouse capture and `DragDrop.DoDragDrop` can continue processing events.
+- `NativeMouseInput` uses checked SendInput, virtual-desktop absolute coordinates,
+  per-call thread DPI context, foreground/endpoint checks and release cleanup.
+- A per-Inspector interaction gate rejects overlapping state-changing commands.
+  Queries remain available during drags. Success reports input delivery only.
+- `scripts/Test-Drag.ps1` runs real desktop tests on an unlocked Windows desktop;
+  the regular unit suite uses a fake mouse to verify failure/cancellation cleanup.
+- `wpf_touch_gesture` / CLI `touch` use the same interaction gate and Dispatcher/worker
+  split. `TouchGesturePath` builds local geometry; `PrepareTouch` validates the full
+  path and creates screen-coordinate frames; `NativeTouchInput` uses two contact slots
+  (IDs 0 and 1), periodic UPDATE frames and matching final UP coordinates.
+- `PhysicalInputGuard` is shared by mouse and touch. Do not change target-app input
+  compatibility switches. The sample opts into WPF's WM_POINTER stack at startup;
+  legacy input configurations can ignore native injected touch.
+- `scripts/Test-Touch.ps1` verifies WPF touch and manipulation events on the same
+  runtime/architecture matrix as the mouse tests. These require an interactive desktop.
 
 ### Named Pipe Communication
 - Pipe name format: `wpf_inspector_{pid}`
@@ -177,7 +200,7 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
 The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
 with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
 it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
-`CliRunner.IsCliCommand`). This gives the same 21 capabilities without an MCP
+`CliRunner.IsCliCommand`). This gives the same 30 capabilities without an MCP
 connection — useful when the MCP server is not connected, for scripting, or for
 verifying the pipeline manually.
 
@@ -194,7 +217,9 @@ shell call. No MCP handshake required; `--help` is self-documenting.
 - **Targeting:** every command except `list` takes `--pid <id>` or `--process <name>`.
 - **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
   **export** writes to `--out` if given, otherwise prints content inline.
-- **click / select-item / set-text / send-keys** are the four state-changing commands.
+- **click / drag / touch / select-item / set-text / send-keys** are the state-changing input commands.
+  - `drag` — physical mouse sequence between elements or by displacement; runs outside the UI Dispatcher.
+  - `touch` — native tap, long press, swipe, pinch and rotation; requires application touch support.
   - `click` — UI Automation invoke by default; `--physical` for OS mouse click
     (auto-scrolls into view); `--click-type double|right` for double/right clicks
     (always physical; right opens context menus — capture with `screenshot --mode screen`).
@@ -206,7 +231,7 @@ shell call. No MCP handshake required; `--help` is self-documenting.
     The response reports the value read back after the write.
   - `send-keys` — OS-level keyboard input; modifiers `Ctrl/Shift/Alt/Win` plus
     letters, digits, F1-F12, and named keys.
-  - All four live in `ControlInteractor`.
+  - `ControlInteractor` prepares interactions; mouse/touch executors run their timed sequences on workers.
 
 ### Typical CLI workflow
 ```bash

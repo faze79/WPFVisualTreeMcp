@@ -1,0 +1,20 @@
+<Window x:Class="SampleWpfApp.TouchDemoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Touch gesture demo" Width="700" Height="550" WindowStartupLocation="CenterScreen">
+    <StackPanel Margin="24">
+        <TextBlock Text="Touch gesture demo" FontSize="24" FontWeight="Bold"/>
+        <TextBlock Text="Tap, hold, swipe, pinch or rotate inside the surface." Margin="0,8,0,16"/>
+        <Border x:Name="TouchSurface" Height="280" Background="#E0F2FE" ClipToBounds="True"
+                IsManipulationEnabled="True" ManipulationStarting="Starting" ManipulationDelta="Delta">
+            <Grid>
+                <Border x:Name="TouchCard" Width="130" Height="90" Background="#0284C7" IsHitTestVisible="False">
+                    <TextBlock Text="Touch" Foreground="White" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </Grid>
+        </Border>
+        <Button x:Name="ResetTouchButton" Content="Reset" Click="Reset" HorizontalAlignment="Left" Margin="0,12,0,8"/>
+        <TextBlock x:Name="TouchTelemetry" TextWrapping="Wrap" FontFamily="Consolas"/>
+        <TextBlock x:Name="TouchManipulation" TextWrapping="Wrap" FontFamily="Consolas" Margin="0,6,0,0"/>
+    </StackPanel>
+</Window>

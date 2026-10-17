@@ -564,6 +564,27 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<TouchGestureResult> TouchGestureAsync(TouchGestureOptions options)
+    {
+        options.Validate();
+        var session = EnsureConnected();
+        var response = await SendRequestAsync<TouchGestureRequest, TouchGestureResponse>(
+            session.ProcessId, new TouchGestureRequest { Options = options });
+        if (!response.Success) throw new McpException(response.Error ?? "Failed to inject touch gesture");
+        return response.Result ?? throw new McpException("Inspector returned no touch result.");
+    }
+
+    public async Task<DragResult> DragAsync(DragOptions options)
+    {
+        options.Validate();
+        var session = EnsureConnected();
+        var response = await SendRequestAsync<DragRequest, DragResponse>(
+            session.ProcessId, new DragRequest { Options = options });
+        if (!response.Success)
+            throw new McpException(response.Error ?? "Failed to drag element");
+        return response.Result ?? throw new McpException("Inspector returned no drag result.");
+    }
+
     public async Task<SelectItemResult> SelectItemAsync(string elementHandle, string? itemText, int? index)
     {
         var session = EnsureConnected();

@@ -136,6 +136,8 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button x:Name="OpenDragDemoButton" Content="Drag demo" Click="OpenDragDemo" Margin="0,0,12,0"/>
+                    <Button x:Name="OpenTouchDemoButton" Content="Touch demo" Click="OpenTouchDemo" Margin="0,0,12,0"/>
                     <TextBlock Text="Items: " Foreground="Gray"/>
                     <TextBlock Text="{Binding Items.Count}" FontWeight="Bold"/>
                     <TextBlock Text="  |  " Foreground="LightGray"/>

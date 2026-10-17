@@ -10,9 +10,9 @@
 
     <!-- Package metadata -->
     <PackageId>WpfVisualTreeMcp</PackageId>
-    <Version>0.12.1</Version>
+    <Version>0.13.0</Version>
     <Authors>faze79</Authors>
-    <Description>MCP server for inspecting WPF application Visual Trees - enables AI agents to debug and analyze WPF UI hierarchies in real-time</Description>
+    <Description>Inspect and drive WPF apps through MCP or CLI: visual trees, bindings, screenshots, mouse dragging and native touch gestures.</Description>
     <PackageTags>mcp;wpf;visual-tree;debugging;dotnet;ai-agents</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/faze79/WpfVisualTreeMcp</RepositoryUrl>

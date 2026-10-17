@@ -1,5 +1,33 @@
 # Release Notes
 
+## v0.13.0 — Mouse dragging and native touch gestures (2026-10-18)
+
+Drive WPF sliders, splitters, drag-and-drop surfaces and touch controls with two new
+tools, bringing the MCP and CLI surface to 30 commands.
+
+- **`wpf_drag` / `drag`**: source and destination handles or a relative displacement,
+  optional local start/end points, left/right/middle button and configurable duration.
+- **`wpf_touch_gesture` / `touch`**: tap, long press, swipe, pinch and rotation. Pinch
+  uses two simultaneous contacts; scale above 1 spreads them, below 1 contracts them.
+  Positive rotation angles turn clockwise.
+
+Input geometry uses local WPF DIPs and is converted to screen pixels. Timed sequences
+run outside the UI Dispatcher; inspection stays responsive. Overlapping mutations
+are rejected, native failures are reported, and pressed buttons/contacts are released
+or canceled on errors. Results confirm input submission; verify application behavior
+with a query, wait or screenshot afterwards.
+
+Touch uses Windows injection APIs. The application must handle touch/manipulations.
+On systems where the legacy WPF input stack ignores synthetic contacts, the app owner
+can opt into the WM_POINTER stack before startup. The Inspector does not change that
+setting in running apps. Both input types require a visible, unobstructed target on
+an interactive desktop. Cross-process drops and scrolling during gestures are not supported.
+
+The sample includes separate mouse and touch demos. Validation covers 144 automated
+tests and real interaction on net48 x64/x86 and net8.0-windows x64, including measured
+scale/rotation and contact release. See the [tool reference](docs/TOOLS_REFERENCE.md)
+for parameters, compatibility configuration and runnable CLI examples.
+
 ## v0.12.1 — Injection packaging and attach diagnostics (2026-10-17)
 
 Fixes #14–#17 reported by @gentledepp. Releases now include the native x86/x64

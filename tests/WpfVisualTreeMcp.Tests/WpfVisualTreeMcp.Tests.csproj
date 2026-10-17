@@ -24,6 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Exercise the platform-independent sequence against a fake mouse;
+         real Win32/WPF behavior is covered by scripts/Test-Drag.ps1. -->
+    <Compile Include="..\..\src\WpfVisualTreeMcp.Inspector\MouseDragExecutor.cs" Link="MouseDragExecutor.cs" />
+    <Compile Include="..\..\src\WpfVisualTreeMcp.Inspector\TouchGestureExecutor.cs" Link="TouchGestureExecutor.cs" />
+    <Compile Include="..\..\src\WpfVisualTreeMcp.Inspector\NativeTouchInput.cs" Link="NativeTouchInput.cs" />
+    <Compile Include="..\..\src\WpfVisualTreeMcp.Inspector\PhysicalInputGuard.cs" Link="PhysicalInputGuard.cs" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Server\WpfVisualTreeMcp.Server.csproj" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" />

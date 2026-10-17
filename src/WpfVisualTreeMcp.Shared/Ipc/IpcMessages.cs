@@ -420,6 +420,29 @@ public class SetTextResponse : IpcResponse
     public string? Detail { get; set; }
 }
 
+public class TouchGestureRequest : IpcRequest
+{
+    public override string RequestType => "TouchGesture";
+    public Models.TouchGestureOptions Options { get; set; } = new();
+}
+
+public class TouchGestureResponse : IpcResponse
+{
+    public Models.TouchGestureResult? Result { get; set; }
+}
+
+// Physical mouse drag (timed input is executed outside the UI Dispatcher).
+public class DragRequest : IpcRequest
+{
+    public override string RequestType => "Drag";
+    public Models.DragOptions Options { get; set; } = new();
+}
+
+public class DragResponse : IpcResponse
+{
+    public Models.DragResult? Result { get; set; }
+}
+
 // Select an item in a Selector control (ComboBox, ListBox, TabControl, ...)
 public class SelectItemRequest : IpcRequest
 {

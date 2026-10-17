@@ -152,6 +152,20 @@ public record PropertyValue
 
 ## Threading Considerations
 
+Physical interaction has two phases. `ControlInteractor.PrepareDrag` / `PrepareTouch`
+resolve handles, scroll before input, hit-test the path and transform local WPF DIPs
+to screen coordinates on the UI Dispatcher. `MouseDragExecutor` / `TouchGestureExecutor`
+then drive timed native input from worker tasks, leaving WPF free to process mouse
+capture, OLE drag-and-drop and touch/manipulation events. A per-Inspector gate rejects
+overlapping mutations while inspection remains available. Input has a bounded duration,
+and failures/cancellation release the mouse or cancel active touch contacts.
+
+`NativeMouseInput` uses SendInput; `NativeTouchInput` uses InitializeTouchInjection /
+InjectTouchInput with stable contact IDs and complete multi-contact frames. Both share
+desktop/foreground validation and per-call DPI context through `PhysicalInputGuard`.
+Results describe input delivery, not application acceptance. The Inspector preserves
+the host's touch configuration; see [touch compatibility](TOOLS_REFERENCE.md#touch-compatibility-and-verification).
+
 WPF applications are single-threaded (STA). All inspection operations must be marshaled to the UI thread:
 
 ```csharp
@@ -170,7 +184,7 @@ public async Task<VisualTreeNode> GetVisualTreeAsync(ElementHandle root)
 
 ### Process Isolation
 - The MCP Server runs in a separate process from target applications
-- Inspector DLL has read-only access to the visual tree
+- Inspection tools read the visual tree; interaction/property tools explicitly change application state
 - No modification of application state is possible through inspection
 
 ### Named Pipe Security

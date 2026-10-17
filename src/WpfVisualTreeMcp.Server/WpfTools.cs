@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using WpfVisualTreeMcp.Server.Services;
+using WpfVisualTreeMcp.Shared.Models;
 
 namespace WpfVisualTreeMcp.Server;
 
@@ -409,6 +411,56 @@ public class WpfTools
             method = result.Method,
             element_type = result.ElementType,
             detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
+    [Description("Drag using the real OS mouse: press, move gradually, release. Supply element_handle and either target_handle OR delta_x/delta_y (omitted delta axis is zero). start_x/start_y and target_x/target_y are optional coordinate pairs measured from the corresponding element's top-left in WPF DIPs; default is its center. Deltas are in the source element's local DIPs, including its transforms. button: left/right/middle. duration_ms: 100-10000, default 500. Brings the source window forward and moves the cursor. Both endpoints must be visible and unobstructed; no scrolling during the drag. Success reports input delivery, not drop acceptance: verify properties or a screenshot afterwards. STATE-CHANGING.")]
+    public async Task<object> WpfDrag(
+        string element_handle, string? target_handle = null,
+        double? delta_x = null, double? delta_y = null,
+        double? start_x = null, double? start_y = null,
+        double? target_x = null, double? target_y = null,
+        string button = "left", int duration_ms = 500)
+    {
+        var options = new DragOptions
+        {
+            ElementHandle = element_handle, TargetHandle = target_handle,
+            DeltaX = delta_x, DeltaY = delta_y, StartX = start_x, StartY = start_y,
+            TargetX = target_x, TargetY = target_y, Button = button, DurationMs = duration_ms
+        };
+        try { options.Validate(); }
+        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        var result = await _ipcBridge.DragAsync(options);
+        return new
+        {
+            success = true, method = result.Method, element_type = result.ElementType,
+            button = result.Button, duration_ms = result.DurationMs,
+            start = new { x = result.StartX, y = result.StartY },
+            end = new { x = result.EndX, y = result.EndY },
+            coordinate_space = "screen_pixels", detail = result.Detail
+        };
+    }
+
+    [McpServerTool]
+    [Description("Inject native Windows touch input into a visible WPF element. gesture: tap, long_press, swipe, pinch, rotate. x/y is an optional local WPF DIP pair (default center). swipe requires delta_x/delta_y (omitted axis zero). pinch requires scale (0.1-10, excluding 1; above 1 spreads two fingers). rotate requires angle_degrees (-360 to 360, nonzero; positive clockwise). radius optionally sets initial finger distance from center in local DIPs for pinch/rotate (minimum 4); default fits the element. The complete path must stay visible inside the element. duration_ms defaults: tap 100, long_press 1000, others 700; limits: tap 50-500, long_press 500-10000, others 100-10000. Requires an interactive Windows 8+ desktop. Activates the window. Success means touch input sent, not gesture recognition: the application must support touch/manipulations. STATE-CHANGING.")]
+    public async Task<object> WpfTouchGesture(string element_handle, string gesture,
+        double? x = null, double? y = null, double? delta_x = null, double? delta_y = null,
+        double? scale = null, double? angle_degrees = null, double? radius = null, int? duration_ms = null)
+    {
+        var options = new TouchGestureOptions
+        {
+            ElementHandle = element_handle, Gesture = gesture, X = x, Y = y, DeltaX = delta_x, DeltaY = delta_y,
+            Scale = scale, AngleDegrees = angle_degrees, Radius = radius, DurationMs = duration_ms
+        };
+        try { options.Validate(); }
+        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        var result = await _ipcBridge.TouchGestureAsync(options);
+        return new
+        {
+            success = true, method = result.Method, gesture = result.Gesture, element_type = result.ElementType,
+            contact_count = result.ContactCount, duration_ms = result.DurationMs, start = result.Start, end = result.End,
+            coordinate_space = "screen_pixels", detail = result.Detail
         };
     }
 

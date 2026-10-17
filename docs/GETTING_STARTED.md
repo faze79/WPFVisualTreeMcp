@@ -284,6 +284,23 @@ What styles are defined in this application?
 
 ## Best Practices
 
+### Mouse dragging and touch gestures
+
+Find a visible source/target with `wpf_find_elements`, then use `wpf_drag` for a mouse
+drag or `wpf_touch_gesture` for `tap`, `long_press`, `swipe`, `pinch`, or `rotate`.
+CLI users can run `drag --help` and `touch --help` for equivalent options.
+
+```powershell
+WpfVisualTreeMcp.Server.exe drag --pid 1234 --handle elem_42 --delta-x 80
+WpfVisualTreeMcp.Server.exe touch --pid 1234 --handle elem_57 --gesture pinch --scale 1.5
+```
+
+These operations require an interactive desktop and a visible, unobstructed target.
+Coordinates are local WPF DIPs. Verify the application's state after input. For touch,
+the app must handle touch/manipulations and its input stack must accept injected
+contacts; see the [compatibility setup](TOOLS_REFERENCE.md#touch-compatibility-and-verification).
+The sample's **Drag demo** and **Touch demo** provide controls and live telemetry.
+
 1. **Start with the visual tree** - Get an overview before diving into specific elements
 2. **Use element search** - Don't manually navigate large trees
 3. **Check binding errors first** - Many UI issues are caused by broken bindings

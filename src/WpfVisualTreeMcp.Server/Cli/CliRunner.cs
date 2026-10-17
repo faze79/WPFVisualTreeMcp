@@ -1,8 +1,10 @@
 using System.Text.Json;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Server.Services;
+using WpfVisualTreeMcp.Shared.Models;
 
 namespace WpfVisualTreeMcp.Server.Cli;
 
@@ -21,7 +23,7 @@ public static class CliRunner
     {
         "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
-        "styles", "watch-property", "highlight", "click", "select-item", "set-text",
+        "styles", "watch-property", "highlight", "click", "drag", "touch", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
         "evaluate-binding", "explain-triggers", "layout", "export", "screenshot",
     };
@@ -233,6 +235,40 @@ public static class CliRunner
                         elementType = result.ElementType,
                         detail = result.Detail,
                     }, cli);
+                    break;
+                }
+
+                case "drag":
+                {
+                    var options = new DragOptions
+                    {
+                        ElementHandle = cli.GetRequired("handle"), TargetHandle = cli.GetStringOrNull("target"),
+                        DeltaX = cli.GetDoubleOrNull("delta-x"), DeltaY = cli.GetDoubleOrNull("delta-y"),
+                        StartX = cli.GetDoubleOrNull("start-x"), StartY = cli.GetDoubleOrNull("start-y"),
+                        TargetX = cli.GetDoubleOrNull("target-x"), TargetY = cli.GetDoubleOrNull("target-y"),
+                        Button = cli.GetString("button", "left"), DurationMs = cli.GetInt("duration", 500)
+                    };
+                    options.Validate();
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.DragAsync(options);
+                    WriteJson(new { success = true, result, coordinateSpace = "screen_pixels" }, cli);
+                    break;
+                }
+
+                case "touch":
+                {
+                    var options = new TouchGestureOptions
+                    {
+                        ElementHandle = cli.GetRequired("handle"), Gesture = cli.GetRequired("gesture"),
+                        X = cli.GetDoubleOrNull("x"), Y = cli.GetDoubleOrNull("y"),
+                        DeltaX = cli.GetDoubleOrNull("delta-x"), DeltaY = cli.GetDoubleOrNull("delta-y"),
+                        Scale = cli.GetDoubleOrNull("scale"), AngleDegrees = cli.GetDoubleOrNull("angle"),
+                        Radius = cli.GetDoubleOrNull("radius"), DurationMs = cli.GetIntOrNull("duration")
+                    };
+                    options.Validate();
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.TouchGestureAsync(options);
+                    WriteJson(new { success = true, result, coordinateSpace = "screen_pixels" }, cli);
                     break;
                 }
 
@@ -532,6 +568,8 @@ COMMANDS
   watch-property        --pid --handle H --property P
   highlight     --pid --handle H [--duration MS]
   click         --pid --handle H [--physical] [--click-type single|double|right]  (changes app state)
+  drag          --pid --handle H (--target H | --delta-x X / --delta-y Y) [--duration MS] [--button left|right|middle]
+  touch         --pid --handle H --gesture tap|long_press|swipe|pinch|rotate [--delta-x X] [--scale N] [--angle N]
   select-item   --pid --handle H (--item-text S | --index N)  (changes app state)
   set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
   send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
@@ -601,6 +639,25 @@ TYPICAL WORKFLOW
                      + "  --click-type double/right: always physical; right opens context menus\n"
                      + "  (capture them with: screenshot --mode screen).\n"
                      + "  This command CHANGES application state.",
+            "drag" => "drag --pid <id> --handle <handle> (--target <handle> | --delta-x <x> / --delta-y <y>)\n"
+                    + "  [--start-x X --start-y Y] [--target-x X --target-y Y]\n"
+                    + "  [--button left|right|middle] [--duration <100-10000 ms>]\n"
+                    + "  Physical mouse drag; moves the cursor and brings the app forward.\n"
+                    + "  Coordinates and deltas are local WPF DIPs; defaults to element centers.\n"
+                    + "  Supply a target OR displacement; an omitted delta axis is zero.\n"
+                    + "  Both endpoints must be visible and unobstructed. Result coordinates\n"
+                    + "  are screen pixels. Success confirms input sent, not drop acceptance.\n"
+                    + "  CHANGES application state. Example: drag --pid 123 --handle elem_1 --delta-x -80\n",
+            "touch" => "touch --pid <id> --handle <handle> --gesture tap|long_press|swipe|pinch|rotate\n"
+                     + "  [--x X --y Y] [--delta-x X --delta-y Y] [--scale N] [--angle N]\n"
+                     + "  [--radius DIPS] [--duration MS]\n"
+                     + "  Native Windows touch. swipe: nonzero delta; pinch: scale 0.1-10 except 1;\n"
+                     + "  rotate: nonzero angle -360..360, positive clockwise. Local WPF DIPs.\n"
+                     + "  Defaults: center, radius fitted to bounds; duration tap 100ms, hold 1000ms, others 700ms.\n"
+                     + "  Duration limits: tap 50-500, long_press 500-10000, others 100-10000ms.\n"
+                     + "  The path must stay visible inside the element. Requires an unlocked\n"
+                     + "  Windows desktop and application touch support. CHANGES application state.\n"
+                     + "  Success confirms injection; verify the application's response separately.",
             "select-item" => "select-item --pid <id> --handle <handle> (--item-text <text> | --index <n>)\n"
                            + "  Select an item in a ComboBox/ListBox/ListView/TabControl by visible\n"
                            + "  text (case-insensitive substring) or zero-based index. Works with\n"
@@ -719,7 +776,8 @@ TYPICAL WORKFLOW
                 {
                     a.Flags.Add(body);
                 }
-                else if (i + 1 < tokens.Length && !tokens[i + 1].StartsWith('-'))
+                else if (i + 1 < tokens.Length && (!tokens[i + 1].StartsWith('-') ||
+                    double.TryParse(tokens[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out _)))
                 {
                     a.Options[body] = tokens[++i];
                 }
@@ -747,5 +805,13 @@ TYPICAL WORKFLOW
         }
 
         public int GetInt(string name, int fallback) => GetIntOrNull(name) ?? fallback;
+
+        public double? GetDoubleOrNull(string name)
+        {
+            var value = GetStringOrNull(name);
+            if (value == null && !Flags.Contains(name)) return null;
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)) return number;
+            throw new ArgumentException($"--{name} must be a number using '.' as the decimal separator.");
+        }
     }
 }

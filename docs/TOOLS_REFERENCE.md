@@ -2,6 +2,157 @@
 
 Complete reference for all MCP tools provided by WpfVisualTreeMcp.
 
+## Mouse Interaction
+
+### wpf_drag
+
+Perform a complete physical mouse drag: press, move along a straight path, release.
+Useful for drag-and-drop, slider thumbs, splitters and custom canvas controls.
+**State-changing:** moves the OS cursor and activates the source window.
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `element_handle` | Required | Source element from `wpf_find_elements` |
+| `target_handle` | Omitted | Destination element; mutually exclusive with displacement |
+| `delta_x`, `delta_y` | Omitted | Displacement in the source element's local WPF DIPs; omitted axis is zero |
+| `start_x`, `start_y` | Source center | Optional pair, relative to the source's top-left, in WPF DIPs |
+| `target_x`, `target_y` | Target center | Optional pair, relative to the target's top-left, in WPF DIPs; requires `target_handle` |
+| `button` | `left` | `left`, `right`, or `middle` |
+| `duration_ms` | `500` | Movement duration, from 100 to 10000 ms (plus brief press/release settling) |
+
+Provide **either a target handle or a non-zero displacement**. Local coordinate
+pairs must be complete and inside the respective element's rendered bounds.
+WPF transforms and DPI conversion are applied before sending OS input. For a
+slider, find its `Thumb` descendant and use that as the source.
+
+```json
+{"element_handle":"elem_00000042","target_handle":"elem_00000057","duration_ms":700}
+```
+
+```json
+{"element_handle":"elem_00000042","delta_x":-80,"button":"left"}
+```
+
+The result contains `success`, `method: "Physical.Drag"`, `element_type`, `button`,
+`duration_ms`, `start` and `end` coordinates with `coordinate_space: "screen_pixels"`.
+Success means the input sequence was sent; it does **not** establish that the
+application accepted a drop. Read properties, use `wpf_wait_for`, or take a
+screenshot to verify the outcome.
+
+Both endpoints must be on a monitor and unobstructed in the attached application.
+Elements are brought into view before resolving coordinates; the tool does not
+scroll during a drag or drag into a different process. The desktop must be
+interactive and unlocked. Keep the physical mouse idle during the operation.
+Focus loss cancels movement, and button release is attempted on every error or
+cancellation after a press. Native input failures are returned as errors.
+Concurrent state-changing Inspector commands are rejected while an interaction
+is in progress; read-only inspection remains available.
+
+CLI equivalents:
+
+```powershell
+WpfVisualTreeMcp.Server.exe drag --pid 1234 --handle elem_00000042 --target elem_00000057 --duration 700
+WpfVisualTreeMcp.Server.exe drag --pid 1234 --handle elem_00000042 --delta-x -80 --button left
+```
+
+The CLI uses `--start-x/--start-y` and `--target-x/--target-y` for local points.
+Output is JSON with `success`, `result` and `coordinateSpace`; failures exit with code 1.
+
+To exercise the implementation, open **Drag demo** in `SampleWpfApp`. Run
+`./scripts/Test-Drag.ps1` on an interactive Windows desktop after building Release
+to test the real MCP/CLI path on net48 x64/x86 and net8.0-windows x64. These desktop
+tests are kept separate from unattended CI; the unit suite covers invalid inputs,
+IPC serialization, cancellation, input failure, and release cleanup.
+
+## Touch Interaction
+
+### wpf_touch_gesture
+
+Inject native Windows touch input using one or two contacts. **State-changing:**
+activates the element's window. Use it for touch-enabled controls and manipulation
+surfaces. It simulates touchscreen contacts, not precision-touchpad gestures.
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `element_handle` | Required | Target element containing the complete gesture |
+| `gesture` | Required | `tap`, `long_press`, `swipe`, `pinch`, or `rotate` |
+| `x`, `y` | Element center | Optional pair in local WPF DIPs; start point for swipe, center for other gestures |
+| `delta_x`, `delta_y` | Omitted | Swipe displacement; at least one non-zero axis required; omitted axis is zero |
+| `scale` | Required for pinch | Final/initial finger separation, 0.1–10 except 1; above 1 spreads, below 1 contracts |
+| `angle_degrees` | Required for rotate | -360–360 except 0; positive is clockwise in local coordinates |
+| `radius` | Fitted to element | Initial distance of each finger from the center for pinch/rotate; minimum 4 DIPs |
+| `duration_ms` | Gesture-specific | Tap: 100 (range 50–500); long press: 1000 (500–10000); others: 700 (100–10000) |
+
+Parameters belonging to a different gesture are rejected. Both fingers start on a
+horizontal line through the center. WPF transforms and DPI are applied to the whole
+path. Every point must remain inside the rendered element and visible; contacts must
+stay at least 8 screen pixels apart. No input is sent if preflight validation fails.
+
+Examples of MCP arguments:
+
+```json
+{"element_handle":"elem_42","gesture":"tap"}
+{"element_handle":"elem_42","gesture":"long_press","duration_ms":1200}
+{"element_handle":"elem_42","gesture":"swipe","x":80,"y":120,"delta_x":200}
+{"element_handle":"elem_42","gesture":"pinch","scale":1.5,"radius":50}
+{"element_handle":"elem_42","gesture":"rotate","angle_degrees":-90,"radius":60}
+```
+
+The result contains `success`, `method: "Physical.Touch"`, `gesture`, `element_type`,
+`contact_count`, `duration_ms`, and `start`/`end` arrays in `screen_pixels`.
+Success means Windows accepted the contact sequence; it does not prove the app
+recognized a gesture. The tool leaves the target's touch handlers and compatibility
+settings unchanged. Query the resulting state or take a screenshot after the action.
+
+CLI equivalents:
+
+```powershell
+WpfVisualTreeMcp.Server.exe touch --pid 1234 --handle elem_42 --gesture tap
+WpfVisualTreeMcp.Server.exe touch --pid 1234 --handle elem_42 --gesture swipe --delta-x -100
+WpfVisualTreeMcp.Server.exe touch --pid 1234 --handle elem_42 --gesture pinch --scale 1.5 --radius 50
+WpfVisualTreeMcp.Server.exe touch --pid 1234 --handle elem_42 --gesture rotate --angle -90
+```
+
+Other CLI options are `--x`, `--y`, `--delta-y`, and `--duration`. CLI JSON contains
+`success`, `result` and `coordinateSpace`; errors exit with code 1.
+
+#### Touch compatibility and verification
+
+The Windows touch injection API requires Windows 8+. Use an unlocked interactive
+desktop and keep physical input idle. The target must implement touch or WPF
+manipulations (`IsManipulationEnabled` and the relevant event handlers).
+
+Some legacy WPF input configurations ignore injected contacts even when Windows
+accepts them. For applications you own, WPF's optional WM_POINTER stack can be
+enabled **before any windows are created** (Windows 10 Creators Update or later):
+
+```csharp
+AppContext.SetSwitch("Switch.System.Windows.Input.Stylus.EnablePointerSupport", true);
+```
+
+For .NET Framework the equivalent app.config setting is:
+
+```xml
+<configuration>
+  <runtime>
+    <AppContextSwitchOverrides value="Switch.System.Windows.Input.Stylus.EnablePointerSupport=true" />
+  </runtime>
+</configuration>
+```
+
+The sample explicitly opts in at startup. The Inspector does not enable this switch
+inside arbitrary running applications. Review Microsoft's [WPF pointer-stack compatibility
+notes](https://learn.microsoft.com/en-us/dotnet/framework/migration-guide/mitigation-pointer-based-touch-and-stylus-support)
+before changing an application's input configuration. Native API reference:
+[InjectTouchInput](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-injecttouchinput).
+
+Open **Touch demo** in the sample to see actual touch counts, hold time, translation,
+scale and rotation. Run `./scripts/Test-Touch.ps1` on an interactive Windows desktop
+after a Release build. It checks real WPF touch/manipulation events on net48 x64/x86
+and net8.0-windows x64, including both pinch directions and signed rotation. The
+unattended unit suite covers geometry, argument validation, contact IDs, native
+structure alignment and cleanup after cancellation or injection failure.
+
 ## Process Management
 
 ### wpf_list_processes

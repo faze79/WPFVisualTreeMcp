@@ -139,6 +139,12 @@ public interface IIpcBridge
     /// </summary>
     Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null);
 
+    /// <summary>Sends a complete physical mouse drag while keeping the target UI responsive.</summary>
+    Task<DragResult> DragAsync(DragOptions options);
+
+    /// <summary>Injects one- or two-contact touch input with native Windows APIs.</summary>
+    Task<TouchGestureResult> TouchGestureAsync(TouchGestureOptions options);
+
     /// <summary>
     /// Selects an item in a Selector control (ComboBox, ListBox, ListView, TabControl)
     /// by visible text or zero-based index. Works with virtualized items.

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-10-18
+
+### Added
+
+- `wpf_drag` and CLI `drag` send a gradual physical mouse drag between visual-tree
+  elements or by a relative displacement, with local coordinate pairs, configurable
+  duration and left/right/middle button support. Results report input delivery and
+  screen coordinates; applications remain responsible for accepting a drop.
+- Timed input runs outside the UI Dispatcher, with checked native input, foreground
+  and endpoint validation, exclusive interaction execution, and release cleanup on
+  failures/cancellation. Read-only inspection remains available during a drag.
+- Sample drag window and an interactive desktop test script covering sliders,
+  splitters, WPF/OLE drag-and-drop, mouse capture, concurrent inspection and CLI input.
+
+- `wpf_touch_gesture` and CLI `touch`: native tap, long press, swipe, two-finger pinch
+  and rotation. Paths use local WPF DIPs, are checked before injection, and retain
+  stable contact identities. Contact cancellation runs on failure or shutdown.
+- Touch sample with actual WPF event/manipulation telemetry and tests for expansion,
+  contraction, signed rotation, concurrent inspection, mouse/touch exclusion and
+  rejection of invalid paths. The sample opts into WPF's WM_POINTER stack at startup;
+  the Inspector preserves the inspected application's existing input configuration.
+- Documented compatibility, examples and verification steps for all 30 MCP tools/CLI commands.
+
+### Validation
+
+- 144 automated tests, including input failure/cancellation cleanup and native structure layout.
+- Real mouse and touch tests on .NET Framework 4.8 x64/x86 and .NET 8 x64.
+- Touch success reports native input delivery; gesture recognition requires application
+  support. Legacy WPF input stacks may need WM_POINTER enabled when the application starts.
+
 ## [0.12.1] - 2026-10-17
 
 ### Fixed

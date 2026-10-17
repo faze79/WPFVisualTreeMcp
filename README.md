@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
 
-> **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI, exposed over the Model Context Protocol — visual tree, data bindings, screenshots, clicks, text input and keyboard, against any running WPF process, no source changes needed.
+> **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI, exposed over the Model Context Protocol — visual tree, bindings, screenshots, mouse dragging, touch gestures, text input and keyboard. Inspect running apps without source changes; touch behavior depends on the application's input support.
 
 ![Demo: an AI agent drives a WPF app and finds a binding bug](docs/assets/demo.gif)
 
@@ -67,6 +67,8 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 - **Property Watching** - Monitor property changes in real-time
 
 ### Interaction & Export
+- **Touch Gestures** *(v0.13.0)* - `wpf_touch_gesture` / CLI `touch`: native tap, long press, swipe, pinch and rotation with one or two contacts. Includes an interactive demo and [WPF compatibility guidance](docs/TOOLS_REFERENCE.md#touch-compatibility-and-verification).
+- **Mouse Drag** - `wpf_drag` / CLI `drag`: drag between visual-tree elements or by a local displacement, with left/right/middle buttons, configurable duration and local start/end points. Supports slider thumbs, splitters and drag-and-drop. See the [parameters and examples](docs/TOOLS_REFERENCE.md#wpf_drag).
 - **Screenshot Capture** - Capture window/element screenshots visible to AI agents
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Control Click** *(v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click
@@ -356,6 +358,8 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_revert_property` | Undo `wpf_set_property` edits (one, filtered, or all) — restores the prior binding/value/default. |
 | `wpf_highlight_element` | Visually highlight an element |
 | `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
+| `wpf_drag` | **Drag with the mouse** — source and target elements or relative displacement, local points, left/right/middle button, gradual movement and release cleanup. *State-changing.* |
+| `wpf_touch_gesture` | **Native touch** — tap, long press, swipe, two-finger pinch and rotation inside a visible element. Requires application touch support. *State-changing.* |
 | `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
 | `wpf_wait_for` | **Wait** until an element is visible/exists/enabled/hidden, polling in the target app — no sleep-and-retry loops. |
 | `wpf_set_text` | **Set text/value** of a TextBox/ComboBox/PasswordBox — UI Automation `IValueProvider.SetValue` by default, `physical=true` to type via OS keyboard input. *State-changing.* |
@@ -420,6 +424,10 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 - [x] Concurrent IPC connections (a long wait no longer blocks other commands)
 
 ### Next up
+
+Shipped in **v0.13.0**: mouse dragging and native touch gestures, with MCP/CLI parity,
+sample demos, input cleanup, and real desktop validation across net48 x86/x64 and net8 x64.
+
 
 The "change → measure → is it effective?" loop is complete: live-edit a property, then
 diff a before/after snapshot to see exactly what moved.
@@ -495,7 +503,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.8 + .NET 8.0-windows (Inspector, dual-target)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 28 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 6 state-changing: `wpf_click_element`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
+- **Tools**: 30 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 8 state-changing: `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments
