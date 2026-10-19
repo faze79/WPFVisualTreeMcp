@@ -423,9 +423,9 @@ public class TreeWalker
     /// (handle, typeName) pair, or null when none matches. Used by the wait/poll loop —
     /// cheaper than building a full result list when only existence matters.
     /// </summary>
-    public (string Handle, string TypeName)? FindFirstMatch(FindCriteria criteria)
+    public (string Handle, string TypeName)? FindFirstMatch(FindCriteria criteria, DependencyObject? searchRoot = null)
     {
-        foreach (var root in GetAllSearchRoots())
+        foreach (var root in searchRoot == null ? GetAllSearchRoots() : new List<DependencyObject> { searchRoot })
         {
             var hit = FindFirstMatchRecursive(root, criteria);
             if (hit != null) return hit;

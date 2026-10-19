@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Server.Services;
 using WpfVisualTreeMcp.Shared.Models;
+using WpfVisualTreeMcp.Shared;
+using WpfVisualTreeMcp.Shared.Ipc;
 
 namespace WpfVisualTreeMcp.Server.Cli;
 
@@ -26,6 +28,7 @@ public static class CliRunner
         "styles", "watch-property", "highlight", "click", "drag", "touch", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
         "evaluate-binding", "explain-triggers", "layout", "export", "screenshot",
+        "record", "get-recording", "assert", "replay", "export-test",
     };
 
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
@@ -109,6 +112,73 @@ public static class CliRunner
                         inspectorReady = session.InspectorReady,
                     }, cli);
                     return session.InspectorReady ? 0 : 1;
+                }
+
+                case "record":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var action = cli.GetStringOrNull("action")
+                        ?? (args.Length > 1 && !args[1].StartsWith('-') ? args[1] : "status");
+                    WriteJson(await bridge.RecordAsync(action, cli.GetStringOrNull("name")), cli);
+                    break;
+                }
+
+                case "get-recording":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var state = await bridge.RecordAsync("status");
+                    if (cli.GetStringOrNull("out") is string path)
+                    {
+                        if (state.Workflow == null) throw new InvalidOperationException("No recorded workflow.");
+                        using var file = new StreamWriter(new FileStream(path, FileMode.CreateNew));
+                        await file.WriteAsync(IpcSerializer.Serialize(state.Workflow));
+                        WriteJson(new { path = Path.GetFullPath(path), active = state.Active }, cli);
+                    }
+                    else WriteJson(state, cli);
+                    break;
+                }
+
+                case "assert":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var actual = await bridge.AssertElementAsync(cli.GetRequired("handle"), cli.GetRequired("property"), cli.GetRequired("expected"));
+                    WriteJson(new { success = true, actualValue = actual }, cli);
+                    break;
+                }
+
+                case "replay":
+                {
+                    var path = cli.GetRequired("file");
+                    if (new FileInfo(path).Length > 2 * 1024 * 1024) throw new ArgumentException("Workflow file exceeds 2 MiB.");
+                    var workflow = IpcSerializer.Deserialize<RecordedWorkflow>(await File.ReadAllTextAsync(path))
+                        ?? throw new ArgumentException("Workflow JSON is required.");
+                    WorkflowCodec.Validate(workflow);
+                    await AttachAsync(processManager, cli, false);
+                    var result = await bridge.ReplayAsync(workflow, cli.GetInt("timeout", 120000));
+                    WriteJson(result, cli);
+                    return result.Success ? 0 : 1;
+                }
+
+                case "export-test":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    var files = WorkflowTestExporter.Export(await bridge.RecordAsync("status"), cli.GetString("format", "xunit"));
+                    var directory = cli.GetStringOrNull("out");
+                    if (directory == null) WriteJson(new { files }, cli);
+                    else
+                    {
+                        var fullPath = Path.GetFullPath(directory);
+                        if (Directory.Exists(fullPath) && Directory.EnumerateFileSystemEntries(fullPath).Any())
+                            throw new ArgumentException("Export directory must be new or empty.");
+                        Directory.CreateDirectory(fullPath);
+                        foreach (var file in files)
+                        {
+                            using var writer = new StreamWriter(new FileStream(Path.Combine(fullPath, file.Key), FileMode.CreateNew));
+                            await writer.WriteAsync(file.Value);
+                        }
+                        WriteJson(new { path = fullPath, files = files.Keys }, cli);
+                    }
+                    break;
                 }
 
                 case "report":
@@ -580,6 +650,11 @@ COMMANDS
   attach        --pid|--process [--auto-inject]
   tree          --pid [--root H] [--depth N]
   report        --pid [--root H] [--max N] [--depth N] [--max-findings N]
+  record        start|stop|status|clear --pid [--name N]
+  get-recording --pid [--out workflow.json]
+  assert        --pid --handle H --property P --expected V
+  replay        --pid --file workflow.json [--timeout MS]                  (changes app state)
+  export-test   --pid [--format xunit|json] [--out NEW_DIRECTORY]
   props         --pid --handle H
   find          --pid [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]
   find-deep     --pid (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]
@@ -642,6 +717,22 @@ TYPICAL WORKFLOW
                       + "  Aggregate current binding/validation errors and UI state counts.\n"
                       + "  Defaults: 500 elements, depth 25, 100 findings. Reports truncation.\n"
                       + "  Recent binding traces are process-wide history; state counts are not defects.",
+            "record" => "record start|stop|status|clear --pid <id> [--name N]\n"
+                      + "  Record sequential actions, finds, successful waits and assertions using stable selectors.\n"
+                      + "  Storage lives in the target process. Stop/export before clear. Limit: 100 steps.",
+            "get-recording" => "get-recording --pid <id> [--out workflow.json]\n"
+                      + "  Return recording state or save workflow JSON to a new file.",
+            "assert" => "assert --pid <id> --handle H --property P --expected V\n"
+                      + "  Compare a dependency-property value exactly (invariant string; {null} for null).\n"
+                      + "  Exits 1 on mismatch. Successful assertions are recorded while recording is active.",
+            "replay" => "replay --pid <id> --file workflow.json [--timeout 1000-120000]\n"
+                      + "  Resolve fresh selectors and execute sequentially. Stop recording first.\n"
+                      + "  Exits 1 at the first failure, with its one-based step index. No rollback.\n"
+                      + "  Include explicit waits/assertions; physical input requires an interactive desktop.",
+            "export-test" => "export-test --pid <id> [--format xunit|json] [--out NEW_DIRECTORY]\n"
+                      + "  Export a stopped recording. Default: xUnit project with workflow.json.\n"
+                      + "  Set WPF_TEST_APP and WPFINSPECT_PATH to absolute executable paths, then dotnet test.\n"
+                      + "  The generated test starts a fresh app and terminates only its own app after testing.",
             "props" => "props --pid <id> --handle <handle>\n  List the dependency properties of an element.",
             "find" => "find --pid <id> [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]\n"
                     + "  Search elements (up to --max, default 50). Filters combine with AND:\n"

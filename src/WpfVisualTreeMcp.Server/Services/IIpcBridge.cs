@@ -7,6 +7,9 @@ namespace WpfVisualTreeMcp.Server.Services;
 /// </summary>
 public interface IIpcBridge
 {
+    Task<RecordingState> RecordAsync(string action, string? name = null);
+    Task<ReplayResult> ReplayAsync(RecordedWorkflow workflow, int timeoutMs = 120000);
+    Task<string?> AssertElementAsync(string elementHandle, string propertyName, string expectedValue);
     Task<DiagnosticReport> ReportAsync(string? rootHandle, int maxElements, int maxDepth, int maxFindings);
 
     /// <summary>

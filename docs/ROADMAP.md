@@ -10,8 +10,9 @@ Status: 💡 idea · 📋 designed · 🚧 in progress · ✅ done.
 
 **Shipped in v0.13.0:** `wpf_drag` and `wpf_touch_gesture`, including CLI commands,
 native mouse/touch sequences, pinch/rotation, sample demos and desktop verification.
-Workflow recording/export (#13) remains a separate planned feature; future recording
-should capture these actions using stable selectors and local gesture parameters.
+**Implemented for v0.16.0:** workflow recording/export (#13), stable-selector replay,
+explicit assertions and local drag/touch parameters; aggregate diagnostics;
+.NET Framework 4.7.2 and full-content screenshots recovered from PR #22.
 
 The project's edge is the **insider view** — real visual tree, dependency properties,
 bindings and DataContext via injection, with no probe installed in the target app —
@@ -95,20 +96,24 @@ not just reporting it. Directly reinforces the binding-diagnostics differentiato
 
 ## Priority 2 — Reproduce & compete on QA
 
-### 2a. `wpf_record` → `wpf_export_test` 📋 (L) — [issue #13](https://github.com/faze79/WPFVisualTreeMcp/issues/13)
+### 2a. `wpf_record` → `wpf_export_test` ✅ *(v0.16.0)* — [issue #13](https://github.com/faze79/WPFVisualTreeMcp/issues/13)
 
 Record a driven workflow and export a runnable xUnit + driver test. Selectors, not
-session handles; recorded assertions map onto `wpf_wait_for` + a value read.
+session handles; recorded assertions use `wpf_assert` and explicit waits. The
+generated project has been compiled and replayed against a fresh sample process,
+including native mouse/touch input. Future extensions: branching, data-driven
+cases and additional export targets. See [tool reference](TOOLS_REFERENCE.md#record-replay-and-export-tests).
 
 **Why:** The strongest competitor (WPF Buddy, 24★) leads on the *test-generation* story —
 record → replay → export a maintainable test — which is what the enterprise WPF audience
 buys. We have the widest interaction surface and real inspection; this is the missing hook
 to compete on their terrain. Design details are in the issue.
 
-### 2b. `wpf_report` — one-call UI health report 💡 (S)
+### 2b. `wpf_report` — aggregate UI diagnostics ✅ *(v0.16.0)*
 
-Aggregate binding errors + a visual-tree summary + any disabled/invisible key controls
-into a single structured report an agent can open a session with.
+Aggregate current binding/validation errors, UI state counts and recent trace
+history into a bounded report. Reports state coverage and truncation; disabled
+or invisible controls are observations, not automatically classified as defects.
 
 **Why:** Cheap, high-signal, and a natural "first thing to run". Reuses existing tools.
 

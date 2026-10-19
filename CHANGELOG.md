@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Workflow recording, stable-selector replay, explicit property assertions and
+  runnable xUnit export (`wpf_record`, `wpf_get_recording`, `wpf_assert`,
+  `wpf_replay`, `wpf_export_test`) with matching CLI commands. Includes mouse
+  drag and native touch parameters, explicit waits, bounded storage and deadlines,
+  and fresh-process round-trip tests. Resolves the v1 scope of issue #13.
 - `wpf_report` / CLI `report`: bounded aggregate diagnostics for current binding
   and validation errors, UI state counts and recent process-wide binding traces.
   Reports identify their scope and incomplete coverage explicitly.
@@ -25,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Replay lets WPF process queued input, bindings and layout between steps;
+  recorded async waits remain explicit. `wait-for --root` now respects its root.
+- Named-pipe request decoding preserves UTF-8 characters split across reads and
+  rejects requests larger than the configured input bound.
 - CLI tool updates download the exact official NuGet package before scheduling
   installation, with four bounded attempts for propagation delays and temporary
   HTTP failures. Installation uses that staged package instead of resolving it

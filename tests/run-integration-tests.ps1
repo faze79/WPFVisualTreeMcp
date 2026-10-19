@@ -36,6 +36,11 @@ try {
     $env:WPF_VISUAL_TREE_MCP_INTEGRATION_SAMPLES = Join-Path $work 'samples'
     & dotnet test "$root/tests/WpfVisualTreeMcp.IntegrationTests/WpfVisualTreeMcp.IntegrationTests.csproj" -c Release --filter 'Category=Integration' --verbosity normal
     if ($LASTEXITCODE -ne 0) { throw 'Inspection/screenshot integration matrix failed.' }
+    foreach ($case in @('net8.0-windows/x64', 'net472/x86')) {
+        $sample = Join-Path $work "samples/$case/AutoInjection/SampleWpfApp.exe"
+        & python "$root/scripts/test_workflow.py" --server $env:WPF_VISUAL_TREE_MCP_INTEGRATION_SERVER --sample $sample
+        if ($LASTEXITCODE -ne 0) { throw "Recorded workflow/xUnit round trip failed: $case" }
+    }
 }
 finally {
     $env:WPF_VISUAL_TREE_MCP_INTEGRATION_SERVER = $previousServer

@@ -30,6 +30,32 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<RecordingState> RecordAsync(string action, string? name = null)
+    {
+        var response = await SendRequestAsync<RecordRequest, RecordResponse>(EnsureConnected().ProcessId,
+            new RecordRequest { Action = action, Name = name });
+        if (!response.Success || response.State == null) throw new McpException(response.Error ?? "Recording unavailable.");
+        return response.State;
+    }
+
+    public async Task<ReplayResult> ReplayAsync(RecordedWorkflow workflow, int timeoutMs = 120000)
+    {
+        Shared.WorkflowCodec.Validate(workflow);
+        if (timeoutMs is < 1000 or > 120000) throw new ArgumentException("Replay timeout must be between 1000 and 120000 ms.");
+        var response = await SendRequestAsync<ReplayRequest, ReplayResponse>(EnsureConnected().ProcessId,
+            new ReplayRequest { Workflow = workflow, TimeoutMs = timeoutMs });
+        if (!response.Success || response.Result == null) throw new InvalidOperationException(response.Error ?? "Replay unavailable.");
+        return response.Result;
+    }
+
+    public async Task<string?> AssertElementAsync(string elementHandle, string propertyName, string expectedValue)
+    {
+        var response = await SendRequestAsync<AssertElementRequest, AssertElementResponse>(EnsureConnected().ProcessId,
+            new AssertElementRequest { ElementHandle = elementHandle, PropertyName = propertyName, ExpectedValue = expectedValue });
+        if (!response.Success) throw new McpException(response.Error ?? "Assertion failed.");
+        return response.ActualValue;
+    }
+
     public async Task<DiagnosticReport> ReportAsync(string? rootHandle, int maxElements, int maxDepth, int maxFindings)
     {
         var response = await SendRequestAsync<ReportRequest, ReportResponse>(EnsureConnected().ProcessId,
@@ -717,7 +743,8 @@ public class NamedPipeBridge : IIpcBridge
             var requestJson = IpcSerializer.SerializeRequest(request);
             await writer.WriteLineAsync(requestJson);
 
-            using var readCts = new CancellationTokenSource(_requestTimeout);
+            using var readCts = new CancellationTokenSource(request is ReplayRequest replay
+                ? TimeSpan.FromMilliseconds(replay.TimeoutMs + 15000) : _requestTimeout);
             var responseJson = await reader.ReadLineAsync(readCts.Token);
 
             if (string.IsNullOrEmpty(responseJson))

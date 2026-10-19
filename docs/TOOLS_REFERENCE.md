@@ -23,6 +23,68 @@ an empty findings list with incomplete coverage is not a clean bill of health.
 
 CLI equivalent: `wpfinspect report --pid 1234 --root elem_00000001 --max 500 --depth 25 --max-findings 100`.
 
+## Record, replay and export tests
+
+1. Attach to the app and call `wpf_record(action="start", name="Save form")`.
+2. Use the existing tools to find controls and perform actions. Recording captures
+   click, set-text, selection, send-keys, drag, touch, set/revert-property, find/deep-find,
+   successful waits and successful `wpf_assert` calls. Calls must be sequential.
+3. Check asynchronous results with `wpf_wait_for_element`. Check exact values with
+   `wpf_assert(element_handle, property_name, expected_value)`, for example `Text="Alice"`
+   or `SelectedIndex="5"`. Comparison is ordinal, using an invariant string value;
+   `{null}` means null. An unknown property or mismatch fails the call.
+4. Call `wpf_record(action="stop")`, then `wpf_export_test(format="xunit")`.
+   Save the returned `files` map into a new directory. Set `WPF_TEST_APP` and
+   `WPFINSPECT_PATH` to absolute executable paths and run `dotnet test`.
+
+The generated .NET 8 xUnit test starts a fresh app, attaches through the CLI,
+replays `workflow.json`, and terminates only its own app and its children.
+Optional `WPF_TEST_APP_ARGS_JSON` supplies an array of application arguments.
+No additional UI-driver library is required. Mouse/touch/physical keyboard
+actions need an unlocked interactive desktop; touch still depends on app support.
+Assertions and waits verify outcomes; successful input delivery alone does not.
+
+`wpf_get_recording` returns `{active, workflow}`. `wpf_record(action="status")` is
+equivalent. Recordings live in the target Inspector, so separate CLI invocations
+share them until the app exits. Export before `clear`; `start` refuses to replace
+an existing recording. Failed actions/assertions and timed-out waits are not saved.
+Input strings are plain text in the exported JSON; review it before sharing.
+
+Selectors prefer exact AutomationId, x:Name, then visible text, always with an
+exact full type name. A unique named/identified ancestor can scope template parts
+such as a slider Thumb. Capture and replay reject ambiguity or incomplete selector
+searches; they never choose an arbitrary first match. Only realized elements can
+be selected. Handles and screen coordinates are not persisted: gestures retain
+local WPF DIP parameters and resolve fresh targets during replay.
+
+`wpf_replay(workflow, timeout_ms=120000)` requires recording to be stopped. The
+whole document is validated before any action, then targets are resolved before
+each step. The result contains `success`, `completedSteps`, and, on failure,
+one-based `failedStep` plus `error`. Earlier actions are not rolled back.
+WPF input/binding/layout callbacks run between steps; asynchronous application
+work still needs explicit recorded waits. Other mutations are rejected during
+replay; inspection remains available. While recording, recordable queries also
+use the interaction gate to preserve step order.
+
+Version 1 supports a linear sequence of 1–100 steps, up to 512 KiB of serialized
+JSON, and a cooperative replay deadline of 1–120 seconds. Selector lookup is
+bounded to 10000 elements and two seconds. Export formats are `xunit` (default)
+and `json`; there are no branches, loops or arbitrary script steps.
+
+```powershell
+wpfinspect record start --pid 1234 --name "Save form"
+# Use find, set-text, click, select-item, drag, touch, wait-for, assert...
+wpfinspect assert --pid 1234 --handle elem_00000042 --property Text --expected Alice
+wpfinspect record stop --pid 1234
+wpfinspect get-recording --pid 1234 --out workflow.json
+wpfinspect export-test --pid 1234 --format xunit --out ./new-test-directory
+wpfinspect replay --pid 5678 --file workflow.json
+```
+
+CLI replay and assertions return exit code 1 on failure. `get-recording --out`
+requires a new file; `export-test --out` requires a new or empty directory.
+Without `--out`, export returns the file-name/content map as JSON.
+
 ## Screenshots
 
 ### wpf_capture_screenshot

@@ -484,6 +484,10 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
 | `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` includes popups and menus; `full_content=true` with render mode captures scrollable content |
 | `wpf_report` | Aggregate current binding/validation errors, UI state counts and recent binding traces, with explicit scan limits and coverage |
+| `wpf_record` / `wpf_get_recording` | Start, stop, inspect or clear a workflow recording with stable selectors |
+| `wpf_assert` | Assert a dependency-property value; successful assertions are included in active recordings |
+| `wpf_replay` | Replay a workflow against a fresh app, stopping at the first failed step |
+| `wpf_export_test` | Export a stopped recording as a runnable xUnit project or workflow JSON |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |
@@ -577,7 +581,9 @@ diff a before/after snapshot to see exactly what moved.
 - [x] `wpf_set_property` / `wpf_revert_property` — live-edit a dependency property, then undo *(v0.9.0)*
 - [x] `wpf_snapshot` / `wpf_diff` — before/after snapshot to verify a change's effect *(v0.10.0)*
 - [x] `wpf_evaluate_binding` — explain why a property has its value; resolve a binding path hop-by-hop *(v0.11.0)*
-- [ ] `wpf_record` → `wpf_export_test` — record a driven workflow, export an xUnit + driver test
+- [x] `wpf_record` → `wpf_export_test` — stable-selector replay and fresh-process xUnit tests, including drag/touch *(v0.16.0)*
+- [x] `wpf_report` — bounded aggregate diagnostics with explicit coverage *(v0.16.0)*
+- [x] .NET Framework 4.7.2 and full-content scroll screenshots *(v0.16.0)*
 - [ ] Inspector-only NuGet package for self-hosted mode (reference instead of injection)
 - [ ] Streaming binding-error / property-change notifications to the MCP client
 - [ ] WinUI 3 support
@@ -622,7 +628,7 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 20 WPF tools (17 inspection + click/set-text/send-keys)
+│   │   ├── WpfTools.cs                 # 36 inspection, interaction and workflow tools
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
@@ -645,7 +651,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.7.2, 4.8 and .NET 8.0-windows (Inspector)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 30 tools auto-discovered via `[McpServerTool]` attributes (22 read-only inspection incl. `wpf_wait_for`, `wpf_snapshot`, `wpf_diff`, `wpf_evaluate_binding`, `wpf_explain_triggers` + 8 state-changing: `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, `wpf_revert_property`)
+- **Tools**: 36 tools auto-discovered via `[McpServerTool]` attributes, covering inspection, diagnostics, interaction and workflow recording/testing. Replay performs recorded actions; full-content screenshots may temporarily scroll controls.
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

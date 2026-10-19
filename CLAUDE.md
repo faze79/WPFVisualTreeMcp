@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (31 tools)
+    ├─ WpfTools (36 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -49,15 +49,17 @@ Target WPF Application (.NET Framework)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** Multi-process architecture for safety. The server runs separately and communicates via named pipes. All operations are read-only **except `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property`**, which drive controls or edit property values and change application state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
+**Key Design:** The server runs separately and communicates via named pipes. `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property` change application state. `wpf_replay` executes recorded actions; full-content screenshots can temporarily scroll controls and trigger handlers. Recording/snapshots/watches maintain Inspector state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
 
 ## Key Source Locations
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 31 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 31 inspection commands plus CLI-only `update` |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 36 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 36 inspection/workflow commands plus CLI-only `update` |
+| Workflow Recording | `WorkflowRecorder.cs`, `StableSelectors.cs`, `InspectorService.Workflow.cs` | Inspector-owned recording and gated replay; exact selectors, explicit waits/assertions |
+| Test Export | `src/WpfVisualTreeMcp.Server/WorkflowTestExporter.cs` | Data-only workflow JSON plus a standalone xUnit project using CLI replay |
 | Aggregate Diagnostics | `src/WpfVisualTreeMcp.Inspector/DiagnosticReporter.cs` | Bounded realized-tree scan, current binding/validation errors and separate process-wide trace history |
 | CLI Updater | `Cli/SelfUpdater.cs` + embedded `Cli/UpdateWorker.ps1` | Stable version lookup, verified staging, detached installation and status |
 | Trigger / Style Diagnostics | `ResourceInspector.ExplainTriggers` | Evaluate Style + ControlTemplate triggers vs current state (active/inactive + setters); attribute a property value to its style setter / active trigger |
@@ -116,6 +118,14 @@ Target WPF Application (.NET Framework)
 - Pipe name format: `wpf_inspector_{pid}`
 - Connection timeout: 5 seconds
 - Request timeout: 30 seconds
+- Replay uses its explicit 1–120-second deadline plus 15 seconds of IPC headroom.
+- Recording state belongs to the target Inspector, persists across one-shot CLI
+  calls and uses the interaction gate for recordable calls. Replay holds the gate
+  for the sequence while leaving other inspection queries available. It yields
+  at Dispatcher Background priority between steps; explicit waits handle app async work.
+- `scripts/test_workflow.py --server <exe> --sample <exe> [--gestures]` records
+  through MCP/CLI, verifies export equality, compiles the generated xUnit project,
+  and replays in a fresh app. The optional gesture path requires the interactive desktop.
 - Uses direct byte I/O (not StreamReader/Writer) due to .NET Framework 4.8 deadlock issues
 
 ### Element Handles

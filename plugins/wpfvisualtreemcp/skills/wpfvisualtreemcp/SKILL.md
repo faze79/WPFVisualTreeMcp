@@ -1,6 +1,6 @@
 ---
 name: wpfvisualtreemcp
-description: Inspect and interact with running Windows WPF applications using the WPF Visual Tree MCP. Use for visual-tree inspection, binding/style diagnosis, screenshots, mouse dragging, touch gestures and other requested UI interaction, or updating this plugin's server/skill. Not for WinUI, Avalonia, or static XAML review without a running WPF app.
+description: Inspect and interact with running Windows WPF applications using the WPF Visual Tree MCP. Use for visual-tree inspection, binding/style diagnosis, diagnostic reports, screenshots, mouse dragging, touch gestures, recording/replaying workflows and exporting xUnit regression tests, or updating this plugin's server/skill. Not for WinUI, Avalonia, or static XAML review without a running WPF app.
 ---
 
 # WPFVisualTreeMcp
@@ -34,6 +34,14 @@ For requested UI interaction, prefer `wpf_click_element`, `wpf_select_item`, and
 For a requested temporary property experiment, take a `wpf_snapshot`, apply `wpf_set_property`, and compare with `wpf_diff`. Restore experimental values with `wpf_revert_property` unless the user wants them retained. Runtime edits do not update source XAML.
 
 Report the observed control, relevant property or binding, and evidence for the diagnosis. Distinguish a verified cause from an inference and state whether an interaction or experiment changed application state.
+
+## Record a repeatable test
+
+For a requested regression test, start `wpf_record(action="start")`, then perform the workflow sequentially. Existing input tools, including drag/touch, finds, successful waits and assertions are captured. Use explicit `wpf_wait_for_element` calls for asynchronous changes and `wpf_assert` for exact dependency-property values (`expected_value` uses invariant strings; `{null}` means null).
+
+Stop recording, inspect `wpf_get_recording`, then use `wpf_export_test(format="xunit")`. Save its file-name/content map in a new directory. The generated test runs with `WPF_TEST_APP` and `WPFINSPECT_PATH` set to absolute executable paths, then `dotnet test`; it starts a fresh app. Verify that test before reporting the workflow reproducible. CLI equivalents are `record start|stop|status|clear`, `get-recording`, `assert`, `replay --file`, and `export-test --format xunit --out NEW_DIRECTORY`.
+
+Recordings live in the inspected process and vanish when it exits. Export before clearing; input values are plain text. Selectors use exact identities and reject missing/ambiguous controls. Do not replace a failed selector with a stale handle or arbitrary first match. Version 1 is linear, limited to 100 steps/512 KiB; replay has a maximum 120-second deadline and stops at the first failure without undoing earlier actions. Physical input still requires the interactive desktop and app gesture support. Inspect explicit assertions and application state when replaying; input delivery alone does not prove the intended result.
 
 ## Connection failures
 

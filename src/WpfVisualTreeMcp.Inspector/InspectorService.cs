@@ -6,17 +6,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfVisualTreeMcp.Shared.Ipc;
+using WpfVisualTreeMcp.Shared;
+using WpfVisualTreeMcp.Shared.Models;
 
 namespace WpfVisualTreeMcp.Inspector;
 
 /// <summary>
 /// Main entry point for the inspector when loaded into a WPF application.
 /// </summary>
-public class InspectorService : IDisposable
+public partial class InspectorService : IDisposable
 {
     private static readonly TimeSpan FullContentCaptureTimeout = TimeSpan.FromSeconds(25);
     private readonly IpcServer _ipcServer;
     private readonly TreeWalker _treeWalker;
+    private readonly WorkflowRecorder _recorder;
     private readonly PropertyReader _propertyReader;
     private readonly PropertyWriter _propertyWriter;
     private readonly Dictionary<string, Dictionary<string, SnapshotNode>> _snapshots = new();
@@ -166,6 +169,7 @@ public class InspectorService : IDisposable
     private InspectorService(int processId)
     {
         _treeWalker = new TreeWalker();
+        _recorder = new WorkflowRecorder(_treeWalker);
         _propertyReader = new PropertyReader();
         _propertyWriter = new PropertyWriter();
         _bindingAnalyzer = new BindingAnalyzer();
@@ -217,49 +221,36 @@ public class InspectorService : IDisposable
                 return new GetVisualTreeResponse { Success = false, Error = "Application.Current is null" };
             }
 
-            // WaitForElement polls over time: it must NOT run inside a single blocking
-            // Dispatcher.Invoke (that would freeze the UI so the condition can never
-            // change, and blow the 10s Invoke timeout). Handle it with a background
-            // loop that does a short Invoke per check and yields the UI thread between.
-            if (requestType == "WaitForElement")
-            {
-                return await HandleWaitForElementAsync(data);
-            }
-
             var fullContent = requestType == "CaptureScreenshot" &&
                 IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data)?.FullContent == true;
             // Input sequences share the OS mouse. Fail fast instead of interleaving
             // concurrent mutations or queuing them past the IPC timeout.
             if (requestType is "Drag" or "TouchGesture" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
-                or "SetProperty" or "RevertProperty" || fullContent)
+                or "SetProperty" or "RevertProperty" or "Record" or "Replay" or "AssertElement"
+                || fullContent || (_recorder.Active && WorkflowCodec.IsRecordable(requestType)))
             {
                 ownsInteraction = _interactionGate.Wait(0);
                 if (!ownsInteraction)
                     return new DragResponse { Success = false, Error = "Another interaction is in progress. Retry after it completes." };
             }
 
-            if (requestType == "Drag")
-                return await HandleDragAsync(data).ConfigureAwait(false);
-            if (requestType == "TouchGesture")
-                return await HandleTouchGestureAsync(data).ConfigureAwait(false);
+            if (requestType == "Replay")
+                return await HandleReplayAsync(data).ConfigureAwait(false);
+
+            WorkflowStep? recordedStep = null;
+            if (ownsInteraction && _recorder.Active && WorkflowCodec.IsRecordable(requestType))
+                recordedStep = await OnDispatcher(() => _recorder.Prepare(requestType, data), _inputShutdown.Token);
 
             using var captureTimeout = fullContent
                 ? CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token) : null;
             captureTimeout?.CancelAfter(FullContentCaptureTimeout);
             var captureToken = captureTimeout?.Token ?? CancellationToken.None;
 
-            // Use Task.Run to avoid blocking the named pipe thread
-            var result = await Task.Run(() =>
-            {
-                DebugLog($"Task.Run thread {System.Threading.Thread.CurrentThread.ManagedThreadId}, calling Dispatcher.Invoke()");
-
-                // Use synchronous Invoke instead of InvokeAsync to avoid potential deadlocks
-                return Application.Current.Dispatcher.Invoke(() =>
-                {
-                    DebugLog($"Inside Dispatcher callback, UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-                    return HandleRequest(requestType, data, captureToken);
-                }, System.Windows.Threading.DispatcherPriority.Normal, captureToken, TimeSpan.FromSeconds(10));
-            });
+            var result = await ExecuteOperationAsync(requestType, data, captureToken).ConfigureAwait(false);
+            if (ownsInteraction && result.Success)
+                await OnDispatcher(() => true, _inputShutdown.Token, System.Windows.Threading.DispatcherPriority.Background);
+            if (recordedStep != null && result.Success && (result is not WaitForElementResponse wait || wait.Matched))
+                await OnDispatcher(() => { _recorder.Commit(recordedStep); return true; }, _inputShutdown.Token);
 
             DebugLog($"HandleRequest completed successfully");
             return result;
@@ -281,13 +272,13 @@ public class InspectorService : IDisposable
         }
     }
 
-    private async Task<IpcResponse> HandleDragAsync(JsonElement data)
+    private async Task<IpcResponse> HandleDragAsync(JsonElement data, CancellationToken cancellationToken = default)
     {
         var request = IpcSerializer.DeserializeRequestData<DragRequest>(data)
             ?? throw new ArgumentException("Drag request is required.");
         if (request.Options == null) throw new ArgumentException("Drag options are required.");
         request.Options.Validate();
-        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token);
+        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token, cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         var plan = await Task.Run(() => Application.Current.Dispatcher.Invoke(() =>
         {
@@ -305,13 +296,13 @@ public class InspectorService : IDisposable
         return new DragResponse { RequestId = request.RequestId, Result = result };
     }
 
-    private async Task<IpcResponse> HandleTouchGestureAsync(JsonElement data)
+    private async Task<IpcResponse> HandleTouchGestureAsync(JsonElement data, CancellationToken cancellationToken = default)
     {
         var request = IpcSerializer.DeserializeRequestData<TouchGestureRequest>(data)
             ?? throw new ArgumentException("Touch gesture request is required.");
         if (request.Options == null) throw new ArgumentException("Touch gesture options are required.");
         request.Options.Validate();
-        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token);
+        using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token, cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         var plan = await Task.Run(() => Application.Current.Dispatcher.Invoke(() =>
         {
@@ -346,6 +337,8 @@ public class InspectorService : IDisposable
     {
         return requestType switch
         {
+            "Record" => HandleRecord(data),
+            "AssertElement" => HandleAssertElement(data),
             "Report" => HandleReport(data),
             "GetVisualTree" => HandleGetVisualTree(data),
             "GetElementProperties" => HandleGetElementProperties(data),
@@ -1012,7 +1005,7 @@ public class InspectorService : IDisposable
         }
     }
 
-    private async Task<IpcResponse> HandleWaitForElementAsync(JsonElement data)
+    private async Task<IpcResponse> HandleWaitForElementAsync(JsonElement data, CancellationToken cancellationToken = default)
     {
         var request = IpcSerializer.DeserializeRequestData<WaitForElementRequest>(data);
         if (request == null)
@@ -1058,10 +1051,12 @@ public class InspectorService : IDisposable
         var start = DateTime.UtcNow;
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var hit = Application.Current.Dispatcher.Invoke(
-                () => _treeWalker.FindFirstMatch(criteria),
+                () => _treeWalker.FindFirstMatch(criteria, request.RootHandle == null ? null :
+                    _treeWalker.ResolveHandle(request.RootHandle) ?? throw new InvalidOperationException(StaleHandleError(request.RootHandle))),
                 System.Windows.Threading.DispatcherPriority.Normal,
-                System.Threading.CancellationToken.None,
+                cancellationToken,
                 TimeSpan.FromSeconds(10));
 
             var satisfied = condition == "hidden" ? hit == null : hit != null;
@@ -1089,7 +1084,7 @@ public class InspectorService : IDisposable
                 };
             }
 
-            await Task.Delay(pollMs);
+            await Task.Delay(pollMs, cancellationToken);
         }
     }
 

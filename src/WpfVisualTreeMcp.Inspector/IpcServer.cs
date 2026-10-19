@@ -99,6 +99,8 @@ public class IpcServer : IDisposable
             // Fix for .NET Framework 4.8: StreamReader/StreamWriter cause deadlocks on NamedPipeServerStream
             // Use direct byte I/O instead
             var buffer = new byte[4096];
+            var decoder = Encoding.UTF8.GetDecoder();
+            var characters = new char[Encoding.UTF8.GetMaxCharCount(buffer.Length)];
             var stringBuilder = new StringBuilder();
 
             DebugLog("HandleClientAsync: Entering read loop with direct byte I/O");
@@ -108,6 +110,7 @@ public class IpcServer : IDisposable
                 try
                 {
                     stringBuilder.Clear();
+                    decoder.Reset();
                     DebugLog("HandleClientAsync: Reading from pipe...");
 
                     // Read until we get a newline
@@ -122,8 +125,10 @@ public class IpcServer : IDisposable
                             return;
                         }
 
-                        var text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        stringBuilder.Append(text);
+                        var characterCount = decoder.GetChars(buffer, 0, bytesRead, characters, 0, false);
+                        stringBuilder.Append(characters, 0, characterCount);
+                        if (stringBuilder.Length > 2 * 1024 * 1024)
+                            throw new InvalidOperationException("IPC request exceeds the 2 MiB character limit.");
 
                         // Check if we have a complete line
                         var currentText = stringBuilder.ToString();

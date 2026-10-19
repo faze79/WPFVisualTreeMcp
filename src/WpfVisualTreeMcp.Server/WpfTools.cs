@@ -24,6 +24,28 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Start/stop/status/clear a linear workflow recording in the attached app. Captures subsequent input actions (including drag/touch), finds, successful waits and assertions using stable selectors. Stop and export before clearing. Recording persists across CLI invocations until the target exits; values are stored as plain text. Calls must be sequential while recording.")]
+    public Task<RecordingState> WpfRecord(string action, string? name = null) => _ipcBridge.RecordAsync(action, name);
+
+    [McpServerTool]
+    [Description("Get the current recording state and versioned workflow JSON, with stable selectors instead of session handles.")]
+    public Task<RecordingState> WpfGetRecording() => _ipcBridge.RecordAsync("status");
+
+    [McpServerTool]
+    [Description("Assert an element's dependency-property value using an exact ordinal comparison of its invariant string value; use {null} for null. Throws on mismatch. Successful assertions are saved while recording. Use wpf_wait_for_element first for asynchronous changes.")]
+    public async Task<object> WpfAssert(string element_handle, string property_name, string expected_value)
+        => new { success = true, actual_value = await _ipcBridge.AssertElementAsync(element_handle, property_name, expected_value) };
+
+    [McpServerTool]
+    [Description("Replay a versioned workflow against the attached app, resolving fresh unique selectors. Changes app state; stop recording first. Explicit waits handle async UI changes. Stops at first failure without rollback; failedStep is one-based. Physical actions need an interactive desktop. Deadline max 120 seconds; queries stay available, other mutations are rejected.")]
+    public Task<ReplayResult> WpfReplay(RecordedWorkflow workflow, int timeout_ms = 120000) => _ipcBridge.ReplayAsync(workflow, timeout_ms);
+
+    [McpServerTool]
+    [Description("Export a stopped recording as file-name/content pairs: xunit (default) produces a runnable .NET 8 test project plus workflow.json; json returns only workflow.json. Save these files to a new directory, set WPF_TEST_APP and WPFINSPECT_PATH, then dotnet test. Tests start a fresh app. Explicit recorded assertions verify outcomes.")]
+    public async Task<object> WpfExportTest(string format = "xunit")
+        => new { files = WorkflowTestExporter.Export(await _ipcBridge.RecordAsync("status"), format) };
+
+    [McpServerTool]
     [Description("List all running WPF applications available for inspection")]
     public async Task<object> WpfListProcesses()
     {
