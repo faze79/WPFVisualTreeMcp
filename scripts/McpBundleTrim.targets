@@ -1,0 +1,13 @@
+<Project>
+  <!-- The MCP SDK discovers tools by reflection. Preserve the server, protocol
+       SDK and IPC models while trimming unused framework implementation code. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'WpfVisualTreeMcp.Server'">
+    <TrimmerRootAssembly Include="WpfVisualTreeMcp.Server" />
+    <TrimmerRootAssembly Include="WpfVisualTreeMcp.Shared" />
+    <TrimmerRootAssembly Include="WpfVisualTreeMcp.Injector" />
+    <TrimmerRootAssembly Include="ModelContextProtocol" />
+    <TrimmerRootAssembly Include="ModelContextProtocol.Core" />
+    <TrimmerRootAssembly Include="System.Text.Json" />
+    <TrimmerRootAssembly Include="Serilog" />
+  </ItemGroup>
+</Project>

@@ -302,7 +302,9 @@ user's local installation. CLI `update` replaces binaries, not skill instruction
    built release checkout. It bundles the server runtime and a single-file x86
    helper, and generates metadata from the actual MCP tool list. Follow
    `docs/MCPB.md`, test the extracted archive, then attach the `.mcpb` to the
-   corresponding GitHub release. This packaging step is currently manual.
+   corresponding GitHub release. Use `-Compact` for clients with upload limits;
+   test the compact archive itself, including the gesture workflow. This
+   packaging step is currently manual.
 
 ## Test Framework
 

@@ -163,7 +163,10 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 Clients that support MCP bundles can import
 [`WpfVisualTreeMcp-v0.16.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.16.0/WpfVisualTreeMcp-v0.16.0-win-x64.mcpb).
 This Windows x64 bundle includes the server runtime and a self-contained x86
-injection helper. Update it through the client's extension UI. See the
+injection helper. A smaller
+[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.16.0/WpfVisualTreeMcp-v0.16.0-win-x64-compact.mcpb)
+provides the same tools with a reduced runtime for catalogs with upload limits.
+Update either bundle through the client's extension UI. See the
 [MCPB guide](docs/MCPB.md) for requirements, packaging and verification.
 
 #### Option 3: Build from Source

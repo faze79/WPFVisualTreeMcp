@@ -7,14 +7,14 @@ text to submit. Keep the entries in sync when the tool count or tagline changes.
 
 | Channel | Status |
 | --- | --- |
-| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.16.0) | v0.16.0 published. GitHub also includes the Windows x64 MCPB bundle with packaged server/helper runtimes. |
+| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.16.0) | v0.16.0 published. GitHub also includes full and compact Windows x64 MCPB bundles with packaged server/helper runtimes. Both expose all 36 tools; the compact variant is about 17 MiB. |
 | Official MCP Registry | v0.16.0 published as `io.github.faze79/wpf-visual-tree`. |
 | [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated; v0.16.0 published as **Latest**. The [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) lists all 36 tools, including drag, touch, diagnostics and workflow recording/replay/export. Build and release publication were verified separately. |
 | [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) updates the description for workflows, touch and full-content screenshots. |
 | [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | Profile exists; [correction #372](https://github.com/YugantM/hvtracker/issues/372) requests the missing NuGet package association and refreshed metadata. Awaiting its maintainer. |
 | [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | Existing listing found through its internal search. Its [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) still shows v0.12.0. The directory has [paused submissions and listing changes](https://www.pulsemcp.com/submit); it says it will ingest the Official MCP Registry when processing resumes. v0.16.0 is already published there. |
 | mcp.so | Submission form prepared with the repository URL and project name. The site requires a **39 USD one-time fee**; no payment authorized or listing published. |
-| Smithery | Browser login completed. A Windows x64 [MCPB bundle](MCPB.md) for v0.16.0 is available on GitHub with all 36 tools; its extracted payload passed the 12-case integration matrix and two workflow/xUnit round trips. Smithery publication uses the CLI and is pending its separate API-key access authorization. No Smithery listing published yet. |
+| Smithery | Browser and CLI authentication completed. Publication is blocked by the service: the create-server API returns HTTP 403, `Updating servers has been removed`; server lookup and release submission return HTTP 404. No listing published. The compact [MCPB bundle](MCPB.md) passed the 12-case integration matrix and two workflow/xUnit round trips, including 24 steps with mouse and touch gestures. |
 
 ## Canonical pitch
 
@@ -122,8 +122,9 @@ Keep the existing Glama badge and platform markers. Follow the upstream
   submissions and changes to existing listings; check again when intake resumes.
 - **Smithery** — <https://smithery.ai/servers/new>. Treat this server as local-only:
   WPF interaction needs Windows and the local desktop. The web form accepts HTTP
-  endpoints; use the [MCPB publishing procedure](MCPB.md#smithery-publishing) for
-  this server. Recheck availability before submission: Smithery [announces](https://smithery.ai/future)
+  endpoints. The [MCPB availability notes](MCPB.md#smithery-availability) record
+  the current API restriction and CLI schema incompatibility. Recheck availability
+  before submission: Smithery [announces](https://smithery.ai/future)
   that its proxy, managed identity and accounts stop working on 2026-10-31,
   while the public registry remains available.
 - **HVTracker** — [profile](https://hvtracker.net/agents/wpfvisualtreemcp/).

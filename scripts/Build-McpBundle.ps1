@@ -1,7 +1,10 @@
 param(
     # Build the native bootstrapper and solution in this checkout first.
     [string]$SourceDirectory = (Split-Path $PSScriptRoot -Parent),
-    [Parameter(Mandatory)][string]$OutputDirectory
+    [Parameter(Mandatory)][string]$OutputDirectory,
+    # Smithery limits MCPB uploads to 25 MB. Keep reflected application models
+    # and tools intact while trimming unused runtime implementation code.
+    [switch]$Compact
 )
 $ErrorActionPreference = 'Stop'
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
@@ -11,6 +14,12 @@ $bundle = Join-Path $output 'bundle'
 $server = Join-Path $bundle 'server'
 $helper = Join-Path $output 'helper'
 New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+$publishOptions = @('-f', 'net8.0')
+if ($Compact) {
+    $publishOptions += @('-p:TargetFrameworks=net8.0', '-p:PublishTrimmed=true',
+        '-p:TrimMode=full', '-p:JsonSerializerIsReflectionEnabledByDefault=true',
+        "-p:CustomAfterMicrosoftCommonTargets=$(Join-Path $PSScriptRoot 'McpBundleTrim.targets')")
+}
 
 Push-Location $source
 try {
@@ -20,9 +29,9 @@ try {
         dotnet build "src/WpfVisualTreeMcp.$project/WpfVisualTreeMcp.$project.csproj" -c Release -f net8.0 -r win-x64 --verbosity quiet
         if ($LASTEXITCODE -ne 0) { throw "$project build failed" }
     }
-    dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -r win-x64 --self-contained true -p:BuildProjectReferences=false -o $server --verbosity quiet
+    dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -r win-x64 --self-contained true -p:BuildProjectReferences=false -o $server --verbosity quiet @publishOptions
     if ($LASTEXITCODE -ne 0) { throw 'Self-contained server publish failed' }
-    dotnet publish src/WpfVisualTreeMcp.InjectorHelper/WpfVisualTreeMcp.InjectorHelper.csproj -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $helper --verbosity quiet
+    dotnet publish src/WpfVisualTreeMcp.InjectorHelper/WpfVisualTreeMcp.InjectorHelper.csproj -c Release -r win-x86 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $helper --verbosity quiet @publishOptions
     if ($LASTEXITCODE -ne 0) { throw 'Self-contained helper publish failed' }
     # Copy ONLY the single-file helper. Its runtime DLLs would otherwise overwrite
     # the .NET Framework Inspector dependencies in native/x86 and break injection.
@@ -47,9 +56,13 @@ try {
     python (Join-Path $PSScriptRoot 'create-mcpb-manifest.py') --source $source --bundle $bundle
     if ($LASTEXITCODE -ne 0) { throw 'MCP schema verification/manifest generation failed' }
     $manifest = Get-Content (Join-Path $bundle 'manifest.json') -Raw | ConvertFrom-Json
-    $archive = Join-Path $output "WpfVisualTreeMcp-v$($manifest.version)-win-x64.mcpb"
+    $suffix = if ($Compact) { '-compact' } else { '' }
+    $archive = Join-Path $output "WpfVisualTreeMcp-v$($manifest.version)-win-x64$suffix.mcpb"
     npx --yes @anthropic-ai/mcpb@2.1.2 pack $bundle $archive
     if ($LASTEXITCODE -ne 0) { throw 'MCPB validation/pack failed' }
+    if ($Compact -and (Get-Item -LiteralPath $archive).Length -gt 25MB) {
+        throw 'Compact bundle exceeds the Smithery upload limit of 25 MB.'
+    }
     Get-FileHash -LiteralPath $archive -Algorithm SHA256
 } finally {
     Pop-Location
