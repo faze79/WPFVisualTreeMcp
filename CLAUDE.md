@@ -271,9 +271,11 @@ user's local installation. CLI `update` replaces binaries, not skill instruction
 2. Bump **both** `version` fields in `src/WpfVisualTreeMcp.Server/.mcp/server.json`
    (registry manifest — must match the NuGet package version exactly)
 3. Update `CHANGELOG.md` and `RELEASE_NOTES.md`
-4. Commit, tag `vX.Y.Z`, push tag → `release.yml` builds the zip, creates the GitHub
-   release, packs the NuGet package and pushes it to nuget.org (needs the
-   `NUGET_API_KEY` repo secret; skipped with a notice if absent)
+4. Commit, tag `vX.Y.Z`, push tag → `release.yml` builds the server and Codex plugin
+   ZIPs, creates the GitHub release, packs the NuGet package and pushes it to
+   nuget.org (trusted publishing / OIDC, using the `NUGET_USER` repo secret and
+   the nuget.org publishing policy; skipped with a notice if absent). The plugin
+   ZIP uses `git archive` to preserve its required dot-directories.
 5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
    workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
 

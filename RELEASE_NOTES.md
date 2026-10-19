@@ -1,5 +1,31 @@
 # Release Notes
 
+## v0.15.0 — Codex plugin and companion skill (2026-10-19)
+
+Install the MCP configuration and WPF inspection skill together in Codex, thanks
+to @gaoshang212's [PR #23](https://github.com/faze79/WPFVisualTreeMcp/pull/23):
+
+```powershell
+codex plugin marketplace add https://github.com/faze79/WPFVisualTreeMcp.git
+codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp
+```
+
+Start a new Codex session, then ask it to inspect your running WPF application.
+The skill covers all 30 tools, including mouse dragging and touch gestures,
+and explains how to update the server, standalone CLI and plugin separately.
+
+The release also includes `WpfVisualTreeMcp-v0.15.0-codex-plugin.zip`. Extract it
+and run `codex plugin marketplace add .` from its root, followed by the same
+`plugin add` command. This archive contains the plugin and marketplace; it still
+downloads the latest stable server from NuGet. The Windows server ZIP and NuGet
+package are also updated to 0.15.0. Server behavior is unchanged from 0.14.0.
+
+The plugin requires Windows, a Codex client with plugin support, .NET SDK
+10.0.300+ within .NET 10, the .NET 8 runtime and internet access. For requirements,
+installation checks and existing-plugin updates, see [Codex plugin](README.md#codex-plugin).
+Standalone CLI users can run `wpfinspect update` and confirm completion with
+`wpfinspect update --status`; this does not update plugin or skill files.
+
 ## v0.14.0 — CLI self-update (2026-10-19)
 
 Run `wpfinspect update` or `WpfVisualTreeMcp.Server.exe update` to update the copy

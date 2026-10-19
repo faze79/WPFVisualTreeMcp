@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] - 2026-10-19
 
 ### Added
 
@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin installation, MCP startup, all 30 tools and x64/x86 Inspector injection.
 - Companion skill guidance for mouse dragging, touch gestures and the distinction
   between CLI self-update, `dnx` server refresh and plugin/skill updates.
+- Separate `WpfVisualTreeMcp-v0.15.0-codex-plugin.zip` release asset containing the
+  local marketplace, MCP configuration and skill, including their dot-directories.
+  The existing Windows server archive and NuGet package remain available.
+
+### Installation and updates
+
+- Install the Codex plugin from Git: `codex plugin marketplace add https://github.com/faze79/WPFVisualTreeMcp.git`,
+  then `codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp` and start a new session.
+- For the plugin ZIP, extract it and run `codex plugin marketplace add .` from the
+  extracted root, then the same `plugin add` command. Requires Windows, a Codex
+  client with plugin support, .NET SDK 10.0.300+ within .NET 10, the .NET 8 runtime
+  and internet access. The plugin resolves the latest stable server from NuGet.
+- Existing Git marketplace users: run `codex plugin marketplace upgrade WPFVisualTreeMcp`,
+  then reinstall with `codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp` and start
+  a new session to refresh the skill and configuration.
+- Existing standalone CLI users: `wpfinspect update`, then `wpfinspect update --status`.
+  This updates that CLI installation; plugin/skill files use the steps above.
+- Includes all 30 MCP tools, mouse dragging, touch gestures and CLI self-update
+  from previous releases. No new MCP commands or server behavior changes.
+
+Thanks to @gaoshang212 for [PR #23](https://github.com/faze79/WPFVisualTreeMcp/pull/23).
 
 ## [0.14.0] - 2026-10-19
 

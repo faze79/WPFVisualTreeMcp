@@ -37,6 +37,14 @@ Before you begin, ensure you have:
 dotnet tool install -g WpfVisualTreeMcp
 ```
 
+### Option 3: Codex plugin
+
+Install the MCP configuration and companion skill together using the
+[Codex plugin instructions](../README.md#codex-plugin). This method requires
+the .NET 10 SDK in addition to the .NET 8 runtime and resolves the latest stable
+server from NuGet. Use the Git marketplace or extract the plugin ZIP from the
+release. Plugin and skill updates use the marketplace, separately from CLI updates.
+
 ### Updating an installation
 
 Starting with v0.14.0:

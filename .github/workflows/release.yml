@@ -66,6 +66,13 @@ jobs:
       run: |
         Compress-Archive -Path ./publish/* -DestinationPath ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
 
+    - name: Create Codex plugin archive
+      shell: pwsh
+      # git archive preserves the dot-directories required by the marketplace and plugin.
+      run: |
+        git archive --format=zip --output=./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip HEAD .agents/plugins plugins/wpfvisualtreemcp LICENSE
+        if ($LASTEXITCODE -ne 0) { throw 'Codex plugin archive failed' }
+
     - name: Pack NuGet package
       run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
 
@@ -121,6 +128,7 @@ jobs:
         body_path: release-notes.md
         files: |
           ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
+          ./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip
           ./artifacts/*.nupkg
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}

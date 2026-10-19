@@ -14,9 +14,15 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
+**New in [v0.15.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.15.0):**
+a [Codex plugin](#codex-plugin) that installs the MCP configuration and companion
+skill together, with a dedicated plugin ZIP. Includes all 30 tools, mouse dragging,
+touch gestures and CLI self-update. Thanks to @gaoshang212 for
+[PR #23](https://github.com/faze79/WPFVisualTreeMcp/pull/23).
+
 ## Quickstart (60 seconds)
 
-1. Download and extract the [latest release](https://github.com/faze79/WPFVisualTreeMcp/releases) zip (requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)).
+1. Download and extract `WpfVisualTreeMcp-vX.Y.Z-win-x64.zip` from the [latest release](https://github.com/faze79/WPFVisualTreeMcp/releases/latest) (requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)).
 2. Register it in your MCP client — for Claude Code, add to `.mcp.json`:
    ```json
    {
@@ -33,10 +39,12 @@
 Prefer the terminal? The same exe is a full CLI: `WpfVisualTreeMcp.Server.exe help`.
 From v0.14.0, run `wpfinspect update` (or `WpfVisualTreeMcp.Server.exe update`)
 to update the installation you launched. See [updating](#updating).
+Using Codex? Follow the [plugin installation](#codex-plugin) to install the MCP
+configuration and skill together.
 
 ## Overview
 
-**WpfVisualTreeMcp** is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that allows AI coding agents (Claude Code, Cursor, GitHub Copilot) to inspect and interact with running WPF applications. Think of it as giving your AI assistant the same capabilities as tools like [Snoop WPF](https://github.com/snoopwpf/snoopwpf) or Visual Studio's Live Visual Tree.
+**WpfVisualTreeMcp** is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that allows AI coding agents (Codex, Claude Code, Cursor, GitHub Copilot) to inspect and interact with running WPF applications. Think of it as giving your AI assistant the same capabilities as tools like [Snoop WPF](https://github.com/snoopwpf/snoopwpf) or Visual Studio's Live Visual Tree.
 
 ### Why This Matters
 
@@ -108,12 +116,12 @@ command list. Output is JSON on stdout; diagnostics go to stderr.
 |---|---|---|---|
 | Sees the real visual tree (not just the UIA view) | ✅ injection | ❌ accessibility tree | ✅ |
 | Binding errors + DataContext **without a probe in the target** | ✅ | ❌ (needs in-process probe) | partial |
-| Interaction surface | click (UIA + physical, double/right), set-text w/ read-back, send-keys, **select-item (virtualized)** | click / type / select | usually invoke-only |
+| Interaction surface | click (UIA + physical, double/right), drag, touch gestures, set-text w/ read-back, send-keys, **select-item (virtualized)** | click / type / select | usually invoke-only |
 | Wait for element conditions | ✅ `wpf_wait_for` | ✅ | ❌ |
 | Popup / dropdown / context-menu screenshots | ✅ screen mode | partial | screenshot only |
 | Cross-architecture injection (x64 ⇄ x86) | ✅ | n/a | ❌ |
 | Dual-mode: MCP server **and** one-shot CLI | ✅ | ❌ | ❌ |
-| Distribution | NuGet (`dnx`/tool) + official MCP registry | varies | varies |
+| Distribution | NuGet (`dnx`/tool), official MCP registry, Codex plugin + skill | varies | varies |
 
 In short: UIA-based tools see what accessibility exposes, and computer-use agents see pixels. This project gives the agent **the same insider view a WPF developer has in Snoop — with no probe to install in the target app** — plus the widest set of hands to act on it, over a protocol every AI coding tool speaks.
 
@@ -292,7 +300,10 @@ Prerequisites for this installation method:
   version. Downloaded packages are cached by .NET. For x86 injection, install
   the x86 .NET 8 runtime as well.
 
-From the repository root, register the local marketplace and install the plugin:
+From the repository root, register the local marketplace and install the plugin.
+You can also download `WpfVisualTreeMcp-v0.15.0-codex-plugin.zip` from
+[GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
+extract it, and run these commands from the extracted root:
 
 ```powershell
 codex plugin marketplace add .
@@ -553,7 +564,8 @@ For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERE
 
 Shipped in **v0.13.0**: mouse dragging and native touch gestures, with MCP/CLI parity,
 sample demos, input cleanup, and real desktop validation across net48 x86/x64 and net8 x64.
-
+Shipped in **v0.14.0**: CLI self-update with version checks and installation status.
+Shipped in **v0.15.0**: Codex plugin marketplace, companion skill and plugin ZIP.
 
 The "change → measure → is it effective?" loop is complete: live-edit a property, then
 diff a before/after snapshot to see exactly what moved.
