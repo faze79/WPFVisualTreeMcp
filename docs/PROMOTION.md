@@ -9,7 +9,7 @@ text to submit. Keep the entries in sync when the tool count or tagline changes.
 | --- | --- |
 | [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.16.0) | v0.16.0 published. |
 | Official MCP Registry | v0.16.0 published as `io.github.faze79/wpf-visual-tree`. |
-| [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated for v0.16.0. [Build test](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/admin/dockerfile/tests/01a15561-2f4d-7ad9-a398-cc04849d1fda) passed with NuGet 0.16.0 and all 36 tools. Publication is blocked: **Make Release** opens `#create-release` without a release form; the public release/schema still show 0.12.0 / 28 tools. |
+| [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated; v0.16.0 published as **Latest**. The [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) lists all 36 tools, including drag, touch, diagnostics and workflow recording/replay/export. Build and release publication were verified separately. |
 | [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) updates the description for workflows, touch and full-content screenshots. |
 | [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | Profile exists; [correction #372](https://github.com/YugantM/hvtracker/issues/372) requests the missing NuGet package association and refreshed metadata. Awaiting its maintainer. |
 | [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | Existing listing found through its internal search. Its [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) still shows v0.12.0. The directory has [paused submissions and listing changes](https://www.pulsemcp.com/submit); it says it will ingest the Official MCP Registry when processing resumes. v0.16.0 is already published there. |
@@ -105,17 +105,15 @@ Keep the existing Glama badge and platform markers. Follow the upstream
   2. **Repository → Sync Server**: refresh README, repository metadata and the head commit.
   3. **Dockerfile → Build & Release**: build the published NuGet tool and inspect
      its MCP schema. A successful metadata sync alone does not update the tools.
-  4. After the test succeeds, use **Make Release** / **Create Release**, enter
-     the package version and release notes, then **Create & Publish Release**.
-     See Glama's [release guide](https://glama.ai/blog/2026-03-15-how-to-make-a-release).
+  4. Wait for release publication after the successful build: the UI can briefly
+     show the previous version/schema while background processing completes.
+     For a build that still needs manual publication, use **Make Release** /
+     **Create Release**, enter the package version and release notes, then
+     **Create & Publish Release**. See Glama's
+     [release guide](https://glama.ai/blog/2026-03-15-how-to-make-a-release).
   5. Verify the expected version appears under **Releases**,
      and the public schema lists all tools (36 in v0.16.0). Auto-release is enabled,
      but its completion must still be checked after each GitHub release.
-  On 2026-10-19 the successful build's release form was missing, including after
-  a reload. Glama's support assistant referred the issue to `support@glama.ai`;
-  the human-support chat form rejected submission with a validation error, so
-  no human support case is confirmed. A metadata sync or successful build alone
-  must not be reported as a published Glama release.
 - **PulseMCP** — [existing listing](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree).
   Keep the Official MCP Registry manifest current. As of 2026-10-19, its
   [submission page](https://www.pulsemcp.com/submit) explicitly pauses both new
