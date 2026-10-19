@@ -1,0 +1,15 @@
+{
+  "name": "wpfvisualtreemcp",
+  "version": "0.13.0",
+  "description": "Inspect and drive running Windows WPF applications: visual trees, bindings, screenshots and UI interaction.",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "WPFVisualTreeMcp",
+    "shortDescription": "Inspect and debug running WPF apps on Windows",
+    "defaultPrompt": [
+      "Inspect my running WPF application and help diagnose its UI or binding problem."
+    ]
+  }
+}

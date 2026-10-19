@@ -1,0 +1,20 @@
+{
+  "name": "WPFVisualTreeMcp",
+  "interface": {
+    "displayName": "WPFVisualTreeMcp"
+  },
+  "plugins": [
+    {
+      "name": "wpfvisualtreemcp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/wpfvisualtreemcp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer tools"
+    }
+  ]
+}
