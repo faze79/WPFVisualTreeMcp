@@ -7,13 +7,14 @@ text to submit. Keep the entries in sync when the tool count or tagline changes.
 
 | Channel | Status |
 | --- | --- |
-| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.16.0) | v0.16.0 published. |
+| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.16.0) | v0.16.0 published. GitHub also includes the Windows x64 MCPB bundle with packaged server/helper runtimes. |
 | Official MCP Registry | v0.16.0 published as `io.github.faze79/wpf-visual-tree`. |
 | [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated; v0.16.0 published as **Latest**. The [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) lists all 36 tools, including drag, touch, diagnostics and workflow recording/replay/export. Build and release publication were verified separately. |
 | [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) updates the description for workflows, touch and full-content screenshots. |
 | [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | Profile exists; [correction #372](https://github.com/YugantM/hvtracker/issues/372) requests the missing NuGet package association and refreshed metadata. Awaiting its maintainer. |
 | [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | Existing listing found through its internal search. Its [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) still shows v0.12.0. The directory has [paused submissions and listing changes](https://www.pulsemcp.com/submit); it says it will ingest the Official MCP Registry when processing resumes. v0.16.0 is already published there. |
-| mcp.so, Smithery | No existing project listing found through internal searches (project name on mcp.so; `namespace:faze79` on Smithery). Do not treat these as published or automatically updated by a release. |
+| mcp.so | Submission form prepared with the repository URL and project name. The site requires a **39 USD one-time fee**; no payment authorized or listing published. |
+| Smithery | Browser login completed. A Windows x64 [MCPB bundle](MCPB.md) for v0.16.0 is available on GitHub with all 36 tools; its extracted payload passed the 12-case integration matrix and two workflow/xUnit round trips. Smithery publication uses the CLI and is pending its separate API-key access authorization. No Smithery listing published yet. |
 
 ## Canonical pitch
 
@@ -93,7 +94,8 @@ Keep the existing Glama badge and platform markers. Follow the upstream
 
 ## 4. Other directories
 
-- **mcp.so** — <https://mcp.so/submit>
+- **mcp.so** — <https://mcp.so/submit>. As of 2026-10-19 the form requires a
+  39 USD one-time payment. Do not treat a prepared form as a published listing.
 - **Glama** — [existing listing](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp).
   Sign in with the repository owner's GitHub account (`faze79`) to manage it.
   The check builds a Docker image and verifies the server starts and answers `tools/list`
@@ -119,8 +121,9 @@ Keep the existing Glama badge and platform markers. Follow the upstream
   [submission page](https://www.pulsemcp.com/submit) explicitly pauses both new
   submissions and changes to existing listings; check again when intake resumes.
 - **Smithery** — <https://smithery.ai/servers/new>. Treat this server as local-only:
-  WPF interaction needs Windows and the local desktop. Recheck the publishing
-  procedure before submission: Smithery [announces](https://smithery.ai/future)
+  WPF interaction needs Windows and the local desktop. The web form accepts HTTP
+  endpoints; use the [MCPB publishing procedure](MCPB.md#smithery-publishing) for
+  this server. Recheck availability before submission: Smithery [announces](https://smithery.ai/future)
   that its proxy, managed identity and accounts stop working on 2026-10-31,
   while the public registry remains available.
 - **HVTracker** — [profile](https://hvtracker.net/agents/wpfvisualtreemcp/).

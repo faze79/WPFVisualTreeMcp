@@ -298,6 +298,11 @@ user's local installation. CLI `update` replaces binaries, not skill instruction
    it never opens a model session or changes the user's own plugin configuration.
 5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
    workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
+6. For local MCPB distribution, use `scripts/Build-McpBundle.ps1` on a clean,
+   built release checkout. It bundles the server runtime and a single-file x86
+   helper, and generates metadata from the actual MCP tool list. Follow
+   `docs/MCPB.md`, test the extracted archive, then attach the `.mcpb` to the
+   corresponding GitHub release. This packaging step is currently manual.
 
 ## Test Framework
 

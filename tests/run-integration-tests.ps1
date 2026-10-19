@@ -21,8 +21,12 @@ foreach ($framework in @('net472', 'net48', 'net8.0-windows')) {
             $xml.Project.ItemGroup.ProjectReference.SetAttribute('Include', $inspectorProject)
             $xml.Save($project)
             $hosting = if ($mode -eq 'SelfHosted') { 'true' } else { 'false' }
+            # PlatformTarget propagates to project references. Isolate their bin/obj
+            # outputs too, so an x64 case cannot reuse a cached x86 Inspector DLL.
+            $sampleArtifacts = Join-Path $work "build/$framework/$architecture/$mode"
             $arguments = @('publish', $project, '-c', 'Release', "-p:SampleTargetFramework=$framework",
-                "-p:PlatformTarget=$architecture", "-p:EnableInspectorSelfHosting=$hosting", '--output', $sampleRoot, '--verbosity', 'quiet')
+                "-p:PlatformTarget=$architecture", "-p:EnableInspectorSelfHosting=$hosting",
+                "-p:ArtifactsPath=$sampleArtifacts", '--output', $sampleRoot, '--verbosity', 'quiet')
             if ($framework -eq 'net8.0-windows') { $arguments += @('--runtime', "win-$architecture", '--self-contained', 'false') }
             & dotnet @arguments
             if ($LASTEXITCODE -ne 0) { throw "Sample build failed: $framework/$architecture/$mode" }
