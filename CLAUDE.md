@@ -40,7 +40,7 @@ MCP Server (.NET 8.0)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
 Target WPF Application (.NET Framework)
-    └─ Inspector DLL (.NET 4.8)
+    └─ Inspector DLL (.NET Framework 4.7.2/4.8 or .NET 8)
         ├─ TreeWalker (visual tree navigation + adorner/popup traversal)
         ├─ ScreenshotCapture (RenderTargetBitmap element capture)
         ├─ PropertyReader (dependency properties)

@@ -150,7 +150,7 @@ std::wstring GetBootstrapperDir()
     return dir;
 }
 
-/// Finds the .NET Framework Inspector DLL (net48)
+/// Finds the .NET Framework Inspector DLL (.NET Framework)
 std::wstring GetInspectorDllPath()
 {
     std::wstring dir = GetBootstrapperDir();
@@ -159,7 +159,7 @@ std::wstring GetInspectorDllPath()
     std::wstring sameDirPath = dir + L"WpfVisualTreeMcp.Inspector.dll";
     if (GetFileAttributesW(sameDirPath.c_str()) != INVALID_FILE_ATTRIBUTES)
     {
-        WriteDebugLog(L"Found net48 Inspector in same directory");
+        WriteDebugLog(L"Found .NET Framework Inspector in same directory");
         return sameDirPath;
     }
 
@@ -167,11 +167,11 @@ std::wstring GetInspectorDllPath()
     std::wstring parentPath = dir + L"..\\..\\WpfVisualTreeMcp.Inspector.dll";
     if (GetFileAttributesW(parentPath.c_str()) != INVALID_FILE_ATTRIBUTES)
     {
-        WriteDebugLog(L"Found net48 Inspector in publish root (../../)");
+        WriteDebugLog(L"Found .NET Framework Inspector in publish root (../../)");
         return parentPath;
     }
 
-    WriteDebugLog(L"net48 Inspector DLL not found");
+    WriteDebugLog(L".NET Framework Inspector DLL not found");
     return sameDirPath;
 }
 
@@ -285,7 +285,7 @@ HRESULT InitializeInspectorFramework()
 
     std::wstring inspectorPath = GetInspectorDllPath();
     wchar_t msg[512];
-    swprintf_s(msg, L"Loading net48 Inspector from: %s", inspectorPath.c_str());
+    swprintf_s(msg, L"Loading .NET Framework Inspector from: %s", inspectorPath.c_str());
     WriteDebugLog(msg);
 
     DWORD attrs = GetFileAttributesW(inspectorPath.c_str());

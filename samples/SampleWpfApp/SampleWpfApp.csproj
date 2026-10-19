@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net48</TargetFramework>
+    <SampleTargetFramework Condition="'$(SampleTargetFramework)' == ''">net48</SampleTargetFramework>
+    <TargetFramework>$(SampleTargetFramework)</TargetFramework>
     <UseWPF>true</UseWPF>
     <RootNamespace>SampleWpfApp</RootNamespace>
     <AssemblyName>SampleWpfApp</AssemblyName>

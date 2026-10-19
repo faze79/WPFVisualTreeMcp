@@ -6,7 +6,7 @@
           BeforeTargets="GetCopyToOutputDirectoryItems;GetCopyToPublishDirectoryItems"
           DependsOnTargets="ResolveProjectReferences">
     <ItemGroup>
-      <_FrameworkPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\*.dll" />
+      <_FrameworkPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net472\*.dll" />
       <_CoreClrPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\*.dll" />
       <_CoreClrPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.coreclr.runtimeconfig.json" />
       <_HelperPayload Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.*"
@@ -37,7 +37,7 @@
     <ItemGroup>
       <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\x64\$(Configuration)\WpfInspectorBootstrapper.dll" />
       <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Bootstrapper\build\Win32\$(Configuration)\WpfInspectorBootstrapper.dll" />
-      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net48\WpfVisualTreeMcp.Inspector.dll" />
+      <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net472\WpfVisualTreeMcp.Inspector.dll" />
       <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.Inspector\bin\$(Configuration)\net8.0-windows\WpfVisualTreeMcp.Inspector.dll" />
       <_RequiredInjectionFile Include="$(MSBuildThisFileDirectory)..\WpfVisualTreeMcp.InjectorHelper\bin\$(Configuration)\net8.0\win-x86\WpfInjectorHelper.exe" />
     </ItemGroup>

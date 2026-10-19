@@ -32,7 +32,7 @@ public class InspectorService : IDisposable
     private static readonly object _initLock = new();
     public static InspectorService? Instance { get; private set; }
 
-#if NET48
+#if NETFRAMEWORK
     static InspectorService()
     {
         // Injected applications do not inherit our NuGet binding redirects.

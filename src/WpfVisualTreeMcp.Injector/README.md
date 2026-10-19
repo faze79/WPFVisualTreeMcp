@@ -18,8 +18,8 @@ without it, attach only connects to an Inspector that is already running.
    package; use the 64-bit server instead.
 5. The native bootstrapper starts a worker thread outside the loader lock and
    selects the target runtime:
-   - **.NET Framework 4.8:** CLR hosting APIs call
-     `InspectorService.Initialize(string)` in the `net48` Inspector.
+   - **.NET Framework 4.7.2+:** CLR hosting APIs call
+     `InspectorService.Initialize(string)` in the `net472` Inspector.
    - **CoreCLR (.NET 8+):** hostfxr loads the `net8.0-windows` Inspector from
      `coreclr/` and invokes `InspectorService.InitializeUnmanaged`.
 6. The server waits up to ten seconds for the Inspector pipe. Loading a DLL
@@ -36,9 +36,9 @@ server/
   native/
     x64/
       WpfInspectorBootstrapper.dll
-      WpfVisualTreeMcp.Inspector.dll      # net48
-      WpfVisualTreeMcp.Shared.dll        # net48
-      System.Text.Json.dll              # plus its net48 dependencies
+      WpfVisualTreeMcp.Inspector.dll      # net472
+      WpfVisualTreeMcp.Shared.dll        # net472
+      System.Text.Json.dll              # plus its net472 dependencies
       coreclr/
         WpfVisualTreeMcp.Inspector.dll   # net8.0-windows
         WpfVisualTreeMcp.Shared.dll      # net8.0
@@ -56,13 +56,13 @@ Keep these directories together when copying a release or installing the
 NuGet tool. The bootstrapper resolves the managed Inspector relative to its
 own location. The injector probes a legacy flat layout, `native/<arch>/`, and
 then a development build location. Published packages use `native/<arch>/`.
-The net48 Inspector resolves its packaged dependency versions without requiring
+The net472 Inspector resolves its packaged dependency versions without requiring
 binding redirects in the target application's configuration.
 
 ## Build and publish
 
 Install Visual Studio Build Tools with **Desktop development with C++**, the
-v143 toolset, Windows SDK, .NET Framework 4.8 targeting pack, and .NET 8 SDK.
+v143 toolset, Windows SDK, .NET Framework 4.7.2 and 4.8 targeting packs, and .NET 8 SDK.
 Run from a Visual Studio Developer PowerShell at the repository root:
 
 ```powershell

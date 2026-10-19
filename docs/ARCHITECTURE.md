@@ -29,7 +29,9 @@ The MCP Server is the main entry point that communicates with AI agents via the 
 
 The Inspector is a .NET Framework library that gets loaded into target WPF applications to perform inspection operations.
 
-**Technology:** .NET Framework 4.8 (for maximum compatibility with WPF apps)
+**Technology:** .NET Framework 4.7.2/4.8 and .NET 8.0-windows. Injection packages
+use the net472 payload for .NET Framework applications and the separate CoreCLR
+payload for modern .NET applications.
 
 **Responsibilities:**
 - Access `VisualTreeHelper` and `LogicalTreeHelper`

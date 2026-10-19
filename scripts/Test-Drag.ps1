@@ -8,7 +8,7 @@ $root = Split-Path $PSScriptRoot -Parent
 foreach ($configuration in $Configurations) {
     $architecture = $configuration.Substring($configuration.LastIndexOf('-') + 1)
     $framework = $configuration.Substring(0, $configuration.LastIndexOf('-'))
-    if ($architecture -notin @('x86', 'x64') -or $framework -notin @('net48', 'net8.0-windows')) {
+    if ($architecture -notin @('x86', 'x64') -or $framework -notin @('net472', 'net48', 'net8.0-windows')) {
         throw "Unsupported configuration: $configuration"
     }
     $sampleDirectory = Join-Path $root "TestResults/$TestKind/$configuration"

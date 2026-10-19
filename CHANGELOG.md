@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- .NET Framework 4.7.2 targets for Inspector and shared contracts, adapted from
+  @miloszkukla's PR #22. Injection packages use the 4.7.2-compatible payload for
+  .NET Framework targets; separate 4.8 and .NET 8 builds remain available.
+- Dependency-clean x86/x64 injection checks now cover applications targeting
+  both .NET Framework 4.7.2 and 4.8. Gesture test runners also accept net472 targets.
+
 ### Fixed
 
 - CLI tool updates download the exact official NuGet package before scheduling
