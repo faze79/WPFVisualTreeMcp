@@ -21,7 +21,7 @@ public static class CliRunner
 {
     private static readonly string[] Commands =
     {
-        "list", "attach", "tree", "props", "find", "find-deep", "bindings",
+        "update", "list", "attach", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "drag", "touch", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
@@ -31,7 +31,7 @@ public static class CliRunner
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "auto-inject", "compact", "verbose", "physical", "visible-only", "all", "help", "h",
+        "auto-inject", "compact", "verbose", "physical", "visible-only", "all", "help", "h", "check", "status",
     };
 
     private static string Exe =>
@@ -78,6 +78,17 @@ public static class CliRunner
         {
             switch (command)
             {
+                case "update":
+                {
+                    // Reject misspelled options rather than accidentally starting an update.
+                    var allowed = new[] { "--check", "--status", "--compact", "--verbose" };
+                    if (args.Skip(1).Any(a => !allowed.Contains(a, StringComparer.OrdinalIgnoreCase)))
+                        throw new ArgumentException("Usage: update [--check | --status] [--compact] [--verbose]");
+                    var result = await SelfUpdater.RunAsync(cli.Flags.Contains("check"), cli.Flags.Contains("status"));
+                    WriteJson(result, cli);
+                    return result is JsonElement state && state.GetProperty("status").GetString() == "failed" ? 1 : 0;
+                }
+
                 case "list":
                 {
                     var processes = await processManager.GetWpfProcessesAsync();
@@ -543,7 +554,7 @@ USAGE
   {Exe}                       (no command) starts the MCP stdio server.
 
 TARGETING
-  Every command except 'list' targets a process with either:
+  Every inspection command except 'list' targets a process with either:
     --pid <id>                process id (from 'list')
     --process <name>          process name (e.g. SampleWpfApp)
 
@@ -553,6 +564,7 @@ GLOBAL OPTIONS
   --help, -h                  show help ('<command> --help' for one command)
 
 COMMANDS
+  update        [--check | --status]  update this installation (no PID required)
   list                              list inspectable WPF processes
   attach        --pid|--process [--auto-inject]
   tree          --pid [--root H] [--depth N]
@@ -600,6 +612,14 @@ TYPICAL WORKFLOW
     {
         var usage = command switch
         {
+            "update" => "update [--check | --status]\n"
+                      + "  Update this installation to the latest stable release. No PID required.\n"
+                      + "  Supports global/custom-path dotnet tools and portable publish folders.\n"
+                      + "  --check: show current/latest versions without installing.\n"
+                      + "  --status: show the last update result (exit 1 if it failed).\n"
+                      + "  Windows applies the update after this command exits; 'scheduled' is\n"
+                      + "  not completion. Check --status, then restart your MCP client and apps.\n"
+                      + "  Source builds/local tool caches must be updated with their build/package workflow.",
             "list" => "list\n  List WPF processes that can be inspected. Takes no targeting options.",
             "attach" => "attach --pid <id> | --process <name> [--auto-inject]\n"
                       + "  Create a session. --auto-inject loads the Inspector DLL into a process\n"

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-10-19
+
+### Added
+
+- CLI `update` installs the latest stable version of the invoked global/custom-path
+  .NET tool or portable server folder. No process ID or MCP connection is required.
+- `update --check` reports installed/latest versions and installation type;
+  `update --status` reports the detached worker's result and diagnostic log.
+- Windows updater waits for the launching CLI to exit, uses official NuGet/GitHub
+  sources, verifies portable release SHA-256 digests, preserves unrelated files,
+  and restores backed-up portable files on replacement failure. Occupied files
+  fail without terminating other applications. Source builds and shared package
+  caches remain managed through their build/package workflows.
+- Installation/update documentation, including the one-time upgrade needed by
+  versions before v0.14.0 and restart requirements for loaded Inspectors.
+
 ## [0.13.0] - 2026-10-18
 
 ### Added

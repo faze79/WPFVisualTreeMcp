@@ -10,7 +10,7 @@
 
     <!-- Package metadata -->
     <PackageId>WpfVisualTreeMcp</PackageId>
-    <Version>0.13.0</Version>
+    <Version>0.14.0</Version>
     <Authors>faze79</Authors>
     <Description>Inspect and drive WPF apps through MCP or CLI: visual trees, bindings, screenshots, mouse dragging and native touch gestures.</Description>
     <PackageTags>mcp;wpf;visual-tree;debugging;dotnet;ai-agents</PackageTags>
@@ -30,6 +30,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Cli\UpdateWorker.ps1" LogicalName="WpfVisualTreeMcp.UpdateWorker.ps1" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <!-- MCP registry manifest, required at .mcp/server.json inside the package
          for registry.modelcontextprotocol.io NuGet validation -->

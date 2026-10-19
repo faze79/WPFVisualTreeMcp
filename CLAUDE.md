@@ -57,7 +57,8 @@ Target WPF Application (.NET Framework)
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
 | Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 30 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | Command-line front-end over the same services (30 commands) |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 30 inspection commands plus CLI-only `update` |
+| CLI Updater | `Cli/SelfUpdater.cs` + embedded `Cli/UpdateWorker.ps1` | Stable version lookup, verified staging, detached installation and status |
 | Trigger / Style Diagnostics | `ResourceInspector.ExplainTriggers` | Evaluate Style + ControlTemplate triggers vs current state (active/inactive + setters); attribute a property value to its style setter / active trigger |
 | Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks, text input, and keyboard shortcuts (UI Automation + SendInput physical fallback) |
 | Property Writer | `src/WpfVisualTreeMcp.Inspector/PropertyWriter.cs` | Live-edits dependency properties (TypeConverter coercion) with a per-session undo stack (restores prior binding/local/default) |
@@ -214,7 +215,17 @@ shell call. No MCP handshake required; `--help` is self-documenting.
 - **Stateless:** each command re-creates the lightweight session internally, so
   element handles (which live in the Inspector) stay valid across separate calls
   as long as the target app keeps running.
-- **Targeting:** every command except `list` takes `--pid <id>` or `--process <name>`.
+- **Targeting:** every inspection command except `list` takes `--pid <id>` or `--process <name>`; `update` takes neither.
+- **Updating:** `update [--check | --status]` is CLI-only (not an MCP tool). It updates
+  the invoked global/custom-path tool or portable folder, never another copy.
+  Source builds and package caches are detected and left to their own workflows.
+  The embedded PowerShell worker waits for the CLI to exit before replacing locked
+  binaries. `scheduled` is not completion; `--status` reports `updated` or `failed`.
+  Official stable NuGet/GitHub sources only; ZIP digest verification and bounded,
+  traversal-safe extraction happen before replacement. Portable writes retain
+  backups and roll back on failure. Do not kill MCP/target processes during updates.
+  `scripts/Test-Update.ps1` exercises actual public downloads in isolated portable
+  and tool-path installations, using a test-only seed older than the stable release.
 - **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
   **export** writes to `--out` if given, otherwise prints content inline.
 - **click / drag / touch / select-item / set-text / send-keys** are the state-changing input commands.

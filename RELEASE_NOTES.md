@@ -1,5 +1,25 @@
 # Release Notes
 
+## v0.14.0 — CLI self-update (2026-10-19)
+
+Run `wpfinspect update` or `WpfVisualTreeMcp.Server.exe update` to update the copy
+you launched. Global/custom-path .NET tools update from nuget.org; portable folders
+download the latest stable GitHub release and verify its SHA-256 digest.
+
+Use `update --check` to compare versions without changing files. Windows finishes
+installation in a hidden worker after the CLI exits: `scheduled` is not success.
+Run `update --status` to confirm `updated` or inspect a failure and its log path.
+Portable updates back up replaced files and roll back on errors. Other files and
+MCP configuration are preserved; applications are never forcibly stopped.
+
+Restart the MCP client and previously inspected applications after updating.
+Source builds, local manifest tools and `dnx` caches use their existing build or
+package workflows. See [updating](README.md#updating) for details.
+
+**First upgrade from an older version:** use `dotnet tool update -g WpfVisualTreeMcp`
+once, or download/extract this release's `server` folder. Future upgrades can use
+the new `update` command directly.
+
 ## v0.13.0 — Mouse dragging and native touch gestures (2026-10-18)
 
 Drive WPF sliders, splitters, drag-and-drop surfaces and touch controls with two new

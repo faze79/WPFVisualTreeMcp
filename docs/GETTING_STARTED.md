@@ -31,11 +31,36 @@ Before you begin, ensure you have:
    src/WpfVisualTreeMcp.Server/bin/Debug/net8.0/WpfVisualTreeMcp.Server.exe
    ```
 
-### Option 2: .NET Tool Installation (Coming Soon)
+### Option 2: .NET Tool Installation
 
 ```bash
 dotnet tool install -g WpfVisualTreeMcp
 ```
+
+### Updating an installation
+
+Starting with v0.14.0:
+
+```powershell
+wpfinspect update --check
+wpfinspect update
+wpfinspect update --status
+```
+
+For a portable copy, use `WpfVisualTreeMcp.Server.exe update` from its published
+folder. The command updates that copy only; an older executable configured in your
+MCP client does not change when you update a different installation.
+
+Installation completes in a separate worker after the command exits. Confirm
+`updated` with `--status`, then restart your MCP client and previously inspected
+applications. `failed` includes a diagnostic log path and returns exit code 1.
+Close processes using the same installation before retrying.
+
+To get the command on an older global installation, run
+`dotnet tool update -g WpfVisualTreeMcp` once. For an older portable installation,
+download the latest release. Source builds use the normal Git/build workflow;
+local manifest tools use `dotnet tool update WpfVisualTreeMcp` in their manifest
+directory. See [update behavior and recovery](../README.md#updating).
 
 ## Configuration
 

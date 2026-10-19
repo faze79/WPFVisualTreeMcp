@@ -31,6 +31,8 @@
 3. Ask your agent: *"Look at my running WPF app and tell me why the Save button is disabled."*
 
 Prefer the terminal? The same exe is a full CLI: `WpfVisualTreeMcp.Server.exe help`.
+From v0.14.0, run `wpfinspect update` (or `WpfVisualTreeMcp.Server.exe update`)
+to update the installation you launched. See [updating](#updating).
 
 ## Overview
 
@@ -144,7 +146,7 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 
 1. Download `WpfVisualTreeMcp-vX.X.X-win-x64.zip`
 2. Extract to a folder (e.g., `C:\Tools\WpfVisualTreeMcp`)
-3. The MCP server executable is `WpfVisualTreeMcp.Server.exe`
+3. The MCP server executable is `server/WpfVisualTreeMcp.Server.exe`
 
 #### Option 3: Build from Source
 
@@ -159,6 +161,46 @@ dotnet build -c Release
 For injection build requirements, package layout, and troubleshooting, see the
 [Injector README](src/WpfVisualTreeMcp.Injector/README.md). Injecting into x86 apps
 requires the x86 .NET 8 runtime for the helper.
+
+### Updating
+
+```powershell
+wpfinspect update --check   # current/latest stable version; no installation changes
+wpfinspect update           # download and schedule installation automatically
+wpfinspect update --status  # confirm completion or inspect a failure
+
+# For an extracted release or a published folder, invoke that exact executable:
+C:\Tools\WpfVisualTreeMcp\server\WpfVisualTreeMcp.Server.exe update
+```
+
+`update` is available from **v0.14.0**. For an older global tool, bootstrap it once:
+
+```powershell
+dotnet tool update -g WpfVisualTreeMcp
+```
+
+For an older portable copy, extract the latest release and use its `server` folder.
+
+The command updates **only the installation it was launched from**. Global and
+custom `--tool-path` tools use `dotnet tool update` against nuget.org (a .NET SDK is
+required). Portable folders receive the latest stable GitHub release's complete
+server payload, verified against its SHA-256 digest. A source build under `bin`
+is left to the source/build workflow; local manifest tools and `dnx` caches are
+left to their package manager. `--check` explains which installation was detected.
+
+On Windows, installation starts in a hidden worker **after the CLI exits** so its
+executable is unlocked. A `scheduled` result means the worker was launched, not
+that installation finished. Run `update --status` until it reports `updated` or
+`failed`; a failed status returns exit code 1. JSON output includes the log path.
+Status, logs and portable backups are stored under
+`%LOCALAPPDATA%\WpfVisualTreeMcp\updates`, separately for each installation.
+
+Close other MCP instances using the same files before updating. The updater does
+not stop applications: occupied files cause an error, and portable replacement
+failures trigger restoration from backup. Unrelated files and MCP configuration
+are preserved. After success, restart the MCP client and previously inspected WPF
+apps so both server and injected Inspector use the new version. Other installed
+copies and any separately copied self-hosted Inspector require their own update.
 
 ### Configuration
 
