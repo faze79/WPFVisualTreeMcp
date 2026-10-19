@@ -337,15 +337,28 @@ such as `list` to the MCP launch arguments: no subcommand selects stdio mode.
 
 The plugin starts in its own directory and includes a `global.json` selecting
 SDK 10.0.300 or a newer stable .NET 10 SDK. This keeps a target project's older SDK pin
-from disabling `dotnet dnx`. The noninteractive launch was verified with SDK
-10.0.300. It stays on .NET 10 because .NET 11 introduces confirmation prompts
-and a `dnx --yes` option that .NET 10 does not support.
+from disabling `dotnet dnx`. The noninteractive launch and x64/x86 Inspector
+injection were verified with SDK 10.0.402 and Codex CLI 0.162.1. The SDK pin keeps
+the launch on the tested .NET 10 command-line behavior.
 
 The compatibility MCP configuration uses `"cwd": "."`, which Codex resolves
-relative to the installed plugin root. Do not replace it with `${PLUGIN_ROOT}`:
-Codex CLI 0.163.0 treats that value as a literal subdirectory in this format.
+relative to the installed plugin root. This resolution was verified through
+`codex mcp list --json` after installation in an isolated profile.
 After editing local plugin files, rerun `codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp`
 to refresh the installed copy, then open a new Codex session.
+
+For a Git-backed marketplace, update the plugin configuration and companion skill with:
+
+```powershell
+codex plugin marketplace upgrade WPFVisualTreeMcp
+codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp
+```
+
+For a local marketplace, update its source checkout before reinstalling the plugin.
+The companion skill covers mouse dragging, touch gestures and update behavior.
+`wpfinspect update` updates a separately installed CLI or portable copy; it does
+not refresh a plugin or its skill, and should not be used to modify the plugin's
+shared `dnx` package cache. See [Updating](#updating) for standalone installations.
 
 ### Self-Hosted Mode (Recommended)
 

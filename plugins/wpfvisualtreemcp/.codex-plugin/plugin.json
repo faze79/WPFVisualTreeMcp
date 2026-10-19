@@ -1,6 +1,6 @@
 {
   "name": "wpfvisualtreemcp",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Inspect and drive running Windows WPF applications: visual trees, bindings, screenshots and UI interaction.",
   "license": "MIT",
   "skills": "./skills/",

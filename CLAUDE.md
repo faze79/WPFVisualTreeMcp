@@ -257,6 +257,16 @@ Run `WpfVisualTreeMcp.Server.exe help` for the full command list, or
 
 ## Release Checklist
 
+When adding MCP/CLI commands, update the repository companion skill at
+`plugins/wpfvisualtreemcp/skills/wpfvisualtreemcp/SKILL.md` as well as CLI help and
+the tool reference. The plugin's manifest version tracks its configuration and
+skill independently of the NuGet server. Its `dnx` launch resolves the stable
+server at startup; plugin/skill changes require marketplace refresh/reinstallation.
+An optional user-level Claude skill also exists outside the repository under
+`~/.claude/skills/wpf-inspector/`. Publishing the server does not update that
+skill's instructions or bundled `bin` directory; check them when maintaining a
+user's local installation. CLI `update` replaces binaries, not skill instructions.
+
 1. Bump `<Version>` in `src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj`
 2. Bump **both** `version` fields in `src/WpfVisualTreeMcp.Server/.mcp/server.json`
    (registry manifest — must match the NuGet package version exactly)

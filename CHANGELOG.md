@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Repository Codex plugin marketplace, portable MCP launch configuration and
+  companion WPF inspection skill, contributed by @gaoshang212 in #23. Verified
+  plugin installation, MCP startup, all 30 tools and x64/x86 Inspector injection.
+- Companion skill guidance for mouse dragging, touch gestures and the distinction
+  between CLI self-update, `dnx` server refresh and plugin/skill updates.
+
 ## [0.14.0] - 2026-10-19
 
 ### Added
