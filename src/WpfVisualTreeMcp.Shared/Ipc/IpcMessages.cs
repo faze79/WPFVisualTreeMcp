@@ -19,6 +19,21 @@ public abstract class IpcResponse
     public string? Error { get; set; }
 }
 
+// Aggregate diagnostics
+public class ReportRequest : IpcRequest
+{
+    public override string RequestType => "Report";
+    public string? RootHandle { get; set; }
+    public int MaxElements { get; set; } = 500;
+    public int MaxDepth { get; set; } = 25;
+    public int MaxFindings { get; set; } = 100;
+}
+
+public class ReportResponse : IpcResponse
+{
+    public Models.DiagnosticReport? Report { get; set; }
+}
+
 // Visual Tree
 public class GetVisualTreeRequest : IpcRequest
 {

@@ -249,7 +249,7 @@ public class TreeWalker
         return null;
     }
 
-    private string GetOrCreateHandle(DependencyObject element)
+    internal string GetOrCreateHandle(DependencyObject element)
     {
         if (_handleCache.TryGetValue(element, out var handle))
         {
@@ -767,7 +767,7 @@ public class TreeWalker
     /// Gets all visual children of an element, including adorner children
     /// and popup visual trees that VisualTreeHelper alone would miss.
     /// </summary>
-    private static List<DependencyObject> GetAllVisualChildren(DependencyObject element)
+    internal static List<DependencyObject> GetAllVisualChildren(DependencyObject element)
     {
         var children = new List<DependencyObject>();
 

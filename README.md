@@ -483,6 +483,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
 | `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` includes popups and menus; `full_content=true` with render mode captures scrollable content |
+| `wpf_report` | Aggregate current binding/validation errors, UI state counts and recent binding traces, with explicit scan limits and coverage |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |

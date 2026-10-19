@@ -30,6 +30,15 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
+    public async Task<DiagnosticReport> ReportAsync(string? rootHandle, int maxElements, int maxDepth, int maxFindings)
+    {
+        var response = await SendRequestAsync<ReportRequest, ReportResponse>(EnsureConnected().ProcessId,
+            new ReportRequest { RootHandle = rootHandle, MaxElements = maxElements, MaxDepth = maxDepth, MaxFindings = maxFindings });
+        if (!response.Success || response.Report == null)
+            throw new InvalidOperationException(response.Error ?? "Diagnostic report unavailable.");
+        return response.Report;
+    }
+
     public async Task<VisualTreeResult> GetVisualTreeAsync(string? rootHandle, int maxDepth)
     {
         var session = EnsureConnected();

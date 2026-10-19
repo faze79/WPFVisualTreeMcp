@@ -7,6 +7,8 @@ namespace WpfVisualTreeMcp.Server.Services;
 /// </summary>
 public interface IIpcBridge
 {
+    Task<DiagnosticReport> ReportAsync(string? rootHandle, int maxElements, int maxDepth, int maxFindings);
+
     /// <summary>
     /// Gets the visual tree from the attached process.
     /// </summary>

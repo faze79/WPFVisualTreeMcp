@@ -21,7 +21,7 @@ public static class CliRunner
 {
     private static readonly string[] Commands =
     {
-        "update", "list", "attach", "tree", "props", "find", "find-deep", "bindings",
+        "update", "list", "attach", "report", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
         "styles", "watch-property", "highlight", "click", "drag", "touch", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
@@ -109,6 +109,14 @@ public static class CliRunner
                         inspectorReady = session.InspectorReady,
                     }, cli);
                     return session.InspectorReady ? 0 : 1;
+                }
+
+                case "report":
+                {
+                    await AttachAsync(processManager, cli, false);
+                    WriteJson(await bridge.ReportAsync(cli.GetStringOrNull("root"), cli.GetInt("max", 500),
+                        cli.GetInt("depth", 25), cli.GetInt("max-findings", 100)), cli);
+                    break;
                 }
 
                 case "tree":
@@ -571,6 +579,7 @@ COMMANDS
   list                              list inspectable WPF processes
   attach        --pid|--process [--auto-inject]
   tree          --pid [--root H] [--depth N]
+  report        --pid [--root H] [--max N] [--depth N] [--max-findings N]
   props         --pid --handle H
   find          --pid [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]
   find-deep     --pid (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]
@@ -629,6 +638,10 @@ TYPICAL WORKFLOW
                       + "  that does not already host it (one-time; survives for later commands).",
             "tree" => "tree --pid <id> [--root <handle>] [--depth <1-100>]\n"
                     + "  Dump the visual tree. --root zooms into a subtree; --depth defaults to 25.",
+            "report" => "report --pid <id> [--root H] [--max 1-2000] [--depth 1-100] [--max-findings 1-500]\n"
+                      + "  Aggregate current binding/validation errors and UI state counts.\n"
+                      + "  Defaults: 500 elements, depth 25, 100 findings. Reports truncation.\n"
+                      + "  Recent binding traces are process-wide history; state counts are not defects.",
             "props" => "props --pid <id> --handle <handle>\n  List the dependency properties of an element.",
             "find" => "find --pid <id> [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]\n"
                     + "  Search elements (up to --max, default 50). Filters combine with AND:\n"

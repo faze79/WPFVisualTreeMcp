@@ -2,6 +2,27 @@
 
 Complete reference for all MCP tools provided by WpfVisualTreeMcp.
 
+## Aggregate diagnostics
+
+`wpf_report(root_handle?, max_elements=500, max_depth=25, max_findings=100)`
+scans the realized visual tree across open windows, or the selected subtree.
+It reports current binding and validation errors with element handles for follow-up,
+plus counts of disabled, invisible and zero-size elements. These state counts are
+observations, not automatic diagnoses. The report does not materialize virtualized items.
+
+The result includes `capturedAtUtc`, `processId`, `scope`, `scannedElements`,
+`bindingsChecked`, `findings`, `findingCount` and `truncationReasons`.
+`recentBindingErrors` contains at most 50 captured process-wide traces since Inspector
+attachment, including when a subtree is selected; they are historical evidence and
+may no longer apply. `capturedBindingErrorCount` is the retained history count.
+Strings are limited to 2048 characters, with an ellipsis when shortened.
+
+Limits are 1–2000 elements, depth 1–100 and 1–500 findings, with a cooperative
+three-second scan budget. Each omitted portion is identified in `truncationReasons`;
+an empty findings list with incomplete coverage is not a clean bill of health.
+
+CLI equivalent: `wpfinspect report --pid 1234 --root elem_00000001 --max 500 --depth 25 --max-findings 100`.
+
 ## Screenshots
 
 ### wpf_capture_screenshot

@@ -346,6 +346,7 @@ public class InspectorService : IDisposable
     {
         return requestType switch
         {
+            "Report" => HandleReport(data),
             "GetVisualTree" => HandleGetVisualTree(data),
             "GetElementProperties" => HandleGetElementProperties(data),
             "FindElements" => HandleFindElements(data),
@@ -372,6 +373,24 @@ public class InspectorService : IDisposable
             "SetText" => HandleSetText(data),
             "SendKeys" => HandleSendKeys(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
+        };
+    }
+
+    private IpcResponse HandleReport(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<ReportRequest>(data)!;
+        IEnumerable<DependencyObject> roots = TreeWalker.GetAllSearchRoots();
+        if (request.RootHandle != null)
+        {
+            var root = _treeWalker.ResolveHandle(request.RootHandle)
+                ?? throw new InvalidOperationException(StaleHandleError(request.RootHandle));
+            roots = new[] { root };
+        }
+        return new ReportResponse
+        {
+            RequestId = request.RequestId,
+            Report = DiagnosticReporter.Capture(roots, _treeWalker, _bindingAnalyzer, request.RootHandle,
+                request.MaxElements, request.MaxDepth, request.MaxFindings)
         };
     }
 

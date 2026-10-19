@@ -15,6 +15,7 @@ Call `wpf_list_processes` to identify the running application, then `wpf_attach`
 
 ## Investigate the symptom
 
+- Start a broad diagnosis with `wpf_report`; use `root_handle` to narrow it. Check `truncationReasons` and coverage before interpreting results. Disabled/invisible/zero-size counts are observations, while recent binding traces are process-wide history even for a subtree report. Follow current findings with the specific inspection tools below.
 - Locate controls with `wpf_find_elements`, filtering by visible text, name or type. Use the returned handles; do not invent or reuse handles from a previous process instance. Use a bounded `wpf_get_visual_tree` when hierarchy is relevant.
 - For binding failures, combine `wpf_get_binding_errors`, `wpf_get_bindings`, and `wpf_get_data_context`. Use `wpf_evaluate_binding` to find the failing path segment or explain a property's value source. An empty error list alone does not prove a binding is correct.
 - For unexpected styling or disabled controls, inspect properties and use `wpf_explain_triggers` to check the current style/template conditions.

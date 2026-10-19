@@ -126,7 +126,7 @@ public class PropertyReader
         return sb.ToString();
     }
 
-    private IEnumerable<DependencyProperty> GetDependencyProperties(DependencyObject element)
+    internal IEnumerable<DependencyProperty> GetDependencyProperties(DependencyObject element)
     {
         var properties = new List<DependencyProperty>();
         var type = element.GetType();

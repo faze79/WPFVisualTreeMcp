@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `wpf_report` / CLI `report`: bounded aggregate diagnostics for current binding
+  and validation errors, UI state counts and recent process-wide binding traces.
+  Reports identify their scope and incomplete coverage explicitly.
 - .NET Framework 4.7.2 targets for Inspector and shared contracts, adapted from
   @miloszkukla's PR #22. Injection packages use the 4.7.2-compatible payload for
   .NET Framework targets; separate 4.8 and .NET 8 builds remain available.

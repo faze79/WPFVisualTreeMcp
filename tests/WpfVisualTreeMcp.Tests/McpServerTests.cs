@@ -55,6 +55,16 @@ public class WpfToolsTests
     }
 
     [Fact]
+    public async Task WpfReport_Preserves_coverage_and_bounds()
+    {
+        var expected = new DiagnosticReport { Scope = "subtree", TruncationReasons = new() { "max_elements" } };
+        _ipcBridgeMock.Setup(b => b.ReportAsync("root", 20, 4, 3)).ReturnsAsync(expected);
+        (await _tools.WpfReport("root", 20, 4, 3)).Should().BeSameAs(expected);
+        var invalid = () => _tools.WpfReport(max_elements: 2001);
+        await invalid.Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
     public async Task WpfAttach_WithProcessId_AttachesToProcess()
     {
         // Arrange

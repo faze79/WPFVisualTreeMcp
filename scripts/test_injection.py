@@ -122,10 +122,21 @@ def main():
                     tree = value(client.tool("wpf_get_visual_tree", max_depth=5))
                     assert tree["totalElements"] > 0, tree
 
+                    report = value(client.tool("wpf_report", max_elements=2))
+                    assert report["processId"] == sample.pid, report
+                    assert report["scannedElements"] == 2, report
+                    assert "max_elements" in report["truncationReasons"], report
+                    assert report["bindingErrorScope"] == "process_since_inspector_attach", report
+                    cli_report = subprocess.run([str(package / "WpfVisualTreeMcp.Server.exe"), "report",
+                                                 "--pid", str(sample.pid), "--max", "2"],
+                                                capture_output=True, text=True, timeout=30)
+                    assert cli_report.returncode == 0, cli_report.stdout + cli_report.stderr
+                    assert json.loads(cli_report.stdout)["scannedElements"] == 2, cli_report.stdout
+
                     existing = value(client.tool("wpf_attach", process_id=sample.pid, auto_inject=False))
                     assert existing["success"] is True, existing
                     print(f"PASS {args.architecture}: missing-DLL diagnostics, CLI failure exit, real injection, "
-                          f"{tree['totalElements']} visual elements, existing-inspector reconnect")
+                          f"{tree['totalElements']} visual elements, bounded MCP/CLI reports, existing-inspector reconnect")
                 finally:
                     client.close()
                     client = None

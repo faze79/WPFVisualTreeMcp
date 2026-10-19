@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (30 tools)
+    ├─ WpfTools (31 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -56,8 +56,9 @@ Target WPF Application (.NET Framework)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 30 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 30 inspection commands plus CLI-only `update` |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 31 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 31 inspection commands plus CLI-only `update` |
+| Aggregate Diagnostics | `src/WpfVisualTreeMcp.Inspector/DiagnosticReporter.cs` | Bounded realized-tree scan, current binding/validation errors and separate process-wide trace history |
 | CLI Updater | `Cli/SelfUpdater.cs` + embedded `Cli/UpdateWorker.ps1` | Stable version lookup, verified staging, detached installation and status |
 | Trigger / Style Diagnostics | `ResourceInspector.ExplainTriggers` | Evaluate Style + ControlTemplate triggers vs current state (active/inactive + setters); attribute a property value to its style setter / active trigger |
 | Control Interactor | `src/WpfVisualTreeMcp.Inspector/ControlInteractor.cs` | Clicks, text input, and keyboard shortcuts (UI Automation + SendInput physical fallback) |

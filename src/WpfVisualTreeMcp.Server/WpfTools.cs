@@ -170,6 +170,15 @@ public class WpfTools
     }
 
     [McpServerTool]
+    [Description("Collect a bounded diagnostic report across open windows or a subtree: current binding/validation errors, disabled/invisible/zero-size counts and recent process-wide binding traces. State counts are observations, not defects. Includes coverage and truncation reasons; does not realize virtualized items or change the UI.")]
+    public Task<DiagnosticReport> WpfReport(string? root_handle = null, int max_elements = 500, int max_depth = 25, int max_findings = 100)
+    {
+        if (max_elements is < 1 or > 2000 || max_depth is < 1 or > 100 || max_findings is < 1 or > 500)
+            throw new ArgumentException("Report limits: max_elements 1-2000, max_depth 1-100, max_findings 1-500.");
+        return _ipcBridge.ReportAsync(root_handle, max_elements, max_depth, max_findings);
+    }
+
+    [McpServerTool]
     [Description("Get the DataContext for an element, including type info, properties, INPC status, and inheritance chain up the visual tree. Essential for diagnosing binding path errors.")]
     public async Task<object> WpfGetDataContext(string element_handle)
     {

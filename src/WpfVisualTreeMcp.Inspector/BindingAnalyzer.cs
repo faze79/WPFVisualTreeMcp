@@ -406,6 +406,15 @@ public class BindingAnalyzer
     /// <summary>
     /// Gets all binding errors captured from the application.
     /// </summary>
+    internal List<BindingErrorInfo> GetRecentErrors(int limit, out int total)
+    {
+        lock (_errorLock)
+        {
+            total = _capturedErrors.Count;
+            return _capturedErrors.GetRange(Math.Max(0, total - limit), Math.Min(total, limit));
+        }
+    }
+
     public string GetBindingErrors()
     {
         List<BindingErrorInfo> errorsCopy;
