@@ -50,6 +50,42 @@ public class SelfUpdaterTests : IDisposable
         (await SelfUpdater.GetLatestAsync(client, true)).Version.Should().Be("0.14.0");
     }
 
+    [Fact]
+    public async Task ToolStaging_RetriesPropagationAndInstallsOnlyTheDownloadedPackage()
+    {
+        var handler = new PackageHandler(HttpStatusCode.NotFound, HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
+        using var client = new HttpClient(handler);
+        var delays = new List<TimeSpan>();
+        var directory = Path.Combine(_root, "feed with spaces & quote'");
+        Directory.CreateDirectory(directory);
+        await SelfUpdater.StageToolPackageAsync(client, "0.15.0", directory, delay =>
+        {
+            delays.Add(delay);
+            return Task.CompletedTask;
+        });
+        delays.Should().Equal(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20));
+        File.ReadAllText(Path.Combine(directory, "WpfVisualTreeMcp.0.15.0.nupkg")).Should().Be("package bytes");
+        var config = System.Xml.Linq.XDocument.Load(Path.Combine(directory, "NuGet.Config"));
+        config.Descendants("add").Single().Attribute("value")!.Value.Should().Be(directory);
+        handler.Requests.Should().HaveCount(3).And.OnlyContain(uri => uri ==
+            "https://api.nuget.org/v3-flatcontainer/wpfvisualtreemcp/0.15.0/wpfvisualtreemcp.0.15.0.nupkg");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, 4)]
+    [InlineData(HttpStatusCode.TooManyRequests, 4)]
+    [InlineData(HttpStatusCode.Forbidden, 1)]
+    public async Task ToolStaging_BoundsRetriesAndDoesNotStageAnInstallerOnFailure(HttpStatusCode status, int requests)
+    {
+        var handler = new PackageHandler(Enumerable.Repeat(status, 4).ToArray());
+        using var client = new HttpClient(handler);
+        var action = () => SelfUpdater.StageToolPackageAsync(client, "0.15.0", _root, _ => Task.CompletedTask);
+        await action.Should().ThrowAsync<HttpRequestException>();
+        handler.Requests.Should().HaveCount(requests);
+        File.Exists(Path.Combine(_root, "NuGet.Config")).Should().BeFalse();
+        File.Exists(Path.Combine(_root, "WpfVisualTreeMcp.0.15.0.nupkg")).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("https://example.com/untrusted.zip", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
     [InlineData("https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.14.0/WpfVisualTreeMcp-v0.14.0-win-x64.zip", null)]
@@ -131,6 +167,7 @@ public class SelfUpdaterTests : IDisposable
         var (code, status) = await RunWorker("99.99.99");
         code.Should().Be(1);
         status.GetProperty("status").GetString().Should().Be("failed");
+        status.GetProperty("message").GetString().Should().NotContain("Close other MCP instances");
         File.ReadAllText(Path.Combine(target, "existing.txt")).Should().Be("old");
         File.Exists(Path.Combine(target, "WpfVisualTreeMcp.Server.dll")).Should().BeFalse();
         File.ReadAllText(Path.Combine(target, "settings.json")).Should().Be("personal settings");
@@ -199,6 +236,18 @@ public class SelfUpdaterTests : IDisposable
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+    }
+
+    private sealed class PackageHandler(params HttpStatusCode[] statuses) : HttpMessageHandler
+    {
+        private readonly Queue<HttpStatusCode> _statuses = new(statuses);
+        public List<string> Requests { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri!.AbsoluteUri);
+            return Task.FromResult(new HttpResponseMessage(_statuses.Dequeue()) { Content = new StringContent("package bytes") });
+        }
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);

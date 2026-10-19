@@ -12,6 +12,24 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  plugin:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install tested Codex CLI
+      run: npm install --global @openai/codex@0.162.1 --no-audit --no-fund
+    - name: Verify plugin installation and skill upgrade
+      shell: pwsh
+      run: |
+        $cli = Join-Path (npm root --global) '@openai/codex/bin/codex.js'
+        python ./scripts/test-plugin.py --codex-cli $cli
+
   build:
     runs-on: windows-latest
 

@@ -114,7 +114,10 @@ catch {
         catch { $rollbackErrors += $_.Exception.Message }
     }
     if ($rollbackErrors.Count -gt 0) { $failure += " Rollback needs attention; backups: $backup. " + ($rollbackErrors -join ' ') }
-    $failure += ' Close other MCP instances and applications using this installation, then retry.'
+    $cause = $_.Exception.GetBaseException()
+    if (($cause.HResult -band 0xFFFF) -in @(32, 33)) {
+        $failure += ' Close other MCP instances and applications using this installation, then retry.'
+    }
     $failure | Add-Content -LiteralPath $logPath
     Write-Status 'failed' $failure
     exit 1

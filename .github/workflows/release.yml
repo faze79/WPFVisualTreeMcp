@@ -73,6 +73,20 @@ jobs:
         git archive --format=zip --output=./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip HEAD .agents/plugins plugins/wpfvisualtreemcp LICENSE
         if ($LASTEXITCODE -ne 0) { throw 'Codex plugin archive failed' }
 
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install tested Codex CLI
+      run: npm install --global @openai/codex@0.162.1 --no-audit --no-fund
+    - name: Verify packaged plugin and skill upgrade
+      shell: pwsh
+      run: |
+        $cli = Join-Path (npm root --global) '@openai/codex/bin/codex.js'
+        python ./scripts/test-plugin.py --codex-cli $cli --archive ./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip
+
     - name: Pack NuGet package
       run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
 

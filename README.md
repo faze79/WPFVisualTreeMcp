@@ -190,8 +190,11 @@ dotnet tool update -g WpfVisualTreeMcp
 For an older portable copy, extract the latest release and use its `server` folder.
 
 The command updates **only the installation it was launched from**. Global and
-custom `--tool-path` tools use `dotnet tool update` against nuget.org (a .NET SDK is
-required). Portable folders receive the latest stable GitHub release's complete
+custom `--tool-path` tools download the exact official NuGet package, then use
+`dotnet tool update` from that staged package (a .NET SDK is required). Temporary
+NuGet download failures and publication delays receive up to four attempts, with
+10, 20 and 30 seconds between attempts. If preparation fails, installed files are
+unchanged; retry later. Portable folders receive the latest stable GitHub release's complete
 server payload, verified against its SHA-256 digest. A source build under `bin`
 is left to the source/build workflow; local manifest tools and `dnx` caches are
 left to their package manager. `--check` explains which installation was detected.

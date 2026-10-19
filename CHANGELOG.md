@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- CLI tool updates download the exact official NuGet package before scheduling
+  installation, with four bounded attempts for propagation delays and temporary
+  HTTP failures. Installation uses that staged package instead of resolving it
+  again through potentially stale NuGet metadata. No installation changes occur
+  when download preparation fails.
+- Update failures only recommend closing applications when a file-sharing/lock
+  error was detected; unrelated failures retain their actual diagnosis.
+
+### Validation
+
+- CI installs and upgrades the Codex plugin in an isolated profile and verifies
+  its complete skill and resolved MCP configuration. Release builds run the same
+  check against the actual plugin ZIP before publishing.
+
 ## [0.15.0] - 2026-10-19
 
 ### Added

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -114,8 +115,7 @@ internal static class SelfUpdater
         if (installation.Kind == "dotnet-tool")
         {
             dotnet = await FindSdkAsync();
-            await File.WriteAllTextAsync(Path.Combine(workDirectory, "NuGet.Config"),
-                "<configuration><packageSources><clear/><add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\"/></packageSources></configuration>");
+            await StageToolPackageAsync(client, release.Version, workDirectory);
         }
         else
         {
@@ -238,6 +238,39 @@ internal static class SelfUpdater
             return new(version, url, digest);
         }
         throw new InvalidDataException($"The release does not contain {name}.");
+    }
+
+    internal static async Task StageToolPackageAsync(HttpClient client, string version, string workDirectory,
+        Func<TimeSpan, Task>? delay = null)
+    {
+        StableVersion(version);
+        delay ??= Task.Delay;
+        var url = $"https://api.nuget.org/v3-flatcontainer/wpfvisualtreemcp/{version}/wpfvisualtreemcp.{version}.nupkg";
+        var package = Path.Combine(workDirectory, $"WpfVisualTreeMcp.{version}.nupkg");
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Console.Error.WriteLine($"Downloading WpfVisualTreeMcp {version} from NuGet (attempt {attempt}/4)...");
+                await DownloadAsync(client, url, package);
+                break;
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode is null or HttpStatusCode.NotFound or
+                HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests or HttpStatusCode.InternalServerError or
+                HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout)
+            {
+                if (attempt == 4)
+                    throw new HttpRequestException($"NuGet lists version {version}, but its package could not be downloaded after four attempts. " +
+                        "The feed may still be propagating or temporarily unavailable. Retry later; no installed files were changed.", ex, ex.StatusCode);
+                await delay(TimeSpan.FromSeconds(attempt * 10));
+            }
+        }
+
+        // Install the exact staged package, avoiding a second version lookup through
+        // NuGet's registration services (which can lag behind the flat-container index).
+        var localFeed = System.Security.SecurityElement.Escape(Path.GetFullPath(workDirectory));
+        await File.WriteAllTextAsync(Path.Combine(workDirectory, "NuGet.Config"),
+            $"<configuration><packageSources><clear/><add key=\"staged-official-package\" value=\"{localFeed}\"/></packageSources></configuration>");
     }
 
     private static async Task DownloadAsync(HttpClient client, string url, string destination)

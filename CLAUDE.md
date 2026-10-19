@@ -219,6 +219,8 @@ shell call. No MCP handshake required; `--help` is self-documenting.
 - **Updating:** `update [--check | --status]` is CLI-only (not an MCP tool). It updates
   the invoked global/custom-path tool or portable folder, never another copy.
   Source builds and package caches are detected and left to their own workflows.
+  Tool updates stage the exact official NuGet package with bounded retries before
+  scheduling; the worker installs from that local feed to avoid metadata propagation races.
   The embedded PowerShell worker waits for the CLI to exit before replacing locked
   binaries. `scheduled` is not completion; `--status` reports `updated` or `failed`.
   Official stable NuGet/GitHub sources only; ZIP digest verification and bounded,
@@ -276,6 +278,8 @@ user's local installation. CLI `update` replaces binaries, not skill instruction
    nuget.org (trusted publishing / OIDC, using the `NUGET_USER` repo secret and
    the nuget.org publishing policy; skipped with a notice if absent). The plugin
    ZIP uses `git archive` to preserve its required dot-directories.
+   `scripts/test-plugin.py` installs/upgrades it using an isolated Codex profile;
+   it never opens a model session or changes the user's own plugin configuration.
 5. Once the package is live on nuget.org, run the manual **"Publish to MCP Registry"**
    workflow (GitHub OIDC, no secrets) to update registry.modelcontextprotocol.io
 
