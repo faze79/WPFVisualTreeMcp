@@ -86,6 +86,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="80"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
@@ -114,7 +115,24 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                    <ScrollViewer Grid.Row="2"
+                                  x:Name="ScreenshotScrollViewer"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Margin="0,8,0,0">
+                        <StackPanel>
+                            <Border Height="40" Background="#FFC62828">
+                                <TextBlock Text="Full capture: top" Foreground="White" VerticalAlignment="Center" Margin="8,0"/>
+                            </Border>
+                            <Border Height="40" Background="#FFEF6C00"/>
+                            <Border Height="40" Background="#FFF9A825"/>
+                            <Border Height="40" Background="#FF2E7D32"/>
+                            <Border Height="40" Background="#FF1565C0">
+                                <TextBlock Text="Full capture: bottom" Foreground="White" VerticalAlignment="Center" Margin="8,0"/>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
                         <Button x:Name="RemoveItemButton"
                                 Content="Remove Selected"
                                 Command="{Binding RemoveItemCommand}"

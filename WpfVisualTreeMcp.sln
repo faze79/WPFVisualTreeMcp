@@ -31,12 +31,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		mcp.json = mcp.json
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WpfVisualTreeMcp.IntegrationTests", "tests\WpfVisualTreeMcp.IntegrationTests\WpfVisualTreeMcp.IntegrationTests.csproj", "{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -70,6 +76,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{19C4FDAE-F5D9-4A48-9A3C-E881C9CBF33D} = {3C4D5E6F-7890-1234-5678-90ABCDEF0123}
 		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890} = {1A2B3C4D-5E6F-7890-1234-567890ABCDEF}
 		{B2C3D4E5-F6A7-8901-BCDE-F12345678901} = {1A2B3C4D-5E6F-7890-1234-567890ABCDEF}
 		{C3D4E5F6-A7B8-9012-CDEF-123456789012} = {1A2B3C4D-5E6F-7890-1234-567890ABCDEF}

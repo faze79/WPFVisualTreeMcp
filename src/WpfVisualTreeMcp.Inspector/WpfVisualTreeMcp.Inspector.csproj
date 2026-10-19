@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" />
+    <InternalsVisibleTo Include="WpfVisualTreeMcp.IntegrationTests" />
   </ItemGroup>
 
 </Project>

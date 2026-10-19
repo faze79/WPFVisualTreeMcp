@@ -368,6 +368,12 @@ public class CaptureScreenshotRequest : IpcRequest
     /// includes open Popups, ComboBox dropdowns, context menus and tooltips.
     /// </summary>
     public string Mode { get; set; } = "render";
+
+    /// <summary>
+    /// Capture the complete content of a ScrollViewer, including content outside
+    /// the current viewport. Supported by render mode only.
+    /// </summary>
+    public bool FullContent { get; set; }
 }
 
 public class CaptureScreenshotResponse : IpcResponse

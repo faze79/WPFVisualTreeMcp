@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   .NET Framework targets; separate 4.8 and .NET 8 builds remain available.
 - Dependency-clean x86/x64 injection checks now cover applications targeting
   both .NET Framework 4.7.2 and 4.8. Gesture test runners also accept net472 targets.
+- Full-content render screenshots (`full_content=true`, CLI `--full-content`),
+  adapted from @miloszkukla's PR #22: direct capture of non-virtualized content and
+  bounded paging/stitching of virtualized lists, with scroll restoration and
+  cooperative execution deadlines. Full-content capture shares the interaction
+  gate with mouse/touch and other mutations.
 
 ### Fixed
 

@@ -118,8 +118,10 @@ public interface IIpcBridge
     /// <paramref name="mode"/> "render" (default) re-renders the visual off-screen;
     /// "screen" captures the on-screen pixels via GDI, including open Popups,
     /// ComboBox dropdowns, context menus and tooltips.
+    /// <paramref name="fullContent"/> captures all content in a ScrollViewer and
+    /// is supported by render mode only.
     /// </summary>
-    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render");
+    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render", bool fullContent = false);
 
     /// <summary>
     /// Gets the DataContext chain for an element.

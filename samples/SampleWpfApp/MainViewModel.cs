@@ -22,12 +22,15 @@ public class MainViewModel : INotifyPropertyChanged
 
     public MainViewModel()
     {
-        Items = new ObservableCollection<ItemModel>
+        Items = new ObservableCollection<ItemModel>();
+        for (var i = 1; i <= 40; i++)
         {
-            new ItemModel { Name = "Item 1", Description = "First sample item" },
-            new ItemModel { Name = "Item 2", Description = "Second sample item" },
-            new ItemModel { Name = "Item 3", Description = "Third sample item" }
-        };
+            Items.Add(new ItemModel
+            {
+                Name = $"Item {i}",
+                Description = $"Sample item {i}"
+            });
+        }
 
         SubmitCommand = new RelayCommand(Submit, CanSubmit);
         ClearCommand = new RelayCommand(Clear);

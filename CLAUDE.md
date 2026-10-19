@@ -154,6 +154,11 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
 - DPI-aware via `PresentationSource.FromVisual`
 - Downscales if exceeding `max_width`/`max_height` (default 1920x1080)
 - Returns MCP `ImageContentBlock` (base64 PNG) — Claude sees the image directly
+- `full_content=true` / `--full-content` is render-only and may temporarily scroll
+  virtualized controls, restoring offsets in `finally`. It uses the interaction
+  gate, bounded tiles/memory and a cooperative 25-second deadline. The live matrix
+  (`tests/run-integration-tests.ps1 -ServerDirectory <publish directory>`) verifies
+  net472/net48/net8 x86/x64, injection/self-hosting and scroll restoration.
 
 ### Logging
 - Server logs: `%LOCALAPPDATA%\WpfVisualTreeMcp\logs\mcp-server-YYYYMMDD.log`

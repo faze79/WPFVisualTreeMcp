@@ -2,6 +2,38 @@
 
 Complete reference for all MCP tools provided by WpfVisualTreeMcp.
 
+## Screenshots
+
+### wpf_capture_screenshot
+
+Use `element_handle` to select a control, or omit it for the main window.
+`mode="render"` (default) renders off-screen; `mode="screen"` captures visible
+desktop pixels, including open popups and menus, and requires an unobstructed window.
+
+Set `full_content=true` with **render mode** to capture the content of a
+ScrollViewer or a control containing one. Non-virtualized content is rendered
+directly; virtualized lists are paged and stitched. Logically scrolling controls
+currently support vertical stitching only. Target a specific scroll control when
+several are present; otherwise the descendant ScrollViewer with the largest extent
+is selected.
+
+**Full-content capture temporarily changes scroll position** and can trigger the
+application's scroll/layout handlers. Original offsets are restored in a `finally`
+block, including failures. It shares the interaction gate with drag, touch and other
+mutations, which are rejected while capture is running. Changing application data
+during capture can affect the result.
+
+`max_width`/`max_height` default to 1920/1080. Full-content requests accept up to
+16384 per dimension, with a separate 8-megapixel output cap; ordinary screenshots
+retain their 3840/2160 limits. Full-content capture uses bounded render tiles,
+a 64-megapixel retained-image budget, a 32-MiB PNG cap and a cooperative 25-second
+deadline. Bounds failures return errors. Application code that blocks the UI thread
+cannot be forcibly interrupted by the Inspector.
+
+```powershell
+wpfinspect screenshot --pid 1234 --handle elem_42 --full-content --max-height 4000 --out full.png
+```
+
 ## Mouse Interaction
 
 ### wpf_drag

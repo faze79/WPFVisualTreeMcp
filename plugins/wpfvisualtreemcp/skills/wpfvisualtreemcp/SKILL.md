@@ -19,6 +19,7 @@ Call `wpf_list_processes` to identify the running application, then `wpf_attach`
 - For binding failures, combine `wpf_get_binding_errors`, `wpf_get_bindings`, and `wpf_get_data_context`. Use `wpf_evaluate_binding` to find the failing path segment or explain a property's value source. An empty error list alone does not prove a binding is correct.
 - For unexpected styling or disabled controls, inspect properties and use `wpf_explain_triggers` to check the current style/template conditions.
 - For layout, combine `wpf_get_layout_info` with a screenshot. Use screen-mode screenshots for visible popups and dropdowns.
+- To inspect content beyond a scroll viewport, use `wpf_capture_screenshot(full_content=true, mode="render")` on that scroll control. Virtualized capture temporarily scrolls and restores offsets, can trigger application handlers, and must not overlap other interactions. Memory/deadline limits can reject oversized captures; do not report a failed capture as complete.
 
 ## Interact and verify
 

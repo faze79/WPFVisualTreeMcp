@@ -73,11 +73,16 @@ jobs:
       run: |
         Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
         & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
+        & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime windowsdesktop -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
         "DOTNET_ROOT_X86=$env:RUNNER_TEMP/dotnet-x86" >> $env:GITHUB_ENV
 
     - name: Test published injection (x64 and x86)
       shell: pwsh
       run: ./scripts/Test-Injection.ps1 -ServerDirectory ./publish
+
+    - name: Test framework, architecture and screenshot matrix
+      shell: pwsh
+      run: ./tests/run-integration-tests.ps1 -ServerDirectory ./publish
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

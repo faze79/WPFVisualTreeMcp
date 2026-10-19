@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using WpfVisualTreeMcp.Shared.Ipc;
@@ -13,6 +14,7 @@ namespace WpfVisualTreeMcp.Inspector;
 /// </summary>
 public class InspectorService : IDisposable
 {
+    private static readonly TimeSpan FullContentCaptureTimeout = TimeSpan.FromSeconds(25);
     private readonly IpcServer _ipcServer;
     private readonly TreeWalker _treeWalker;
     private readonly PropertyReader _propertyReader;
@@ -224,10 +226,12 @@ public class InspectorService : IDisposable
                 return await HandleWaitForElementAsync(data);
             }
 
+            var fullContent = requestType == "CaptureScreenshot" &&
+                IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data)?.FullContent == true;
             // Input sequences share the OS mouse. Fail fast instead of interleaving
             // concurrent mutations or queuing them past the IPC timeout.
             if (requestType is "Drag" or "TouchGesture" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
-                or "SetProperty" or "RevertProperty")
+                or "SetProperty" or "RevertProperty" || fullContent)
             {
                 ownsInteraction = _interactionGate.Wait(0);
                 if (!ownsInteraction)
@@ -239,6 +243,11 @@ public class InspectorService : IDisposable
             if (requestType == "TouchGesture")
                 return await HandleTouchGestureAsync(data).ConfigureAwait(false);
 
+            using var captureTimeout = fullContent
+                ? CancellationTokenSource.CreateLinkedTokenSource(_inputShutdown.Token) : null;
+            captureTimeout?.CancelAfter(FullContentCaptureTimeout);
+            var captureToken = captureTimeout?.Token ?? CancellationToken.None;
+
             // Use Task.Run to avoid blocking the named pipe thread
             var result = await Task.Run(() =>
             {
@@ -248,17 +257,18 @@ public class InspectorService : IDisposable
                 return Application.Current.Dispatcher.Invoke(() =>
                 {
                     DebugLog($"Inside Dispatcher callback, UI thread {System.Threading.Thread.CurrentThread.ManagedThreadId}");
-                    return HandleRequest(requestType, data);
-                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(10));
+                    return HandleRequest(requestType, data, captureToken);
+                }, System.Windows.Threading.DispatcherPriority.Normal, captureToken, TimeSpan.FromSeconds(10));
             });
 
             DebugLog($"HandleRequest completed successfully");
             return result;
         }
-        catch (TimeoutException)
+        catch (TimeoutException ex)
         {
-            DebugLog($"TIMEOUT in HandleRequestAsync: Dispatcher is busy or blocked");
-            return new GetVisualTreeResponse { Success = false, Error = "Request timeout: UI thread is busy" };
+            var error = GetTimeoutErrorMessage(ex);
+            DebugLog($"TIMEOUT in HandleRequestAsync: {error}");
+            return new GetVisualTreeResponse { Success = false, Error = error };
         }
         catch (Exception ex)
         {
@@ -329,7 +339,10 @@ public class InspectorService : IDisposable
         }
     }
 
-    private IpcResponse HandleRequest(string requestType, JsonElement data)
+    internal static string GetTimeoutErrorMessage(TimeoutException exception) =>
+        exception is FullContentCaptureTimeoutException ? exception.Message : "Request timeout: UI thread is busy";
+
+    private IpcResponse HandleRequest(string requestType, JsonElement data, CancellationToken captureToken)
     {
         return requestType switch
         {
@@ -345,7 +358,7 @@ public class InspectorService : IDisposable
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
             "ExportTree" => HandleExportTree(data),
-            "CaptureScreenshot" => HandleCaptureScreenshot(data),
+            "CaptureScreenshot" => HandleCaptureScreenshot(data, captureToken),
             "GetDataContext" => HandleGetDataContext(data),
             "ClearBindingErrors" => HandleClearBindingErrors(),
             "SetProperty" => HandleSetProperty(data),
@@ -1156,7 +1169,7 @@ public class InspectorService : IDisposable
         };
     }
 
-    private IpcResponse HandleCaptureScreenshot(JsonElement data)
+    private IpcResponse HandleCaptureScreenshot(JsonElement data, CancellationToken captureToken)
     {
         var request = IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data);
 
@@ -1211,9 +1224,13 @@ public class InspectorService : IDisposable
             var maxWidth = request?.MaxWidth ?? 1920;
             var maxHeight = request?.MaxHeight ?? 1080;
 
-            var (base64, width, height) = mode == "screen"
-                ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
-                : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
+            if (request?.FullContent == true && mode == "screen")
+                throw new ArgumentException("Full-content capture is supported by render mode only.");
+            var (base64, width, height) = request?.FullContent == true
+                ? screenshotCapture.CaptureFullContent(element, maxWidth, maxHeight, captureToken)
+                : mode == "screen"
+                    ? screenshotCapture.CaptureScreen(element, maxWidth, maxHeight)
+                    : screenshotCapture.CaptureElement(element, maxWidth, maxHeight);
 
             return new CaptureScreenshotResponse
             {

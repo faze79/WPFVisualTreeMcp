@@ -79,7 +79,7 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 ### Interaction & Export
 - **Touch Gestures** *(v0.13.0)* - `wpf_touch_gesture` / CLI `touch`: native tap, long press, swipe, pinch and rotation with one or two contacts. Includes an interactive demo and [WPF compatibility guidance](docs/TOOLS_REFERENCE.md#touch-compatibility-and-verification).
 - **Mouse Drag** - `wpf_drag` / CLI `drag`: drag between visual-tree elements or by a local displacement, with left/right/middle buttons, configurable duration and local start/end points. Supports slider thumbs, splitters and drag-and-drop. See the [parameters and examples](docs/TOOLS_REFERENCE.md#wpf_drag).
-- **Screenshot Capture** - Capture window/element screenshots visible to AI agents
+- **Screenshot Capture** - Capture window/element screenshots visible to AI agents; `full_content=true` / CLI `--full-content` captures scrollable content, including virtualized lists, and restores the original scroll position
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Control Click** *(v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click
 - **Set Text** *(new in v0.5.0)* - Fill a TextBox/ComboBox/PasswordBox via UI Automation `IValueProvider.SetValue`, with a `TextBox.Text` / `PasswordBox.Password` / reflected-`Text` fallback, or `physical=true` to type via OS keyboard input (full Unicode BMP)
@@ -482,7 +482,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_get_element_properties` | Get all dependency properties of an element |
 | `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
-| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` captures real on-screen pixels including open popups, dropdowns and context menus |
+| `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` includes popups and menus; `full_content=true` with render mode captures scrollable content |
 | `wpf_get_bindings` | Get data bindings for an element (includes MultiBinding, converter, StringFormat) |
 | `wpf_get_binding_errors` | List all captured binding errors |
 | `wpf_clear_binding_errors` | Clear the captured binding errors list |
