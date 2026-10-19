@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "wpf-visual-tree": {
+      "command": "dotnet",
+      "args": [
+        "dnx",
+        "WpfVisualTreeMcp",
+        "--source",
+        "https://api.nuget.org/v3/index.json",
+        "--no-http-cache",
+        "--verbosity",
+        "quiet"
+      ],
+      "cwd": ".",
+      "env": {
+        "DOTNET_NOLOGO": "1",
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+      },
+      "startup_timeout_sec": 120
+    }
+  }
+}

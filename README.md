@@ -276,6 +276,77 @@ Add to your Cursor settings (`.cursor/mcp.json`):
 }
 ```
 
+#### Codex plugin
+
+The repository includes a **WPFVisualTreeMcp** Codex plugin that installs the MCP
+configuration and a `wpfvisualtreemcp` skill together. It runs the **latest stable NuGet package**,
+not a build of the checked-out source. No machine-specific executable path is
+required.
+
+Prerequisites for this installation method:
+
+- Windows 10/11 and a local Codex client with plugin support.
+- [.NET 10 SDK, version 10.0.300 or newer within .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) for `dotnet dnx`,
+  plus the [.NET 8 runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
+- Internet access to nuget.org on each MCP launch to resolve the latest stable
+  version. Downloaded packages are cached by .NET. For x86 injection, install
+  the x86 .NET 8 runtime as well.
+
+From the repository root, register the local marketplace and install the plugin:
+
+```powershell
+codex plugin marketplace add .
+codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp
+```
+
+Restart Codex or open a new session, then ask it to inspect your running WPF app.
+The skill can also be invoked explicitly as `$wpfvisualtreemcp`.
+
+Alternatively, install directly from the upstream Git repository without cloning
+it manually:
+
+```powershell
+codex plugin marketplace add https://github.com/faze79/WPFVisualTreeMcp.git
+codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp
+```
+
+Use `codex plugin list --marketplace WPFVisualTreeMcp` to check the installation. This is
+a repository marketplace; it does not imply publication in OpenAI's public
+plugin directory. If your client lacks `codex plugin add`, use a plugin-capable
+client or the direct MCP configuration below.
+
+To use your own build, or to avoid the .NET 10 SDK requirement, register the
+published executable directly instead of installing the plugin:
+
+```powershell
+codex mcp add wpf-visual-tree -- "C:/Tools/WpfVisualTreeMcp/server/WpfVisualTreeMcp.Server.exe"
+```
+
+Replace the example with the actual executable path. Avoid enabling both this
+manual entry and the plugin at the same time, which would start two servers.
+
+Plugin files are under `plugins/wpfvisualtreemcp/`; the marketplace entry is
+`.agents/plugins/marketplace.json`. The plugin uses Codex's supported
+`.codex-plugin/plugin.json` compatibility format. Its manifest version identifies
+the plugin configuration and skill, independently of the NuGet server version.
+The MCP launch omits a package version and uses `--no-http-cache` to resolve the
+latest stable release from nuget.org on each start. Prereleases are excluded.
+Restart the MCP server or Codex to pick up a new server release; a running server
+does not update in place. Never add CLI subcommands
+such as `list` to the MCP launch arguments: no subcommand selects stdio mode.
+
+The plugin starts in its own directory and includes a `global.json` selecting
+SDK 10.0.300 or a newer stable .NET 10 SDK. This keeps a target project's older SDK pin
+from disabling `dotnet dnx`. The noninteractive launch was verified with SDK
+10.0.300. It stays on .NET 10 because .NET 11 introduces confirmation prompts
+and a `dnx --yes` option that .NET 10 does not support.
+
+The compatibility MCP configuration uses `"cwd": "."`, which Codex resolves
+relative to the installed plugin root. Do not replace it with `${PLUGIN_ROOT}`:
+Codex CLI 0.163.0 treats that value as a literal subdirectory in this format.
+After editing local plugin files, rerun `codex plugin add wpfvisualtreemcp@WPFVisualTreeMcp`
+to refresh the installed copy, then open a new Codex session.
+
 ### Self-Hosted Mode (Recommended)
 
 For your WPF application to be inspectable, add a reference to the Inspector DLL and initialize it on startup:
