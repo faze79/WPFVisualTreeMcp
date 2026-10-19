@@ -643,7 +643,8 @@ WpfVisualTreeMcp/
 ├── samples/
 │   └── SampleWpfApp/                   # Test application
 ├── tests/
-│   └── WpfVisualTreeMcp.Tests/         # Unit tests (48 tests)
+│   ├── WpfVisualTreeMcp.Tests/         # Unit tests
+│   └── WpfVisualTreeMcp.IntegrationTests/ # Live WPF integration tests
 ├── publish/                            # Published server + native DLLs
 │   └── native/{x64,x86}/              # Architecture-specific bootstrapper
 └── docs/                               # Documentation
