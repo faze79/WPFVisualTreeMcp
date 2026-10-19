@@ -89,7 +89,10 @@ def main():
             written = cli("export-test", "--format", "xunit", "--out", str(project))
             assert set(written["files"]) == set(exported)
             for name, content in exported.items():
-                assert (project / name).read_text(encoding="utf-8-sig") == content
+                # C# raw strings preserve checkout line endings. Do not let Python
+                # normalize CRLF while comparing the exact CLI and MCP exports.
+                with (project / name).open(encoding="utf-8-sig", newline="") as output:
+                    assert output.read() == content, f"MCP/CLI export differs: {name}"
             cli("get-recording", "--out", str(work / "raw.json"))
             assert json.loads((work / "raw.json").read_text(encoding="utf-8-sig")) == workflow
 
