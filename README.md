@@ -14,11 +14,13 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
-**New in [v0.15.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.15.0):**
-a [Codex plugin](#codex-plugin) that installs the MCP configuration and companion
-skill together, with a dedicated plugin ZIP. Includes all 30 tools, mouse dragging,
-touch gestures and CLI self-update. Thanks to @gaoshang212 for
-[PR #23](https://github.com/faze79/WPFVisualTreeMcp/pull/23).
+**New in [v0.16.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0):**
+record workflows and export runnable xUnit tests, including drag and touch;
+collect aggregate diagnostics with `wpf_report`; capture full scrollable content;
+inspect apps targeting .NET Framework 4.7.2. Includes 36 MCP tools, matching CLI
+commands, a more reliable updater and an updated [Codex companion skill](#codex-plugin).
+Thanks to @miloszkukla for the compatibility and screenshot work in
+[PR #22](https://github.com/faze79/WPFVisualTreeMcp/pull/22).
 
 ## Quickstart (60 seconds)
 
@@ -304,7 +306,7 @@ Prerequisites for this installation method:
   the x86 .NET 8 runtime as well.
 
 From the repository root, register the local marketplace and install the plugin.
-You can also download `WpfVisualTreeMcp-v0.15.0-codex-plugin.zip` from
+You can also download `WpfVisualTreeMcp-v0.16.0-codex-plugin.zip` from
 [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
 extract it, and run these commands from the extracted root:
 
@@ -574,6 +576,8 @@ Shipped in **v0.13.0**: mouse dragging and native touch gestures, with MCP/CLI p
 sample demos, input cleanup, and real desktop validation across net48 x86/x64 and net8 x64.
 Shipped in **v0.14.0**: CLI self-update with version checks and installation status.
 Shipped in **v0.15.0**: Codex plugin marketplace, companion skill and plugin ZIP.
+Shipped in **v0.16.0**: workflow recording/replay/xUnit export, aggregate diagnostics,
+full-content screenshots and .NET Framework 4.7.2 compatibility.
 
 The "change → measure → is it effective?" loop is complete: live-edit a property, then
 diff a before/after snapshot to see exactly what moved.

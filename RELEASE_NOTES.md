@@ -1,5 +1,41 @@
 # Release Notes
 
+## v0.16.0 — Repeatable workflows, diagnostics and compatibility (2026-10-19)
+
+Record a workflow, add explicit property assertions and waits, then export a
+standalone xUnit project that drives a fresh application through the CLI. Stable
+selectors replace session handles; mouse dragging, native touch, text, selection,
+keyboard and property edits share the same recording/replay path. See the
+[workflow guide](docs/TOOLS_REFERENCE.md#record-replay-and-export-tests).
+
+`wpf_report` gathers current binding/validation errors, UI state counts and recent
+binding traces with explicit scope and truncation. `full_content=true` / CLI
+`--full-content` captures scrollable content, including virtualized lists, and
+restores offsets. Apps targeting .NET Framework 4.7.2 are now supported alongside
+4.8 and .NET 8. Thanks to @miloszkukla for [PR #22](https://github.com/faze79/WPFVisualTreeMcp/pull/22);
+its compatibility and screenshot changes were adapted into separate co-authored commits.
+
+CLI tool updates stage the exact official NuGet package with bounded retries,
+avoiding stale feed metadata during release propagation. Plugin installation and
+skill upgrades are verified in isolated Codex profiles in CI. The plugin and its
+companion skill are updated to 0.16.0 and cover all 36 MCP tools.
+
+Validation: 198 ordinary tests; 12 live framework/architecture/hosting combinations;
+generated xUnit tests compiled and passed against fresh .NET 8 x64 and .NET Framework
+4.7.2 x86 sample processes; an additional 24-step desktop round trip includes real
+mouse, keyboard and touch with outcome checks. Framework-targeted apps were tested
+on the installed .NET Framework 4.8 runtime.
+
+Workflow v1 is linear and bounded to 100 steps/512 KiB, with a cooperative replay
+deadline up to 120 seconds. Replay stops at the first failure without rollback.
+Physical gestures require an interactive desktop and application touch support.
+Full-content screenshots can trigger scroll handlers. Coverage and resource limits
+are documented in the [tool reference](docs/TOOLS_REFERENCE.md).
+
+Update each CLI/portable installation with `update`, verify `update --status`,
+and restart MCP clients and previously inspected apps. Refresh/reinstall the Codex
+plugin separately to update its skill; CLI self-update does not change skill files.
+
 ## v0.15.0 — Codex plugin and companion skill (2026-10-19)
 
 Install the MCP configuration and WPF inspection skill together in Codex, thanks
