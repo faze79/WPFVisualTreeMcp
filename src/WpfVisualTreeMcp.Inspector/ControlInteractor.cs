@@ -54,16 +54,17 @@ internal sealed class ControlInteractor
     /// <paramref name="clickType"/> selects single (default), "double" or "right" —
     /// double and right clicks are OS-level notions, so they always use the physical path.
     /// </summary>
-    public InteractionOutcome Click(UIElement element, bool physical, string? clickType = null)
+    public InteractionOutcome Click(UIElement element, bool physical, string? clickType = null, double? x = null, double? y = null)
     {
+        MousePointerOptions.ValidatePoint(x, y);
         EnsureInteractable(element, "clicked");
 
         var type = string.IsNullOrEmpty(clickType) ? "single" : clickType!.ToLowerInvariant();
         if (type != "single" && type != "double" && type != "right")
             throw new ArgumentException($"Unknown click_type '{clickType}'. Expected: single, double, or right.");
 
-        if (type != "single")
-            return PhysicalClick(element, type);
+        if (type != "single" || x.HasValue)
+            return PhysicalClick(element, type, x, y);
 
         return physical ? PhysicalClick(element, type) : AutomationClick(element);
     }
@@ -131,35 +132,34 @@ internal sealed class ControlInteractor
             "element exposes no UI Automation pattern; raised routed mouse events (best-effort)");
     }
 
-    private static InteractionOutcome PhysicalClick(UIElement element, string clickType = "single")
+    private static InteractionOutcome PhysicalClick(UIElement element, string clickType = "single", double? localX = null, double? localY = null)
     {
-        var size = element.RenderSize;
-        if (size.Width <= 0 || size.Height <= 0)
-            throw new InvalidOperationException("Element has zero size and cannot be physically clicked.");
+        var plan = PreparePointer(element, localX, localY);
+        var input = new NativeMouseInput();
+        input.ValidateStart(plan);
+        input.Move(plan.StartX, plan.StartY);
+        var button = clickType == "right" ? "right" : "left";
+        for (int i = 0; i < (clickType == "double" ? 2 : 1); i++)
+        {
+            input.VerifyForeground();
+            try { input.Press(button); }
+            finally { input.Release(button); }
+        }
+        var method = clickType == "double" ? "Physical.DoubleClick" : clickType == "right" ? "Physical.RightClick" : "Physical";
+        return new InteractionOutcome(method, $"OS mouse {clickType} click at screen ({plan.StartX},{plan.StartY})");
+    }
 
+    internal static MouseDragPlan PreparePointer(UIElement element, double? x, double? y)
+    {
+        MousePointerOptions.ValidatePoint(x, y);
+        EnsureInteractable(element, "used for pointer input");
         Window.GetWindow(element)?.Activate();
         ScrollIntoView(element);
-
-        var centre = element.PointToScreen(new Point(size.Width / 2.0, size.Height / 2.0));
-        var x = (int)Math.Round(centre.X);
-        var y = (int)Math.Round(centre.Y);
-
-        if (!NativeMethods.SetCursorPos(x, y))
-            throw new InvalidOperationException($"SetCursorPos({x},{y}) failed — the point may be off-screen.");
-
-        switch (clickType)
-        {
-            case "double":
-                NativeMethods.MouseLeftClick();
-                NativeMethods.MouseLeftClick();
-                return new InteractionOutcome("Physical.DoubleClick", $"OS mouse double-click at screen ({x},{y})");
-            case "right":
-                NativeMethods.MouseRightClick();
-                return new InteractionOutcome("Physical.RightClick", $"OS mouse right-click at screen ({x},{y})");
-            default:
-                NativeMethods.MouseLeftClick();
-                return new InteractionOutcome("Physical", $"OS mouse click at screen ({x},{y})");
-        }
+        var screen = element.PointToScreen(LocalPoint(element, x, y));
+        EnsureHit(element, screen);
+        int sx = checked((int)Math.Round(screen.X)), sy = checked((int)Math.Round(screen.Y));
+        var window = (PresentationSource.FromVisual(element) as System.Windows.Interop.HwndSource)?.Handle ?? IntPtr.Zero;
+        return new MouseDragPlan(sx, sy, sx, sy, "left", 0, element.GetType().Name, window, window);
     }
 
     /// <summary>
@@ -253,13 +253,16 @@ internal sealed class ControlInteractor
         if (size.Width <= 0 || size.Height <= 0 || !element.IsHitTestVisible)
             throw new InvalidOperationException("Input elements must have a positive size and be hit-test visible.");
         var point = new Point(x ?? size.Width / 2, y ?? size.Height / 2);
-        if (point.X >= size.Width || point.Y >= size.Height)
+        if (point.X < 0 || point.Y < 0 || point.X >= size.Width || point.Y >= size.Height)
             throw new ArgumentException("The local input point lies outside the element's rendered bounds.");
         return point;
     }
 
     private static void EnsureHit(UIElement element, Point screenPoint)
     {
+        if (element is System.Windows.Interop.HwndHost host &&
+            PhysicalInputGuard.IsHostedPoint(host.Handle, checked((int)Math.Round(screenPoint.X)), checked((int)Math.Round(screenPoint.Y))))
+            return;
         var root = PresentationSource.FromVisual(element)?.RootVisual as UIElement;
         DependencyObject? hit = root?.InputHitTest(root.PointFromScreen(screenPoint)) as DependencyObject;
         while (hit != null)

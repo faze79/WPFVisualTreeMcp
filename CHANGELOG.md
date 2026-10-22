@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-22
+
+### Fixed
+
+- Preserve WPF `NaN`/`Infinity`, numeric, boolean and null property values; use
+  culture-independent JSON and retain binding/element metadata. Invalid payloads
+  now return actionable errors instead of an apparently successful empty result.
+- Accept visible HWND children of `HwndHost` for mouse/touch input while retaining
+  overlay and process checks. Native boundaries are explicitly marked in tree/find results.
+- Screenshot `auto` mode (new default) uses screen capture for native hosted content
+  and reports the selected mode. Explicit render/full-content requests reject native
+  content with recovery guidance instead of returning an incomplete black image.
+- Expose input-validation and Inspector errors to MCP clients; document report limits.
+- Read composite/custom headers and inline text in backstage/tab searches and snapshots. Include
+  dependency-property `ownerType` to distinguish same-name attached properties.
+- Delegate foreground permission before physical input, replay and screen capture;
+  verify the target is foreground and not minimized before capturing desktop pixels.
+
+### Added
+
+- `wpf_move_mouse` / CLI `move-mouse` for hover and `wpf_scroll` / CLI `scroll` for
+  vertical/horizontal wheel input. Paired local `x`/`y` coordinates on click imply
+  physical input. All new inputs support stable-selector recording and replay.
+- Regression coverage for real WPF defaults under en-US/it-IT, native HWND input
+  boundaries, mixed JSON value parsing and fresh-process pointer workflow export.
+- Full and compact Windows x64 MCPB bundles are built and validated by the release
+  workflow alongside the portable archive, NuGet package and Codex companion plugin.
+
+### Upgrade notes
+
+- Restart the MCP client and previously inspected applications after updating so
+  the server and injected Inspector both reload. Coordinate clicks and pointer
+  replay detect older Inspectors and explain how to reload them.
+- Screenshot capture now defaults to `auto`; choose `render` explicitly for
+  off-screen WPF-only capture or `screen` for visible popups and menus.
+
 ## [0.16.0] - 2026-10-19
 
 ### Added

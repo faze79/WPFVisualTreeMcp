@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
 
@@ -37,6 +39,7 @@ public class PropertyReader
             sb.Append("{");
             sb.Append($"\"name\":\"{EscapeJson(dp.Name)}\"");
             sb.Append($",\"typeName\":\"{EscapeJson(dp.PropertyType.FullName ?? dp.PropertyType.Name)}\"");
+            sb.Append($",\"ownerType\":\"{EscapeJson(dp.OwnerType.FullName ?? dp.OwnerType.Name)}\"");
             sb.Append($",\"value\":{FormatValue(value)}");
             sb.Append($",\"source\":\"{GetSourceName(source.BaseValueSource)}\"");
             sb.Append($",\"isBinding\":{(source.IsExpression ? "true" : "false")}");
@@ -86,18 +89,18 @@ public class PropertyReader
 
         if (element is FrameworkElement fe)
         {
-            sb.Append($"\"actualWidth\":{fe.ActualWidth}");
-            sb.Append($",\"actualHeight\":{fe.ActualHeight}");
-            sb.Append($",\"desiredSize\":{{\"width\":{fe.DesiredSize.Width},\"height\":{fe.DesiredSize.Height}}}");
-            sb.Append($",\"renderSize\":{{\"width\":{fe.RenderSize.Width},\"height\":{fe.RenderSize.Height}}}");
-            sb.Append($",\"margin\":{{\"left\":{fe.Margin.Left},\"top\":{fe.Margin.Top},\"right\":{fe.Margin.Right},\"bottom\":{fe.Margin.Bottom}}}");
+            sb.Append(FormattableString.Invariant($"\"actualWidth\":{fe.ActualWidth}"));
+            sb.Append(FormattableString.Invariant($",\"actualHeight\":{fe.ActualHeight}"));
+            sb.Append(FormattableString.Invariant($",\"desiredSize\":{{\"width\":{fe.DesiredSize.Width},\"height\":{fe.DesiredSize.Height}}}"));
+            sb.Append(FormattableString.Invariant($",\"renderSize\":{{\"width\":{fe.RenderSize.Width},\"height\":{fe.RenderSize.Height}}}"));
+            sb.Append(FormattableString.Invariant($",\"margin\":{{\"left\":{fe.Margin.Left},\"top\":{fe.Margin.Top},\"right\":{fe.Margin.Right},\"bottom\":{fe.Margin.Bottom}}}"));
             sb.Append($",\"horizontalAlignment\":\"{fe.HorizontalAlignment}\"");
             sb.Append($",\"verticalAlignment\":\"{fe.VerticalAlignment}\"");
             sb.Append($",\"visibility\":\"{fe.Visibility}\"");
 
             if (fe is System.Windows.Controls.Control control)
             {
-                sb.Append($",\"padding\":{{\"left\":{control.Padding.Left},\"top\":{control.Padding.Top},\"right\":{control.Padding.Right},\"bottom\":{control.Padding.Bottom}}}");
+                sb.Append(FormattableString.Invariant($",\"padding\":{{\"left\":{control.Padding.Left},\"top\":{control.Padding.Top},\"right\":{control.Padding.Right},\"bottom\":{control.Padding.Bottom}}}"));
             }
         }
 
@@ -166,9 +169,9 @@ public class PropertyReader
         var type = value.GetType();
 
         // Handle primitives
-        if (type == typeof(string))
+        if (type == typeof(string) || type == typeof(char))
         {
-            return $"\"{EscapeJson((string)value)}\"";
+            return JsonSerializer.Serialize(Convert.ToString(value, CultureInfo.InvariantCulture));
         }
         if (type == typeof(bool))
         {
@@ -176,7 +179,12 @@ public class PropertyReader
         }
         if (type.IsPrimitive || type == typeof(decimal))
         {
-            return value.ToString() ?? "null";
+            // WPF uses NaN for Auto and Infinity for unconstrained dimensions.
+            // JSON has no non-finite numbers: retain their meaning as strings.
+            if (value is double d && (double.IsNaN(d) || double.IsInfinity(d)) ||
+                value is float f && (float.IsNaN(f) || float.IsInfinity(f)))
+                return JsonSerializer.Serialize(Convert.ToString(value, CultureInfo.InvariantCulture));
+            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "null";
         }
 
         // Handle common WPF types
@@ -321,11 +329,7 @@ public class PropertyReader
 
     private static string EscapeJson(string text)
     {
-        return text
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t");
+        var quoted = JsonSerializer.Serialize(text);
+        return quoted.Substring(1, quoted.Length - 2);
     }
 }

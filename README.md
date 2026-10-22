@@ -14,13 +14,16 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
-**New in [v0.16.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.16.0):**
-record workflows and export runnable xUnit tests, including drag and touch;
-collect aggregate diagnostics with `wpf_report`; capture full scrollable content;
-inspect apps targeting .NET Framework 4.7.2. Includes 36 MCP tools, matching CLI
-commands, a more reliable updater and an updated [Codex companion skill](#codex-plugin).
-Thanks to @miloszkukla for the compatibility and screenshot work in
-[PR #22](https://github.com/faze79/WPFVisualTreeMcp/pull/22).
+**New in [v0.17.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.17.0):**
+38 MCP tools and matching CLI commands, with mouse hover, vertical/horizontal wheel
+input and coordinate clicks. Native hosted canvases support direct mouse/touch input;
+screenshot `auto` mode captures their visible content. Property inspection now preserves
+WPF Auto/unbounded values, and backstage searches read composite and formatted labels.
+The [Codex companion skill](#codex-plugin) includes the new commands and upgrade guidance.
+
+Workflow recording/replay/xUnit export, aggregate diagnostics, full-content screenshots
+and .NET Framework 4.7.2 support remain available from v0.16.0. Thanks to @miloszkukla
+for the compatibility and screenshot work in [PR #22](https://github.com/faze79/WPFVisualTreeMcp/pull/22).
 
 ## Quickstart (60 seconds)
 
@@ -81,7 +84,7 @@ Debugging WPF UI issues traditionally requires manual inspection with specialize
 ### Interaction & Export
 - **Touch Gestures** *(v0.13.0)* - `wpf_touch_gesture` / CLI `touch`: native tap, long press, swipe, pinch and rotation with one or two contacts. Includes an interactive demo and [WPF compatibility guidance](docs/TOOLS_REFERENCE.md#touch-compatibility-and-verification).
 - **Mouse Drag** - `wpf_drag` / CLI `drag`: drag between visual-tree elements or by a local displacement, with left/right/middle buttons, configurable duration and local start/end points. Supports slider thumbs, splitters and drag-and-drop. See the [parameters and examples](docs/TOOLS_REFERENCE.md#wpf_drag).
-- **Screenshot Capture** - Capture window/element screenshots visible to AI agents; `full_content=true` / CLI `--full-content` captures scrollable content, including virtualized lists, and restores the original scroll position
+- **Screenshot Capture** - Current source uses `auto` capture for native hosted content and reports the selected mode; explicit render rejects unsupported native areas. Capture window/element screenshots visible to AI agents; `full_content=true` / CLI `--full-content` captures scrollable content, including virtualized lists, and restores the original scroll position
 - **Element Highlighting** - Visually highlight elements in the running app
 - **Control Click** *(v0.4.0)* - Click elements via UI Automation (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) or a real OS mouse click
 - **Set Text** *(new in v0.5.0)* - Fill a TextBox/ComboBox/PasswordBox via UI Automation `IValueProvider.SetValue`, with a `TextBox.Text` / `PasswordBox.Password` / reflected-`Text` fallback, or `physical=true` to type via OS keyboard input (full Unicode BMP)
@@ -161,10 +164,10 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 #### Desktop extension (MCPB)
 
 Clients that support MCP bundles can import
-[`WpfVisualTreeMcp-v0.16.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.16.0/WpfVisualTreeMcp-v0.16.0-win-x64.mcpb).
+[`WpfVisualTreeMcp-v0.17.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.17.0/WpfVisualTreeMcp-v0.17.0-win-x64.mcpb).
 This Windows x64 bundle includes the server runtime and a self-contained x86
 injection helper. A smaller
-[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.16.0/WpfVisualTreeMcp-v0.16.0-win-x64-compact.mcpb)
+[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.17.0/WpfVisualTreeMcp-v0.17.0-win-x64-compact.mcpb)
 provides the same tools with a reduced runtime for catalogs with upload limits.
 Update either bundle through the client's extension UI. See the
 [MCPB guide](docs/MCPB.md) for requirements, packaging and verification.
@@ -317,7 +320,7 @@ Prerequisites for this installation method:
   the x86 .NET 8 runtime as well.
 
 From the repository root, register the local marketplace and install the plugin.
-You can also download `WpfVisualTreeMcp-v0.16.0-codex-plugin.zip` from
+You can also download `WpfVisualTreeMcp-v0.17.0-codex-plugin.zip` from
 [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
 extract it, and run these commands from the extracted root:
 
@@ -516,6 +519,8 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_revert_property` | Undo `wpf_set_property` edits (one, filtered, or all) — restores the prior binding/value/default. |
 | `wpf_highlight_element` | Visually highlight an element |
 | `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
+| `wpf_move_mouse` | **Move/hover** at a local point without clicking. Available in the current source build. |
+| `wpf_scroll` | **Wheel input** vertically or horizontally; the app decides whether to scroll or zoom. Available in the current source build. |
 | `wpf_drag` | **Drag with the mouse** — source and target elements or relative displacement, local points, left/right/middle button, gradual movement and release cleanup. *State-changing.* |
 | `wpf_touch_gesture` | **Native touch** — tap, long press, swipe, two-finger pinch and rotation inside a visible element. Requires application touch support. *State-changing.* |
 | `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
@@ -643,7 +648,7 @@ WpfVisualTreeMcp/
 ├── src/
 │   ├── WpfVisualTreeMcp.Server/        # MCP Server (.NET 8) - Uses official MCP SDK
 │   │   ├── Program.cs                  # Server initialization with MCP SDK
-│   │   ├── WpfTools.cs                 # 36 inspection, interaction and workflow tools
+│   │   ├── WpfTools.cs                 # 38 inspection, interaction and workflow tools
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
 │   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
@@ -667,7 +672,7 @@ WpfVisualTreeMcp/
 - **Protocol**: JSON-RPC 2.0 over stdio transport
 - **Target Framework**: .NET 8.0 (Server) / .NET Framework 4.7.2, 4.8 and .NET 8.0-windows (Inspector)
 - **IPC**: Named Pipes for server-to-application communication
-- **Tools**: 36 tools auto-discovered via `[McpServerTool]` attributes, covering inspection, diagnostics, interaction and workflow recording/testing. Replay performs recorded actions; full-content screenshots may temporarily scroll controls.
+- **Tools**: 38 tools auto-discovered via `[McpServerTool]` attributes, covering inspection, diagnostics, interaction and workflow recording/testing. Replay performs recorded actions; full-content screenshots may temporarily scroll controls.
 - **CLI**: same executable runs as one-shot CLI when given a subcommand (`Program.cs` routes via `CliRunner.IsCliCommand`)
 
 ## Acknowledgments

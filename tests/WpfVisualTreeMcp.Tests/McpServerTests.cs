@@ -61,7 +61,7 @@ public class WpfToolsTests
         _ipcBridgeMock.Setup(b => b.ReportAsync("root", 20, 4, 3)).ReturnsAsync(expected);
         (await _tools.WpfReport("root", 20, 4, 3)).Should().BeSameAs(expected);
         var invalid = () => _tools.WpfReport(max_elements: 2001);
-        await invalid.Should().ThrowAsync<ArgumentException>();
+        await invalid.Should().ThrowAsync<ModelContextProtocol.McpException>();
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class WpfToolsTests
     public async Task WpfAttach_WithNoParameters_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfAttach());
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfAttach());
     }
 
     [Theory]
@@ -239,7 +239,7 @@ public class WpfToolsTests
     public async Task WpfGetElementProperties_WithEmptyHandle_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfGetElementProperties(""));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfGetElementProperties(""));
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public class WpfToolsTests
     public async Task WpfFindElementsDeep_WithoutAnyCriteria_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfFindElementsDeep());
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfFindElementsDeep());
     }
 
     [Fact]
@@ -344,7 +344,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfExplainTriggers_WithEmptyHandle_Throws()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfExplainTriggers(""));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfExplainTriggers(""));
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfEvaluateBinding_WithEmptyHandle_Throws()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfEvaluateBinding("", "Text"));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfEvaluateBinding("", "Text"));
     }
 
     [Fact]
@@ -410,7 +410,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfDiff_WithMissingLabels_Throws()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfDiff("", "after"));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfDiff("", "after"));
     }
 
     [Fact]
@@ -443,7 +443,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfSetProperty_WithEmptyHandle_Throws()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfSetProperty("", "Margin", "0"));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfSetProperty("", "Margin", "0"));
     }
 
     [Fact]
@@ -498,7 +498,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfWaitForElement_WithoutCriteria_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _tools.WpfWaitForElement());
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfWaitForElement());
     }
 
     [Fact]
@@ -579,7 +579,7 @@ public class WpfToolsTests
     public async Task WpfGetResources_WithElementScopeButNoHandle_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() =>
             _tools.WpfGetResources(scope: "element", element_handle: null));
     }
 
@@ -708,7 +708,7 @@ public class WpfToolsTests
     public async Task WpfExportTree_WithInvalidFormat_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() =>
             _tools.WpfExportTree(format: "invalid"));
     }
 
@@ -771,7 +771,7 @@ public class WpfToolsTests
     public async Task WpfCaptureScreenshot_FullContentScreenMode_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() =>
             _tools.WpfCaptureScreenshot(mode: "screen", full_content: true));
         _ipcBridgeMock.Verify(
             x => x.CaptureScreenshotAsync(
@@ -803,7 +803,7 @@ public class WpfToolsTests
     public async Task WpfWatchProperty_WithEmptyHandle_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() =>
             _tools.WpfWatchProperty("", "Width"));
     }
 
@@ -811,7 +811,7 @@ public class WpfToolsTests
     public async Task WpfWatchProperty_WithEmptyPropertyName_ThrowsArgumentException()
     {
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() =>
             _tools.WpfWatchProperty("elem_1", ""));
     }
 }

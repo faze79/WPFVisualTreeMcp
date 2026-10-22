@@ -19,8 +19,8 @@ text to submit. Keep the entries in sync when the tool count or tagline changes.
 ## Canonical pitch
 
 > **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI,
-> exposed over 36 MCP tools and matching CLI commands: visual trees, bindings,
-> diagnostic reports, full-content screenshots, mouse dragging, native touch,
+> exposed over 38 MCP tools and matching CLI commands: visual trees, bindings,
+> diagnostic reports, full-content screenshots, mouse hover/wheel/dragging, native touch,
 > and workflow recording/replay with runnable xUnit export. Supports WPF apps on
 > .NET Framework 4.7.2/4.8 and .NET 8+ through runtime injection or self-hosting.
 > Includes CLI self-update and a Codex companion skill. Native touch behavior

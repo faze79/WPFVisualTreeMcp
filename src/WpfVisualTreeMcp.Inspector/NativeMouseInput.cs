@@ -39,6 +39,7 @@ internal sealed class NativeMouseInput : IMouseInput
 
     public void Press(string button) => Send(ButtonFlag(button, false));
     public void Release(string button) => Send(ButtonFlag(button, true));
+    public void Wheel(int delta, bool horizontal) => Send(horizontal ? 0x1000u : 0x0800u, data: unchecked((uint)delta));
 
     private static uint ButtonFlag(string button, bool up) => button switch
     {
@@ -48,10 +49,10 @@ internal sealed class NativeMouseInput : IMouseInput
         _ => throw new ArgumentException("Unsupported mouse button.")
     };
 
-    private static void Send(uint flags, int x = 0, int y = 0)
+    private static void Send(uint flags, int x = 0, int y = 0, uint data = 0)
     {
         // MOUSEINPUT is the largest member of INPUT's union on both x86 and x64.
-        var inputs = new[] { new INPUT { Mouse = new MOUSEINPUT { X = x, Y = y, Flags = flags } } };
+        var inputs = new[] { new INPUT { Mouse = new MOUSEINPUT { X = x, Y = y, Flags = flags, Data = data } } };
         if (SendInput(1, inputs, Marshal.SizeOf(typeof(INPUT))) != 1)
             throw new Win32Exception(Marshal.GetLastWin32Error(),
                 "SendInput failed. The input desktop may be unavailable or input blocked by Windows integrity restrictions.");

@@ -34,6 +34,18 @@ internal sealed class PhysicalInputGuard
             throw new InvalidOperationException("A different window covers an input point. Make the target unobstructed before injecting input.");
     }
 
+    // WPF InputHitTest cannot enter an HwndHost. Accept only pixels owned by
+    // that exact native window or one of its children, never an overlay/sibling.
+    public static bool IsHostedPoint(IntPtr host, int x, int y)
+    {
+        using (new PhysicalCoordinates())
+        {
+            var hit = WindowFromPoint(new POINT { X = x, Y = y });
+            return host != IntPtr.Zero && hit != IntPtr.Zero &&
+                (hit == host || IsChild(host, hit));
+        }
+    }
+
     // DPI awareness is thread-local; never keep this scope across an await.
     internal sealed class PhysicalCoordinates : IDisposable
     {
@@ -53,6 +65,7 @@ internal sealed class PhysicalInputGuard
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT point, uint flags);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);

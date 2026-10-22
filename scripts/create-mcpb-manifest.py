@@ -28,11 +28,11 @@ def main():
         "name": "wpf-visual-tree",
         "display_name": "WPFVisualTreeMcp",
         "version": version,
-        "description": "Inspect and automate local WPF apps: visual trees, binding diagnostics, screenshots, mouse dragging, touch gestures and workflow tests.",
+        "description": "Inspect and automate local WPF apps: visual trees, binding diagnostics, screenshots, mouse hover/wheel/dragging, touch gestures and workflow tests.",
         "long_description": (
             f"{len(tools)} MCP tools for inspecting and automating running WPF apps on Windows x64. "
             "Read visual trees, dependency properties, bindings and DataContext; capture full-content screenshots; "
-            "drag with the mouse, send native touch gestures, record/replay workflows and export runnable xUnit tests.\n\n"
+            "move/click/scroll/drag with the mouse, send native touch gestures, record/replay workflows and export runnable xUnit tests.\n\n"
             "Supports .NET Framework 4.7.2/4.8 and .NET 8+ WPF targets, including x86 targets. "
             "The server and x86 helper include their .NET runtimes. The target app still needs its own runtime. "
             "Run in the same local Windows desktop session as the target application. "

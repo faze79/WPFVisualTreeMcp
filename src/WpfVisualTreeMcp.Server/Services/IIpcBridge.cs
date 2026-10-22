@@ -126,7 +126,7 @@ public interface IIpcBridge
     /// <paramref name="fullContent"/> captures all content in a ScrollViewer and
     /// is supported by render mode only.
     /// </summary>
-    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render", bool fullContent = false);
+    Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "auto", bool fullContent = false);
 
     /// <summary>
     /// Gets the DataContext chain for an element.
@@ -144,7 +144,9 @@ public interface IIpcBridge
     /// <paramref name="clickType"/>: "single" (default), "double" or "right" —
     /// double/right always use the physical path.
     /// </summary>
-    Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null);
+    Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null, double? x = null, double? y = null);
+
+    Task<MousePointerResult> MousePointerAsync(MousePointerOptions options);
 
     /// <summary>Sends a complete physical mouse drag while keeping the target UI responsive.</summary>
     Task<DragResult> DragAsync(DragOptions options);

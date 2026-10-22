@@ -11,7 +11,7 @@ public static class WorkflowCodec
     public const int MaxSteps = 100;
     public const int MaxJsonLength = 512 * 1024;
     public static bool IsRecordable(string action) => action is "ClickElement" or "SetText" or "SelectItem" or "SendKeys"
-        or "Drag" or "TouchGesture" or "SetProperty" or "RevertProperty" or "FindElements" or "FindElementsDeep"
+        or "Drag" or "TouchGesture" or "MousePointer" or "SetProperty" or "RevertProperty" or "FindElements" or "FindElementsDeep"
         or "WaitForElement" or "AssertElement";
 
     public static void Validate(RecordedWorkflow workflow)
@@ -26,7 +26,7 @@ public static class WorkflowCodec
             ValidateSelector(step.Target); ValidateSelector(step.Destination); ValidateSelector(step.Root);
             var request = ReadRequest(step.Action, step.Arguments);
             var needsTarget = request is ClickElementRequest or SetTextRequest or SelectItemRequest or SendKeysRequest
-                or DragRequest or TouchGestureRequest or SetPropertyRequest or AssertElementRequest;
+                or DragRequest or TouchGestureRequest or MousePointerRequest or SetPropertyRequest or AssertElementRequest;
             if (needsTarget && step.Target == null) throw new ArgumentException($"{step.Action} requires a target selector.");
             BindHandles(request, step.Target == null ? null : "selector", step.Destination == null ? null : "selector", step.Root == null ? null : "selector");
             ValidateRequest(request);
@@ -75,6 +75,7 @@ public static class WorkflowCodec
             "SendKeys" => IpcSerializer.DeserializeRequestData<SendKeysRequest>(arguments)!,
             "Drag" => IpcSerializer.DeserializeRequestData<DragRequest>(arguments)!,
             "TouchGesture" => IpcSerializer.DeserializeRequestData<TouchGestureRequest>(arguments)!,
+            "MousePointer" => IpcSerializer.DeserializeRequestData<MousePointerRequest>(arguments)!,
             "SetProperty" => IpcSerializer.DeserializeRequestData<SetPropertyRequest>(arguments)!,
             "RevertProperty" => IpcSerializer.DeserializeRequestData<RevertPropertyRequest>(arguments)!,
             "FindElements" => IpcSerializer.DeserializeRequestData<FindElementsRequest>(arguments)!,
@@ -106,6 +107,7 @@ public static class WorkflowCodec
         SendKeysRequest r => (r.ElementHandle, null, null),
         DragRequest r => (r.Options.ElementHandle, r.Options.TargetHandle, null),
         TouchGestureRequest r => (r.Options.ElementHandle, null, null),
+        MousePointerRequest r => (r.Options.ElementHandle, null, null),
         SetPropertyRequest r => (r.ElementHandle, null, null),
         RevertPropertyRequest r => (r.ElementHandle, null, null),
         FindElementsRequest r => (null, null, r.RootHandle),
@@ -129,6 +131,9 @@ public static class WorkflowCodec
             case TouchGestureRequest r:
                 if (r.Options == null) throw new ArgumentException("Touch options required.");
                 r.Options.ElementHandle = target!; break;
+            case MousePointerRequest r:
+                if (r.Options == null) throw new ArgumentException("Pointer options required.");
+                r.Options.ElementHandle = target!; break;
             case SetPropertyRequest r: r.ElementHandle = target!; break;
             case RevertPropertyRequest r: r.ElementHandle = target; break;
             case FindElementsRequest r: r.RootHandle = root; break;
@@ -144,8 +149,10 @@ public static class WorkflowCodec
         {
             case DragRequest r: (r.Options ?? throw new ArgumentException("Drag options required.")).Validate(); break;
             case TouchGestureRequest r: (r.Options ?? throw new ArgumentException("Touch options required.")).Validate(); break;
+            case MousePointerRequest r: (r.Options ?? throw new ArgumentException("Pointer options required.")).Validate(); break;
             case ClickElementRequest r when r.ClickType != null && r.ClickType is not ("single" or "double" or "right"):
                 throw new ArgumentException("Invalid click type.");
+            case ClickElementRequest r: MousePointerOptions.ValidatePoint(r.X, r.Y); break;
             case SelectItemRequest r when (r.ItemText == null) == (r.Index == null) || r.Index < 0:
                 throw new ArgumentException("SelectItem needs either itemText or a nonnegative index.");
             case SendKeysRequest r when string.IsNullOrWhiteSpace(r.Keys): throw new ArgumentException("Keys required.");

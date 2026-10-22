@@ -1,7 +1,7 @@
 <Window x:Class="SampleWpfApp.DragDemoWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Mouse drag demo" Width="700" Height="550" WindowStartupLocation="CenterScreen">
+        Title="Mouse drag demo" Width="700" Height="600" WindowStartupLocation="CenterScreen">
     <StackPanel Margin="24">
         <TextBlock Text="Mouse drag demo" FontSize="24" FontWeight="Bold"/>
         <TextBlock Text="Drag the slider thumb, resize the panels, or drop the blue item." Margin="0,8,0,16"/>
@@ -30,12 +30,15 @@
             </Border>
         </Grid>
         <TextBlock Text="Canvas: drag with left, right or middle button" Margin="0,16,0,8"/>
-        <Canvas x:Name="DragCanvas" Height="110" Background="#F1F5F9">
+        <Canvas x:Name="DragCanvas" Height="110" Background="#F1F5F9"
+                PreviewMouseMove="PointerMove" PreviewMouseWheel="PointerWheel" PreviewMouseDown="PointerDown">
             <Border x:Name="DragBox" Width="70" Height="60" Canvas.Left="20" Canvas.Top="20"
                     Background="#F59E0B" MouseDown="BoxDown" MouseMove="BoxMove" MouseUp="BoxUp">
                 <TextBlock Text="Move" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Canvas>
         <TextBlock x:Name="DragStatus" Text="Ready" Margin="0,8,0,0"/>
+        <TextBlock x:Name="PointerStatus" Text="Pointer ready"/>
+        <TextBlock x:Name="WheelStatus" Text="Wheel:0; Horizontal:0"/>
     </StackPanel>
 </Window>

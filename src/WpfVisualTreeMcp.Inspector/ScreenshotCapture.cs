@@ -36,6 +36,8 @@ public class ScreenshotCapture
     public (string base64, int width, int height) CaptureElement(
         UIElement element, int maxWidth = 1920, int maxHeight = 1080)
     {
+        if (NativeContent.ContainsVisibleHost(element))
+            throw new InvalidOperationException("Render capture cannot include native HwndHost/WindowsFormsHost content. Use mode='auto' or mode='screen' with the target visible and unobstructed.");
         // Get the actual rendered bounds
         var bounds = VisualTreeHelper.GetDescendantBounds(element);
         if (bounds.IsEmpty || bounds.Width < 1 || bounds.Height < 1)
@@ -123,6 +125,8 @@ public class ScreenshotCapture
     {
         ThrowIfFullContentCaptureTimedOut(cancellationToken);
         element.UpdateLayout();
+        if (NativeContent.ContainsVisibleHost(element))
+            throw new InvalidOperationException("Full-content render capture cannot include native HwndHost content. Use a viewport screenshot with mode='screen' and full_content=false.");
         ThrowIfFullContentCaptureTimedOut(cancellationToken);
         var scrollViewer = FindScrollViewer(element);
         ThrowIfFullContentCaptureTimedOut(cancellationToken);
@@ -841,11 +845,17 @@ public class ScreenshotCapture
         if (PresentationSource.FromVisual(element) == null || !element.IsVisible)
             throw new InvalidOperationException(
                 "Element is not rendered on screen; screen capture needs a visible element. " +
-                "Use the default render mode for off-screen captures.");
+                "Use mode='render' for off-screen WPF content; native content requires a visible window.");
 
         // Bring the host window forward so the capture isn't of an occluding window.
         var window = Window.GetWindow(element);
+        if (window?.WindowState == WindowState.Minimized)
+            throw new InvalidOperationException("Screen capture cannot capture a minimized window. Restore the target window first.");
         window?.Activate();
+        new PhysicalInputGuard().VerifyForeground();
+        // Activation and the compositor update are asynchronous. Wait for the
+        // pending frame instead of returning pixels of the previous foreground app.
+        NativeMethods.DwmFlush();
 
         var topLeft = element.PointToScreen(new Point(0, 0));
         var bottomRight = element.PointToScreen(
@@ -1021,6 +1031,7 @@ public class ScreenshotCapture
 
     private static class NativeMethods
     {
+        [DllImport("dwmapi.dll")] internal static extern int DwmFlush();
         public const uint SRCCOPY = 0x00CC0020;
         public const uint CAPTUREBLT = 0x40000000;
 

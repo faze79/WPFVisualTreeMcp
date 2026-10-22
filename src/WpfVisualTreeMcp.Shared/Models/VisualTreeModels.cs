@@ -5,6 +5,7 @@ namespace WpfVisualTreeMcp.Shared.Models;
 /// </summary>
 public class VisualTreeNode
 {
+    public NativeContentInfo? NativeContent { get; set; }
     public string Handle { get; set; } = string.Empty;
     public string TypeName { get; set; } = string.Empty;
     public string? Name { get; set; }
@@ -37,6 +38,8 @@ public class ElementInfo
 /// </summary>
 public class PropertyInfo
 {
+    /// <summary>Declaring owner of the dependency property; distinguishes same-name attached properties.</summary>
+    public string? OwnerType { get; set; }
     public string Name { get; set; } = string.Empty;
     public string TypeName { get; set; } = string.Empty;
     public string? Value { get; set; }
@@ -58,6 +61,7 @@ public class ElementPropertiesResult
 /// </summary>
 public class FoundElement
 {
+    public NativeContentInfo? NativeContent { get; set; }
     public string Handle { get; set; } = string.Empty;
     public string TypeName { get; set; } = string.Empty;
     public string? Name { get; set; }
@@ -75,6 +79,14 @@ public class FoundElement
     public ScreenBounds? ScreenBounds { get; set; }
 
     public string Path { get; set; } = string.Empty;
+}
+
+/// <summary>Marks the boundary where WPF tree inspection stops.</summary>
+public class NativeContentInfo
+{
+    public string Kind { get; set; } = "HwndHost";
+    public string WindowHandle { get; set; } = string.Empty;
+    public string Note { get; set; } = "Native content is outside the WPF visual tree; an empty children list does not mean an empty control. Use screen/auto screenshots and local-coordinate click, move, scroll, drag or touch. CAD entities require application-specific accessibility or an API.";
 }
 
 /// <summary>

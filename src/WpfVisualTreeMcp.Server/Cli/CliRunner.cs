@@ -25,7 +25,7 @@ public static class CliRunner
     {
         "update", "list", "attach", "report", "tree", "props", "find", "find-deep", "bindings",
         "binding-errors", "clear-binding-errors", "data-context", "resources",
-        "styles", "watch-property", "highlight", "click", "drag", "touch", "select-item", "set-text",
+        "styles", "watch-property", "highlight", "click", "move-mouse", "scroll", "drag", "touch", "select-item", "set-text",
         "send-keys", "wait-for", "set-property", "revert-property", "snapshot", "diff",
         "evaluate-binding", "explain-triggers", "layout", "export", "screenshot",
         "record", "get-recording", "assert", "replay", "export-test",
@@ -34,7 +34,7 @@ public static class CliRunner
     /// <summary>Options that never take a value (presence alone is meaningful).</summary>
     private static readonly HashSet<string> KnownFlags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "auto-inject", "compact", "verbose", "physical", "visible-only", "full-content", "all", "help", "h", "check", "status",
+        "auto-inject", "compact", "verbose", "physical", "horizontal", "visible-only", "full-content", "all", "help", "h", "check", "status",
     };
 
     private static string Exe =>
@@ -316,7 +316,7 @@ public static class CliRunner
                     var result = await bridge.ClickElementAsync(
                         cli.GetRequired("handle"),
                         cli.Flags.Contains("physical"),
-                        cli.GetStringOrNull("click-type"));
+                        cli.GetStringOrNull("click-type"), cli.GetDoubleOrNull("x"), cli.GetDoubleOrNull("y"));
                     WriteJson(new
                     {
                         success = true,
@@ -324,6 +324,22 @@ public static class CliRunner
                         elementType = result.ElementType,
                         detail = result.Detail,
                     }, cli);
+                    break;
+                }
+
+                case "move-mouse":
+                case "scroll":
+                {
+                    var options = new MousePointerOptions
+                    {
+                        ElementHandle = cli.GetRequired("handle"), Action = command == "scroll" ? "scroll" : "move",
+                        X = cli.GetDoubleOrNull("x"), Y = cli.GetDoubleOrNull("y"),
+                        Delta = cli.GetInt("delta", 0), Horizontal = cli.Flags.Contains("horizontal"),
+                        HoverMs = command == "move-mouse" ? cli.GetInt("hover-ms", 500) : 0
+                    };
+                    options.Validate();
+                    await AttachAsync(processManager, cli, false);
+                    WriteJson(await bridge.MousePointerAsync(options), cli);
                     break;
                 }
 
@@ -546,11 +562,12 @@ public static class CliRunner
                     var fullContent = cli.Flags.Contains("full-content");
                     var maxW = Math.Clamp(cli.GetInt("max-width", 1920), 1, fullContent ? 16384 : 3840);
                     var maxH = Math.Clamp(cli.GetInt("max-height", 1080), 1, fullContent ? 16384 : 2160);
-                    var shotMode = cli.GetString("mode", "render").ToLowerInvariant();
-                    if (shotMode != "render" && shotMode != "screen")
-                        throw new ArgumentException("--mode must be 'render' or 'screen'.");
+                    var shotMode = cli.GetString("mode", "auto").ToLowerInvariant();
+                    if (shotMode != "auto" && shotMode != "render" && shotMode != "screen")
+                        throw new ArgumentException("--mode must be 'auto', 'render' or 'screen'.");
                     if (fullContent && shotMode == "screen")
                         throw new ArgumentException("--full-content is supported with --mode render only.");
+                    if (fullContent && shotMode == "auto") shotMode = "render";
                     var shot = await bridge.CaptureScreenshotAsync(cli.GetStringOrNull("handle"), maxW, maxH, shotMode, fullContent);
                     if (string.IsNullOrEmpty(shot.ImageBase64))
                         throw new InvalidOperationException("Screenshot capture returned no image data.");
@@ -565,6 +582,8 @@ public static class CliRunner
                         width = shot.Width,
                         height = shot.Height,
                         elementType = shot.ElementType ?? "Window",
+                        captureMode = shot.CaptureMode,
+                        detail = shot.Detail,
                     }, cli);
                     break;
                 }
@@ -666,7 +685,9 @@ COMMANDS
   styles        --pid --handle H
   watch-property        --pid --handle H --property P
   highlight     --pid --handle H [--duration MS]
-  click         --pid --handle H [--physical] [--click-type single|double|right]  (changes app state)
+  click         --pid --handle H [--physical] [--click-type single|double|right] [--x X --y Y]  (changes app state)
+  move-mouse    --pid --handle H [--x X --y Y] [--hover-ms 0-5000]
+  scroll        --pid --handle H --delta N [--horizontal] [--x X --y Y]
   drag          --pid --handle H (--target H | --delta-x X / --delta-y Y) [--duration MS] [--button left|right|middle]
   touch         --pid --handle H --gesture tap|long_press|swipe|pinch|rotate [--delta-x X] [--scale N] [--angle N]
   select-item   --pid --handle H (--item-text S | --index N)  (changes app state)
@@ -681,7 +702,7 @@ COMMANDS
   explain-triggers --pid --handle H [--property P]                         (evaluate Style/Template triggers; attribute a value)
   layout        --pid --handle H
   export        --pid [--handle H] [--format json|xaml] [--out FILE]
-  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode render|screen] [--full-content]
+  screenshot    --pid [--handle H] [--out FILE] [--max-width N] [--max-height N] [--mode auto|render|screen] [--full-content]
 
 Element handles (elem_XXXXXXXX) come from 'tree' / 'find' and stay valid while
 the target app keeps running.
@@ -758,14 +779,20 @@ TYPICAL WORKFLOW
                               + "  Register a property watch in the Inspector.",
             "highlight" => "highlight --pid <id> --handle <handle> [--duration <ms>]\n"
                          + "  Flash an element in the running app. --duration defaults to 2000.",
-            "click" => "click --pid <id> --handle <handle> [--physical] [--click-type single|double|right]\n"
+            "click" => "click --pid <id> --handle <handle> [--physical] [--click-type single|double|right] [--x X --y Y]\n"
                      + "  Click an element. Default: UI Automation invoke (buttons, checkboxes,\n"
                      + "  menu items, tabs, list items, expanders) — no cursor movement.\n"
+                     + "  --x/--y: paired local WPF DIPs, imply physical input; default center.\n"
                      + "  --physical: real OS mouse click at the element (moves the cursor,\n"
                      + "  brings the window forward, auto-scrolls the element into view).\n"
                      + "  --click-type double/right: always physical; right opens context menus\n"
                      + "  (capture them with: screenshot --mode screen).\n"
                      + "  This command CHANGES application state.",
+            "move-mouse" => "move-mouse --pid <id> --handle H [--x X --y Y] [--hover-ms 0-5000]\n"
+                          + "  Moves the OS pointer without clicking; default hover 500 ms. Coordinates are local WPF DIPs.\n",
+            "scroll" => "scroll --pid <id> --handle H --delta N [--horizontal] [--x X --y Y]\n"
+                      + "  Wheel units: 120 per notch; positive up/right, negative down/left, nonzero -12000..12000.\n"
+                      + "  The application may scroll, zoom or ignore input. Verify the effect.\n",
             "drag" => "drag --pid <id> --handle <handle> (--target <handle> | --delta-x <x> / --delta-y <y>)\n"
                     + "  [--start-x X --start-y Y] [--target-x X --target-y Y]\n"
                     + "  [--button left|right|middle] [--duration <100-10000 ms>]\n"
@@ -855,9 +882,10 @@ TYPICAL WORKFLOW
                                 + "  attribute that property's value to the style setter or active trigger\n"
                                 + "  that set it (or local/inherited/default).",
             "layout" => "layout --pid <id> --handle <handle>\n  Show layout info (sizes, margin, alignment, visibility).",
-            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode render|screen] [--full-content]\n"
+            "screenshot" => "screenshot --pid <id> [--handle <handle>] [--out <file>] [--max-width N] [--max-height N] [--mode auto|render|screen] [--full-content]\n"
                            + "  Capture the window (or one element) as PNG and print the file path.\n"
-                           + "  --mode render (default): off-screen re-render; works when covered,\n"
+                           + "  --mode auto (default): screen for native HwndHost content, render otherwise.\n"
+                           + "  --mode render: off-screen re-render; rejects native content; works when covered,\n"
                            + "  but cannot see open popups/dropdowns/context menus.\n"
                            + "  --mode screen: capture the actual screen pixels (includes popups,\n"
                            + "  ComboBox dropdowns, context menus, tooltips); the window must be\n"

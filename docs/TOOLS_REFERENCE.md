@@ -27,7 +27,7 @@ CLI equivalent: `wpfinspect report --pid 1234 --root elem_00000001 --max 500 --d
 
 1. Attach to the app and call `wpf_record(action="start", name="Save form")`.
 2. Use the existing tools to find controls and perform actions. Recording captures
-   click, set-text, selection, send-keys, drag, touch, set/revert-property, find/deep-find,
+   click (including coordinates), move-mouse, scroll, set-text, selection, send-keys, drag, touch, set/revert-property, find/deep-find,
    successful waits and successful `wpf_assert` calls. Calls must be sequential.
 3. Check asynchronous results with `wpf_wait_for_element`. Check exact values with
    `wpf_assert(element_handle, property_name, expected_value)`, for example `Text="Alice"`
@@ -90,8 +90,13 @@ Without `--out`, export returns the file-name/content map as JSON.
 ### wpf_capture_screenshot
 
 Use `element_handle` to select a control, or omit it for the main window.
-`mode="render"` (default) renders off-screen; `mode="screen"` captures visible
-desktop pixels, including open popups and menus, and requires an unobstructed window.
+`mode="auto"` (default) selects screen capture when visible `HwndHost` content
+is present, otherwise render. The response includes the actual capture mode and
+explains any automatic switch. `mode="screen"` captures visible desktop pixels,
+including open popups and menus, and requires an unobstructed window.
+Explicit `mode="render"` renders off-screen but rejects native hosted content
+with recovery guidance. Full-content capture remains render-only, including when
+auto is requested, and cannot include native content.
 
 Set `full_content=true` with **render mode** to capture the content of a
 ScrollViewer or a control containing one. Non-virtualized content is rendered
@@ -118,6 +123,47 @@ wpfinspect screenshot --pid 1234 --handle elem_42 --full-content --max-height 40
 ```
 
 ## Mouse Interaction
+
+### wpf_click_element
+
+`wpf_click_element(element_handle, physical=false, click_type="single", x?, y?)`
+uses UI Automation by default. Paired local WPF DIP coordinates `x`/`y` imply
+physical input; omit both for the element center. `double` and `right` are also
+physical. Coordinates must be finite, nonnegative, visible and unobstructed.
+UI Automation `Toggle` changes a toggle's state and may not execute a custom
+control's click command; use physical input and verify the intended effect.
+
+```powershell
+wpfinspect click --pid 1234 --handle elem_42 --x 100 --y 60 --click-type right
+```
+
+### wpf_move_mouse
+
+`wpf_move_mouse(element_handle, x?, y?, hover_ms=500)` moves the OS pointer without
+clicking and waits 0–5000 ms while the app remains responsive. Useful for hover
+handlers and tooltips. Coordinates are paired local WPF DIPs, default center.
+Capture tooltips using screen mode.
+
+### wpf_scroll
+
+`wpf_scroll(element_handle, delta, horizontal=false, x?, y?)` moves the pointer to
+the selected local point and sends a native wheel event. `delta` is signed wheel
+units: 120 is one notch, positive means up/right, negative down/left. Valid range
+is -12000 through 12000 excluding zero. The application may scroll, zoom or ignore
+input. It does not change keyboard focus to force a particular application action.
+
+```powershell
+wpfinspect move-mouse --pid 1234 --handle elem_42 --x 100 --y 60 --hover-ms 800
+wpfinspect scroll --pid 1234 --handle elem_42 --delta -240
+wpfinspect scroll --pid 1234 --handle elem_42 --delta 120 --horizontal
+```
+
+All physical pointer tools activate the app and require an interactive desktop.
+New pointer operations and click coordinates are included in recordings/replay.
+Native `HwndHost` elements can receive these inputs directly; tree/find results
+include `nativeContent` and the HWND. Native CAD geometry is not a WPF subtree;
+semantic access requires an accessible provider or an application-specific API.
+
 
 ### wpf_drag
 
@@ -457,6 +503,8 @@ Get all dependency properties of a UI element.
   ]
 }
 ```
+
+Values retain numeric/boolean/null data; `NaN` (Auto) and `Infinity` are represented as strings. The returned property value field is string-or-null. `ownerType` identifies the dependency property's declaring type, distinguishing attached properties that share names such as `IsEnabled`. Invalid Inspector payloads produce an error, never an empty success.
 
 **Property Sources:**
 - `Default` - Default value from property metadata

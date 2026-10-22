@@ -35,7 +35,7 @@ dotnet run --project src/WpfVisualTreeMcp.Server -- list
 AI Agent (Claude Code)
     ↓ [MCP Protocol - JSON-RPC over stdio]
 MCP Server (.NET 8.0)
-    ├─ WpfTools (36 tools)
+    ├─ WpfTools (38 tools)
     ├─ ProcessManager (discovers WPF processes)
     └─ NamedPipeBridge (IPC)
         ↓ [Named Pipes: wpf_inspector_{pid}]
@@ -49,15 +49,15 @@ Target WPF Application (.NET Framework)
         └─ IpcServer (named pipe communication)
 ```
 
-**Key Design:** The server runs separately and communicates via named pipes. `wpf_click_element`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property` change application state. `wpf_replay` executes recorded actions; full-content screenshots can temporarily scroll controls and trigger handlers. Recording/snapshots/watches maintain Inspector state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
+**Key Design:** The server runs separately and communicates via named pipes. `wpf_click_element`, `wpf_move_mouse`, `wpf_scroll`, `wpf_drag`, `wpf_touch_gesture`, `wpf_select_item`, `wpf_set_text`, `wpf_send_keys`, `wpf_set_property`, and `wpf_revert_property` change application state. `wpf_replay` executes recorded actions; full-content screenshots can temporarily scroll controls and trigger handlers. Recording/snapshots/watches maintain Inspector state. `wpf_set_property` is reversible via `wpf_revert_property` (per-session undo stack that restores the prior binding, local value, or default).
 
 ## Key Source Locations
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | MCP Server Entry | `src/WpfVisualTreeMcp.Server/Program.cs` | Server init with MCP SDK; routes to CLI mode if args present |
-| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 36 tools with `[McpServerTool]` attributes |
-| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 36 inspection/workflow commands plus CLI-only `update` |
+| Tool Definitions | `src/WpfVisualTreeMcp.Server/WpfTools.cs` | 38 tools with `[McpServerTool]` attributes |
+| CLI Front-End | `src/WpfVisualTreeMcp.Server/Cli/CliRunner.cs` | 38 inspection/workflow commands plus CLI-only `update` |
 | Workflow Recording | `WorkflowRecorder.cs`, `StableSelectors.cs`, `InspectorService.Workflow.cs` | Inspector-owned recording and gated replay; exact selectors, explicit waits/assertions |
 | Test Export | `src/WpfVisualTreeMcp.Server/WorkflowTestExporter.cs` | Data-only workflow JSON plus a standalone xUnit project using CLI replay |
 | Aggregate Diagnostics | `src/WpfVisualTreeMcp.Inspector/DiagnosticReporter.cs` | Bounded realized-tree scan, current binding/validation errors and separate process-wide trace history |
@@ -90,6 +90,11 @@ Target WPF Application (.NET Framework)
   Its timeout is clamped to 25s to stay under the 30s IPC request timeout.
 
 ## Important Implementation Notes
+
+### Physical mouse input
+
+- Coordinate clicks (`x`/`y`), `move-mouse`/`wpf_move_mouse` and `scroll`/`wpf_scroll` support local WPF DIPs, including HwndHost/WindowsFormsHost. Wheel units are signed (120 per notch), vertical or horizontal. New inputs are recordable/replayable; hover waits run off the Dispatcher. Coordinate clicks and pointer replay probe Inspector capabilities first so an old DLL cannot silently ignore coordinates.
+- Native hit testing checks HWND ownership/descendants without accepting overlays; tree/find results mark native boundaries. Native CAD geometry requires an application-specific accessible provider or API.
 
 ### Physical mouse drag
 
@@ -158,7 +163,7 @@ The Inspector strips UTF-8 BOM (0xEF 0xBB 0xBF) before JSON parsing to prevent d
 - Default `max_depth` is 25 (configurable 1-100)
 
 ### Screenshot Capture
-- Two modes: `render` (default) uses `RenderTargetBitmap` + `VisualBrush` (handles
+- Three modes: `auto` (default) selects screen for visible HwndHost content, render otherwise, and reports the selected mode. Explicit render rejects native content with recovery guidance. `render` uses `RenderTargetBitmap` + `VisualBrush` (handles
   transforms, works when the window is covered, but cannot see Popups/menus);
   `screen` uses GDI BitBlt of the on-screen pixels (includes open Popups, ComboBox
   dropdowns, context menus and tooltips — requires the window visible and unobstructed)
@@ -217,7 +222,7 @@ The server uses the official Microsoft/Anthropic MCP SDK. Configure in `.mcp.jso
 The server executable doubles as a command-line tool. `WpfVisualTreeMcp.Server.exe`
 with **no arguments** runs the MCP stdio server; with **any recognised subcommand**
 it runs a single one-shot CLI command instead (`Program.cs` checks `args[0]` via
-`CliRunner.IsCliCommand`). This gives the same 36 capabilities without an MCP
+`CliRunner.IsCliCommand`). This gives the same 38 capabilities without an MCP
 connection — useful when the MCP server is not connected, for scripting, or for
 verifying the pipeline manually.
 
@@ -246,7 +251,7 @@ shell call. No MCP handshake required; `--help` is self-documenting.
   and tool-path installations, using a test-only seed older than the stable release.
 - **screenshot** writes a PNG file and prints its path (Claude reads it with Read);
   **export** writes to `--out` if given, otherwise prints content inline.
-- **click / drag / touch / select-item / set-text / send-keys** are the state-changing input commands.
+- **click / move-mouse / scroll / drag / touch / select-item / set-text / send-keys** are the state-changing input commands.
   - `drag` — physical mouse sequence between elements or by displacement; runs outside the UI Dispatcher.
   - `touch` — native tap, long press, swipe, pinch and rotation; requires application touch support.
   - `click` — UI Automation invoke by default; `--physical` for OS mouse click

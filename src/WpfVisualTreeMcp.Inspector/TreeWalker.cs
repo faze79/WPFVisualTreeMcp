@@ -109,6 +109,9 @@ public class TreeWalker
 
         sb.Append($",\"depth\":{depth}");
 
+        if (NativeContent.Describe(element) is { } native)
+            sb.Append(",\"nativeContent\":" + WpfVisualTreeMcp.Shared.Ipc.IpcSerializer.Serialize(native));
+
         // Get children (including adorners and popup content)
         sb.Append(",\"children\":[");
 
@@ -409,7 +412,7 @@ public class TreeWalker
         }
 
         // Own text (button caption, textbox value, ...) if any, for content-change detection.
-        var own = GetOwnText(element);
+        var own = GetHeaderText(element) ?? GetOwnText(element);
         if (!string.IsNullOrEmpty(own) && !p.ContainsKey("Text"))
         {
             p["Text"] = own!;
@@ -595,6 +598,8 @@ public class TreeWalker
         }
 
         sb.Append($",\"path\":\"{EscapeJson(path)}\"");
+        if (NativeContent.Describe(element) is { } native)
+            sb.Append(",\"nativeContent\":" + WpfVisualTreeMcp.Shared.Ipc.IpcSerializer.Serialize(native));
         sb.Append("}");
         return sb.ToString();
     }
@@ -645,7 +650,7 @@ public class TreeWalker
     {
         var parts = new List<string>();
 
-        var own = GetOwnText(element);
+        var own = GetHeaderText(element) ?? GetOwnText(element);
         if (!string.IsNullOrWhiteSpace(own))
         {
             parts.Add(own!.Trim());
@@ -672,12 +677,40 @@ public class TreeWalker
         return parts.Count == 0 ? null : string.Join(" ", parts.Distinct());
     }
 
+    private static string? GetHeaderText(DependencyObject element)
+    {
+        object? header;
+        try
+        {
+            // Ribbon/backstage controls may expose Header without deriving from
+            // HeaderedContentControl. Read the public header, not the page body.
+            header = element switch
+            {
+                HeaderedContentControl control => control.Header,
+                HeaderedItemsControl items => items.Header,
+                ContentControl control => control.GetType().GetProperty("Header", BindingFlags.Public | BindingFlags.Instance)?.GetValue(control, null),
+                _ => null
+            };
+        }
+        catch { return null; }
+
+        if (header is string text) return string.IsNullOrWhiteSpace(text) ? null : text;
+        if (header is not Visual visual) return null;
+        var parts = new List<string>();
+        var own = GetOwnText(visual);
+        if (!string.IsNullOrWhiteSpace(own)) parts.Add(own!.Trim());
+        else CollectDescendantText(visual, parts, depth: 0, maxDepth: 4, maxParts: 5);
+        return parts.Count == 0 ? null : string.Join(" ", parts.Distinct());
+    }
+
     private static string? GetOwnText(DependencyObject element)
     {
         return element switch
         {
             Window w => w.Title,
-            TextBlock tb => tb.Text,
+            // Inline-bound/localized Runs can render text while Text remains empty.
+            TextBlock tb => !string.IsNullOrEmpty(tb.Text)
+                ? tb.Text : new TextRange(tb.ContentStart, tb.ContentEnd).Text,
             AccessText at => at.Text,
             TextBox tb => tb.Text,
             Run run => run.Text,

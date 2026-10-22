@@ -225,7 +225,7 @@ public partial class InspectorService : IDisposable
                 IpcSerializer.DeserializeRequestData<CaptureScreenshotRequest>(data)?.FullContent == true;
             // Input sequences share the OS mouse. Fail fast instead of interleaving
             // concurrent mutations or queuing them past the IPC timeout.
-            if (requestType is "Drag" or "TouchGesture" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
+            if (requestType is "Drag" or "TouchGesture" or "MousePointer" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
                 or "SetProperty" or "RevertProperty" or "Record" or "Replay" or "AssertElement"
                 || fullContent || (_recorder.Active && WorkflowCodec.IsRecordable(requestType)))
             {
@@ -337,6 +337,7 @@ public partial class InspectorService : IDisposable
     {
         return requestType switch
         {
+            "GetCapabilities" => new GetCapabilitiesResponse { CoordinatePointerInput = true },
             "Record" => HandleRecord(data),
             "AssertElement" => HandleAssertElement(data),
             "Report" => HandleReport(data),
@@ -1224,19 +1225,26 @@ public partial class InspectorService : IDisposable
 
         try
         {
-            var mode = request?.Mode?.ToLowerInvariant() ?? "render";
-            if (mode != "render" && mode != "screen")
+            var mode = request?.Mode?.ToLowerInvariant() ?? "auto";
+            if (mode != "auto" && mode != "render" && mode != "screen")
             {
                 return new CaptureScreenshotResponse
                 {
                     Success = false,
-                    Error = $"Unknown screenshot mode '{request?.Mode}'. Expected 'render' or 'screen'."
+                    Error = $"Unknown screenshot mode '{request?.Mode}'. Expected 'auto', 'render' or 'screen'."
                 };
             }
 
             var screenshotCapture = new ScreenshotCapture();
             var maxWidth = request?.MaxWidth ?? 1920;
             var maxHeight = request?.MaxHeight ?? 1080;
+            string? detail = null;
+            if (mode == "auto")
+            {
+                bool native = NativeContent.ContainsVisibleHost(element);
+                mode = native && request?.FullContent != true ? "screen" : "render";
+                if (mode == "screen") detail = "Native HwndHost content detected: auto used screen capture. The target must be visible and unobstructed; pixels reflect the desktop.";
+            }
 
             if (request?.FullContent == true && mode == "screen")
                 throw new ArgumentException("Full-content capture is supported by render mode only.");
@@ -1252,7 +1260,8 @@ public partial class InspectorService : IDisposable
                 ImageBase64 = base64,
                 Width = width,
                 Height = height,
-                ElementType = element.GetType().Name
+                ElementType = element.GetType().Name,
+                CaptureMode = mode, Detail = detail
             };
         }
         catch (Exception ex)
@@ -1314,7 +1323,7 @@ public partial class InspectorService : IDisposable
 
         try
         {
-            var outcome = _interactor.Click(element, request.Physical, request.ClickType);
+            var outcome = _interactor.Click(element, request.Physical, request.ClickType, request.X, request.Y);
             DebugLog($"ClickElement: {element.GetType().Name} clicked via {outcome.Method}");
             return new ClickElementResponse
             {

@@ -102,6 +102,21 @@ jobs:
         if ($packages.Count -ne 1) { throw 'Expected exactly one NuGet package' }
         ./scripts/Test-NuGetPayload.ps1 -Package $packages[0].FullName
 
+    - name: Build and verify full and compact MCPB bundles
+      shell: pwsh
+      run: |
+        ./scripts/Build-McpBundle.ps1 -OutputDirectory ./artifacts/mcpb-full
+        ./scripts/Build-McpBundle.ps1 -OutputDirectory ./artifacts/mcpb-compact -Compact
+
+    - name: Test compact bundle workflow
+      shell: pwsh
+      run: |
+        $matrix = Get-ChildItem ./TestResults -Directory -Filter 'matrix-*' | Select-Object -First 1
+        if (-not $matrix) { throw 'Integration matrix samples are missing' }
+        $sample = Join-Path $matrix.FullName 'samples/net8.0-windows/x64/AutoInjection/SampleWpfApp.exe'
+        python ./scripts/test_workflow.py --server ./artifacts/mcpb-compact/bundle/server/WpfVisualTreeMcp.Server.exe --sample $sample
+        if ($LASTEXITCODE -ne 0) { throw 'Compact MCPB workflow test failed' }
+
     # Trusted publishing (OIDC): requires a policy at nuget.org/account/trustedpublishing
     # for repo faze79/WPFVisualTreeMcp, workflow release.yml, package WpfVisualTreeMcp,
     # plus a repo secret NUGET_USER = the nuget.org profile name. Skipped with a notice
@@ -149,6 +164,8 @@ jobs:
           ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
           ./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip
           ./artifacts/*.nupkg
+          ./artifacts/mcpb-full/*.mcpb
+          ./artifacts/mcpb-compact/*.mcpb
         draft: false
         prerelease: ${{ contains(github.ref_name, '-') }}
       env:

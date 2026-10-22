@@ -26,8 +26,46 @@ public partial class InspectorService
         {
             "Drag" => HandleDragAsync(data, token),
             "TouchGesture" => HandleTouchGestureAsync(data, token),
+            "MousePointer" => HandleMousePointerAsync(data, token),
             "WaitForElement" => HandleWaitForElementAsync(data, token),
             _ => OnDispatcher(() => HandleRequest(type, data, token), token)
+        };
+    }
+
+    private async Task<IpcResponse> HandleMousePointerAsync(JsonElement data, CancellationToken token)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, _inputShutdown.Token);
+        token = linked.Token;
+        var request = IpcSerializer.DeserializeRequestData<MousePointerRequest>(data)
+            ?? throw new ArgumentException("Mouse pointer request required.");
+        var options = request.Options ?? throw new ArgumentException("Pointer options required.");
+        options.Validate();
+        var plan = await OnDispatcher(() =>
+        {
+            var element = _treeWalker.ResolveHandle(options.ElementHandle)
+                ?? throw new InvalidOperationException(StaleHandleError(options.ElementHandle));
+            if (element is not UIElement ui) throw new ArgumentException("Pointer target must be a UIElement.");
+            return ControlInteractor.PreparePointer(ui, options.X, options.Y);
+        }, token).ConfigureAwait(false);
+        var input = new NativeMouseInput();
+        token.ThrowIfCancellationRequested();
+        input.ValidateStart(plan);
+        input.Move(plan.StartX, plan.StartY);
+        // Let MouseEnter/focus/tooltip handlers run before any wheel event.
+        await Task.Delay(40, token).ConfigureAwait(false);
+        input.ValidateStart(plan);
+        if (options.Action == "scroll") input.Wheel(options.Delta, options.Horizontal);
+        if (options.HoverMs > 0) await Task.Delay(options.HoverMs, token).ConfigureAwait(false);
+        input.VerifyForeground();
+        return new MousePointerResponse
+        {
+            RequestId = request.RequestId,
+            Result = new MousePointerResult
+            {
+                Method = options.Action == "scroll" ? "Physical.Wheel" : "Physical.Move",
+                ElementType = plan.ElementType, X = plan.StartX, Y = plan.StartY,
+                Delta = options.Delta, Horizontal = options.Horizontal
+            }
         };
     }
 

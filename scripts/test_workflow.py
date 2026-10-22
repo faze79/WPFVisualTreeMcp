@@ -73,6 +73,19 @@ def main():
                 tool("wpf_drag", element_handle=find("DragSource"), target_handle=find("DropTarget"),
                      start_x=15, start_y=20, target_x=20, target_y=20, duration_ms=600)
                 assert tool("wpf_wait_for_element", element_name="DropStatus", text="Dropped 1")["matched"]
+                canvas = find("DragCanvas")
+                tool("wpf_move_mouse", element_handle=canvas, x=300, y=70, hover_ms=100)
+                tool("wpf_assert", element_handle=find("PointerStatus"), property_name="Text", expected_value="Move:300,70")
+                tool("wpf_click_element", element_handle=canvas, x=300, y=70)
+                tool("wpf_assert", element_handle=find("PointerStatus"), property_name="Text", expected_value="Click:Left:300,70;Count:1")
+                tool("wpf_click_element", element_handle=canvas, x=280, y=70, click_type="double")
+                tool("wpf_assert", element_handle=find("PointerStatus"), property_name="Text", expected_value="Click:Left:280,70;Count:2")
+                tool("wpf_click_element", element_handle=canvas, x=260, y=70, click_type="right")
+                tool("wpf_assert", element_handle=find("PointerStatus"), property_name="Text", expected_value="Click:Right:260,70;Count:1")
+                tool("wpf_scroll", element_handle=canvas, delta=-240, x=300, y=70)
+                tool("wpf_assert", element_handle=find("WheelStatus"), property_name="Text", expected_value="Wheel:-240; Horizontal:0")
+                cli("scroll", "--handle", canvas, "--delta", "120", "--horizontal", "--x", "300", "--y", "70")
+                tool("wpf_assert", element_handle=find("WheelStatus"), property_name="Text", expected_value="Wheel:-240; Horizontal:120")
                 tool("wpf_click_element", element_handle=find("OpenTouchDemoButton"))
                 assert tool("wpf_wait_for_element", element_name="TouchSurface")["matched"]
                 tool("wpf_touch_gesture", element_handle=find("TouchSurface"), gesture="tap")

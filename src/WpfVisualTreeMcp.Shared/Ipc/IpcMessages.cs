@@ -19,6 +19,16 @@ public abstract class IpcResponse
     public string? Error { get; set; }
 }
 
+public class GetCapabilitiesRequest : IpcRequest
+{
+    public override string RequestType => "GetCapabilities";
+}
+
+public class GetCapabilitiesResponse : IpcResponse
+{
+    public bool CoordinatePointerInput { get; set; }
+}
+
 // Aggregate diagnostics
 public class ReportRequest : IpcRequest
 {
@@ -378,11 +388,12 @@ public class CaptureScreenshotRequest : IpcRequest
     public int MaxHeight { get; set; } = 1080;
 
     /// <summary>
-    /// "render" (default): off-screen RenderTargetBitmap of the visual — works even when
+    /// "auto" (default): screen capture for visible native hosts, render otherwise.
+    /// "render": off-screen RenderTargetBitmap of the visual — works even when
     /// covered, but cannot see Popups/menus. "screen": GDI capture of the on-screen pixels —
     /// includes open Popups, ComboBox dropdowns, context menus and tooltips.
     /// </summary>
-    public string Mode { get; set; } = "render";
+    public string Mode { get; set; } = "auto";
 
     /// <summary>
     /// Capture the complete content of a ScrollViewer, including content outside
@@ -397,6 +408,8 @@ public class CaptureScreenshotResponse : IpcResponse
     public int Width { get; set; }
     public int Height { get; set; }
     public string? ElementType { get; set; }
+    public string? CaptureMode { get; set; }
+    public string? Detail { get; set; }
 }
 
 // Click / Interaction
@@ -410,6 +423,19 @@ public class ClickElementRequest : IpcRequest
 
     /// <summary>"single" (default), "double" or "right". Double and right clicks always use the physical path.</summary>
     public string? ClickType { get; set; }
+    public double? X { get; set; }
+    public double? Y { get; set; }
+}
+
+public class MousePointerRequest : IpcRequest
+{
+    public override string RequestType => "MousePointer";
+    public Models.MousePointerOptions Options { get; set; } = new();
+}
+
+public class MousePointerResponse : IpcResponse
+{
+    public Models.MousePointerResult? Result { get; set; }
 }
 
 public class ClickElementResponse : IpcResponse

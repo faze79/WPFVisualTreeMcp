@@ -43,7 +43,11 @@ public class WpfTools
     [McpServerTool]
     [Description("Export a stopped recording as file-name/content pairs: xunit (default) produces a runnable .NET 8 test project plus workflow.json; json returns only workflow.json. Save these files to a new directory, set WPF_TEST_APP and WPFINSPECT_PATH, then dotnet test. Tests start a fresh app. Explicit recorded assertions verify outcomes.")]
     public async Task<object> WpfExportTest(string format = "xunit")
-        => new { files = WorkflowTestExporter.Export(await _ipcBridge.RecordAsync("status"), format) };
+    {
+        try { return new { files = WorkflowTestExporter.Export(await _ipcBridge.RecordAsync("status"), format) }; }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        { throw new McpException(ex.Message); }
+    }
 
     [McpServerTool]
     [Description("List all running WPF applications available for inspection")]
@@ -70,7 +74,7 @@ public class WpfTools
     {
         if (process_id == null && string.IsNullOrEmpty(process_name))
         {
-            throw new ArgumentException("Either process_id or process_name must be provided");
+            throw new McpException("Either process_id or process_name must be provided");
         }
 
         var session = await _processManager.AttachToProcessAsync(process_id, process_name, auto_inject);
@@ -102,7 +106,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.GetElementPropertiesAsync(element_handle);
@@ -138,7 +142,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
         {
-            throw new ArgumentException("At least type_name, element_name or text is required. Use wpf_get_visual_tree to browse the full tree instead.");
+            throw new McpException("At least type_name, element_name or text is required. Use wpf_get_visual_tree to browse the full tree instead.");
         }
 
         var result = await _ipcBridge.FindElementsDeepAsync(
@@ -168,7 +172,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.GetBindingsAsync(element_handle);
@@ -192,11 +196,11 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Collect a bounded diagnostic report across open windows or a subtree: current binding/validation errors, disabled/invisible/zero-size counts and recent process-wide binding traces. State counts are observations, not defects. Includes coverage and truncation reasons; does not realize virtualized items or change the UI.")]
+    [Description("Collect a bounded diagnostic report across open windows or a subtree: current binding/validation errors, disabled/invisible/zero-size counts and recent process-wide binding traces. Limits: max_elements 1-2000, max_depth 1-100, max_findings 1-500. State counts are observations, not defects. Includes coverage and truncation reasons; does not realize virtualized items or change the UI.")]
     public Task<DiagnosticReport> WpfReport(string? root_handle = null, int max_elements = 500, int max_depth = 25, int max_findings = 100)
     {
         if (max_elements is < 1 or > 2000 || max_depth is < 1 or > 100 || max_findings is < 1 or > 500)
-            throw new ArgumentException("Report limits: max_elements 1-2000, max_depth 1-100, max_findings 1-500.");
+            throw new McpException("Report limits: max_elements 1-2000, max_depth 1-100, max_findings 1-500.");
         return _ipcBridge.ReportAsync(root_handle, max_elements, max_depth, max_findings);
     }
 
@@ -206,7 +210,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.GetDataContextAsync(element_handle);
@@ -219,7 +223,7 @@ public class WpfTools
     {
         if (scope == "element" && string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required when scope is 'element'");
+            throw new McpException("element_handle is required when scope is 'element'");
         }
 
         var result = await _ipcBridge.GetResourcesAsync(scope, element_handle);
@@ -232,7 +236,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.GetStylesAsync(element_handle);
@@ -245,11 +249,11 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
         if (string.IsNullOrEmpty(property_name))
         {
-            throw new ArgumentException("property_name is required");
+            throw new McpException("property_name is required");
         }
 
         var result = await _ipcBridge.WatchPropertyAsync(element_handle, property_name);
@@ -262,7 +266,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         await _ipcBridge.HighlightElementAsync(element_handle, duration_ms);
@@ -282,7 +286,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
         {
-            throw new ArgumentException("At least type_name, element_name or text is required to identify the element to wait for.");
+            throw new McpException("At least type_name, element_name or text is required to identify the element to wait for.");
         }
 
         var result = await _ipcBridge.WaitForElementAsync(
@@ -302,7 +306,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.ExplainTriggersAsync(element_handle, property_name);
@@ -317,11 +321,11 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
         if (string.IsNullOrEmpty(property_name))
         {
-            throw new ArgumentException("property_name is required");
+            throw new McpException("property_name is required");
         }
 
         var result = await _ipcBridge.EvaluateBindingAsync(element_handle, property_name);
@@ -344,7 +348,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(before) || string.IsNullOrEmpty(after))
         {
-            throw new ArgumentException("Both 'before' and 'after' snapshot labels are required.");
+            throw new McpException("Both 'before' and 'after' snapshot labels are required.");
         }
 
         var result = await _ipcBridge.DiffAsync(before, after);
@@ -367,11 +371,11 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
         if (string.IsNullOrEmpty(property_name))
         {
-            throw new ArgumentException("property_name is required");
+            throw new McpException("property_name is required");
         }
 
         var result = await _ipcBridge.SetPropertyAsync(element_handle, property_name, value ?? string.Empty);
@@ -406,7 +410,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.GetLayoutInfoAsync(element_handle);
@@ -419,7 +423,7 @@ public class WpfTools
     {
         if (format != "json" && format != "xaml")
         {
-            throw new ArgumentException("format must be 'json' or 'xaml'");
+            throw new McpException("format must be 'json' or 'xaml'");
         }
 
         var result = await _ipcBridge.ExportTreeAsync(element_handle, format);
@@ -427,15 +431,17 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward; auto-scrolls the element into view first). click_type: 'single' (default), 'double' (open items), 'right' (context menus) — double and right are always physical. After opening a context menu or dropdown, use wpf_capture_screenshot with mode='screen' to see it. STATE-CHANGING.")]
-    public async Task<object> WpfClickElement(string element_handle, bool physical = false, string? click_type = null)
+    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward; auto-scrolls the element into view first). Optional paired x/y select a point in local WPF DIPs and imply physical input; omitted coordinates use the center. click_type: 'single' (default), 'double' (open items), 'right' (context menus) — double and right are always physical. After opening a context menu or dropdown, use wpf_capture_screenshot with mode='screen' to see it. STATE-CHANGING.")]
+    public async Task<object> WpfClickElement(string element_handle, bool physical = false, string? click_type = null, double? x = null, double? y = null)
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
-        var result = await _ipcBridge.ClickElementAsync(element_handle, physical, click_type);
+        try { MousePointerOptions.ValidatePoint(x, y); }
+        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        var result = await _ipcBridge.ClickElementAsync(element_handle, physical, click_type, x, y);
         return new
         {
             success = true,
@@ -443,6 +449,23 @@ public class WpfTools
             element_type = result.ElementType,
             detail = result.Detail
         };
+    }
+
+    [McpServerTool]
+    [Description("Move the real mouse to a visible element without clicking. Optional x/y are paired local WPF DIPs, default center. hover_ms (0-5000, default 500) waits with the UI responsive for hover/tooltip handlers. Supports native content hosted in HwndHost. Activates the target window; requires a visible unobstructed desktop. Verify tooltips with a screen screenshot. STATE-CHANGING.")]
+    public Task<MousePointerResult> WpfMoveMouse(string element_handle, double? x = null, double? y = null, int hover_ms = 500) =>
+        SendPointer(new MousePointerOptions { ElementHandle = element_handle, Action = "move", X = x, Y = y, HoverMs = hover_ms });
+
+    [McpServerTool]
+    [Description("Send a real mouse wheel event over a visible element. delta is signed wheel units: 120 = one notch, positive scrolls up (or right with horizontal=true), negative down/left; nonzero range -12000..12000. Optional paired x/y are local WPF DIPs, default center. Moves the mouse and activates the app. Supports native hosted canvases. The app decides whether to scroll, zoom or ignore input; verify the result. STATE-CHANGING.")]
+    public Task<MousePointerResult> WpfScroll(string element_handle, int delta, bool horizontal = false, double? x = null, double? y = null) =>
+        SendPointer(new MousePointerOptions { ElementHandle = element_handle, Action = "scroll", X = x, Y = y, Delta = delta, Horizontal = horizontal });
+
+    private Task<MousePointerResult> SendPointer(MousePointerOptions options)
+    {
+        try { options.Validate(); }
+        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        return _ipcBridge.MousePointerAsync(options);
     }
 
     [McpServerTool]
@@ -501,11 +524,11 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
         if (string.IsNullOrEmpty(item_text) && index == null)
         {
-            throw new ArgumentException("Provide item_text or index to choose the item to select");
+            throw new McpException("Provide item_text or index to choose the item to select");
         }
 
         var result = await _ipcBridge.SelectItemAsync(element_handle, item_text, index);
@@ -524,7 +547,7 @@ public class WpfTools
     {
         if (string.IsNullOrEmpty(element_handle))
         {
-            throw new ArgumentException("element_handle is required");
+            throw new McpException("element_handle is required");
         }
 
         var result = await _ipcBridge.SetTextAsync(element_handle, text ?? string.Empty, physical);
@@ -543,7 +566,7 @@ public class WpfTools
     {
         if (string.IsNullOrWhiteSpace(keys))
         {
-            throw new ArgumentException("keys is required (e.g. \"Ctrl+S\")");
+            throw new McpException("keys is required (e.g. \"Ctrl+S\")");
         }
 
         var result = await _ipcBridge.SendKeysAsync(element_handle, keys);
@@ -557,27 +580,28 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window. mode='render' (default) re-renders the visual off-screen — works even if the window is covered, but CANNOT see open Popups, ComboBox dropdowns, context menus or tooltips. mode='screen' captures the actual on-screen pixels (GDI) and DOES include them — use it right after clicking something that opened a popup/menu; requires the window to be visible and unobstructed. Set full_content=true with render mode to capture all content in a ScrollViewer, including unscrolled and virtualized content; the original scroll position is restored.")]
+    [Description("Capture a screenshot of the WPF window or a specific element. Returns an image that can be visually analyzed. Use element_handle to capture a specific element, or omit for the entire window. mode='auto' (default) uses screen capture when native HwndHost content is present, otherwise render; the response states the mode. Native content needs a visible unobstructed desktop. Explicit mode='render' rejects native content instead of returning a blank image, and re-renders the visual off-screen — works even if the window is covered, but CANNOT see open Popups, ComboBox dropdowns, context menus or tooltips. mode='screen' captures the actual on-screen pixels (GDI) and DOES include them — use it right after clicking something that opened a popup/menu; requires the window to be visible and unobstructed. Set full_content=true with render mode to capture all content in a ScrollViewer, including unscrolled and virtualized content; the original scroll position is restored.")]
     public async Task<CallToolResult> WpfCaptureScreenshot(
         string? element_handle = null,
         int max_width = 1920,
         int max_height = 1080,
-        string mode = "render",
+        string mode = "auto",
         bool full_content = false)
     {
         if (max_width < 1) max_width = 1;
         if (max_width > (full_content ? 16384 : 3840)) max_width = full_content ? 16384 : 3840;
         if (max_height < 1) max_height = 1;
         if (max_height > (full_content ? 16384 : 2160)) max_height = full_content ? 16384 : 2160;
-        if (mode != "render" && mode != "screen")
+        if (mode != "auto" && mode != "render" && mode != "screen")
         {
-            throw new ArgumentException("mode must be 'render' or 'screen'");
+            throw new McpException("mode must be 'auto', 'render' or 'screen'");
         }
         if (full_content && mode == "screen")
         {
-            throw new ArgumentException("full_content is supported with mode='render' only");
+            throw new McpException("full_content is supported with mode='render' only");
         }
 
+        if (full_content && mode == "auto") mode = "render";
         var result = await _ipcBridge.CaptureScreenshotAsync(element_handle, max_width, max_height, mode, full_content);
 
         var content = new List<ContentBlock>
@@ -589,7 +613,7 @@ public class WpfTools
             },
             new TextContentBlock
             {
-                Text = $"Screenshot captured: {result.Width}x{result.Height}px, element type: {result.ElementType ?? "Window"}"
+                Text = $"Screenshot captured: {result.Width}x{result.Height}px, element type: {result.ElementType ?? "Window"}, mode: {result.CaptureMode ?? mode}. {result.Detail}"
             }
         };
 

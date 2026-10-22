@@ -10,4 +10,6 @@ public class ScreenshotResult
     public int Width { get; set; }
     public int Height { get; set; }
     public string? ElementType { get; set; }
+    public string? CaptureMode { get; set; }
+    public string? Detail { get; set; }
 }

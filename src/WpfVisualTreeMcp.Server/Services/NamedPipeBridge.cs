@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using WpfVisualTreeMcp.Shared.Ipc;
@@ -14,6 +15,8 @@ namespace WpfVisualTreeMcp.Server.Services;
 /// </summary>
 public class NamedPipeBridge : IIpcBridge
 {
+    [DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(uint processId);
     private readonly ILogger<NamedPipeBridge> _logger;
     private readonly IProcessManager _processManager;
     private readonly JsonSerializerOptions _jsonOptions;
@@ -40,11 +43,15 @@ public class NamedPipeBridge : IIpcBridge
 
     public async Task<ReplayResult> ReplayAsync(RecordedWorkflow workflow, int timeoutMs = 120000)
     {
-        Shared.WorkflowCodec.Validate(workflow);
-        if (timeoutMs is < 1000 or > 120000) throw new ArgumentException("Replay timeout must be between 1000 and 120000 ms.");
+        try { Shared.WorkflowCodec.Validate(workflow); }
+        catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        if (timeoutMs is < 1000 or > 120000) throw new McpException("Replay timeout must be between 1000 and 120000 ms.");
+        if (workflow.Steps.Any(step => step.Action == "MousePointer" ||
+            step.Action == "ClickElement" && (step.Arguments.TryGetProperty("x", out _) || step.Arguments.TryGetProperty("y", out _))))
+            await EnsurePointerSupportAsync(EnsureConnected().ProcessId);
         var response = await SendRequestAsync<ReplayRequest, ReplayResponse>(EnsureConnected().ProcessId,
             new ReplayRequest { Workflow = workflow, TimeoutMs = timeoutMs });
-        if (!response.Success || response.Result == null) throw new InvalidOperationException(response.Error ?? "Replay unavailable.");
+        if (!response.Success || response.Result == null) throw new McpException(response.Error ?? "Replay unavailable.");
         return response.Result;
     }
 
@@ -61,7 +68,7 @@ public class NamedPipeBridge : IIpcBridge
         var response = await SendRequestAsync<ReportRequest, ReportResponse>(EnsureConnected().ProcessId,
             new ReportRequest { RootHandle = rootHandle, MaxElements = maxElements, MaxDepth = maxDepth, MaxFindings = maxFindings });
         if (!response.Success || response.Report == null)
-            throw new InvalidOperationException(response.Error ?? "Diagnostic report unavailable.");
+            throw new McpException(response.Error ?? "Diagnostic report unavailable.");
         return response.Report;
     }
 
@@ -80,7 +87,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get visual tree");
+            throw new McpException(response.Error ?? "Failed to get visual tree");
         }
 
         return ParseVisualTreeResponse(response);
@@ -100,7 +107,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get element properties");
+            throw new McpException(response.Error ?? "Failed to get element properties");
         }
 
         return ParseElementPropertiesResponse(response, elementHandle);
@@ -127,7 +134,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to find elements");
+            throw new McpException(response.Error ?? "Failed to find elements");
         }
 
         return ParseFindElementsResponse(response);
@@ -153,7 +160,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to find elements (deep search)");
+            throw new McpException(response.Error ?? "Failed to find elements (deep search)");
         }
 
         return ParseFindElementsDeepResponse(response);
@@ -173,7 +180,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get bindings");
+            throw new McpException(response.Error ?? "Failed to get bindings");
         }
 
         return ParseBindingsResponse(response, elementHandle);
@@ -190,7 +197,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get binding errors");
+            throw new McpException(response.Error ?? "Failed to get binding errors");
         }
 
         return ParseBindingErrorsResponse(response);
@@ -211,7 +218,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get resources");
+            throw new McpException(response.Error ?? "Failed to get resources");
         }
 
         return ParseResourcesResponse(response);
@@ -231,7 +238,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get styles");
+            throw new McpException(response.Error ?? "Failed to get styles");
         }
 
         return ParseStylesResponse(response, elementHandle);
@@ -252,7 +259,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to watch property");
+            throw new McpException(response.Error ?? "Failed to watch property");
         }
 
         return response.WatchId;
@@ -273,7 +280,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to highlight element");
+            throw new McpException(response.Error ?? "Failed to highlight element");
         }
     }
 
@@ -291,7 +298,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get layout info");
+            throw new McpException(response.Error ?? "Failed to get layout info");
         }
 
         return ParseLayoutInfoResponse(response, elementHandle);
@@ -312,7 +319,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to explain triggers");
+            throw new McpException(response.Error ?? "Failed to explain triggers");
         }
 
         return new ExplainTriggersResult { Json = response.Json };
@@ -333,7 +340,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to evaluate binding");
+            throw new McpException(response.Error ?? "Failed to evaluate binding");
         }
 
         return new EvaluateBindingResult { Json = response.EvaluationJson };
@@ -355,7 +362,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to capture snapshot");
+            throw new McpException(response.Error ?? "Failed to capture snapshot");
         }
 
         return new SnapshotResult
@@ -376,7 +383,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to diff snapshots");
+            throw new McpException(response.Error ?? "Failed to diff snapshots");
         }
 
         return new DiffResult
@@ -404,7 +411,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to set property");
+            throw new McpException(response.Error ?? "Failed to set property");
         }
 
         return new SetPropertyResult
@@ -432,7 +439,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to revert property");
+            throw new McpException(response.Error ?? "Failed to revert property");
         }
 
         return new RevertPropertyResult
@@ -465,7 +472,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to wait for element");
+            throw new McpException(response.Error ?? "Failed to wait for element");
         }
 
         return new WaitForResult
@@ -492,7 +499,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to export tree");
+            throw new McpException(response.Error ?? "Failed to export tree");
         }
 
         return new ExportResult
@@ -503,7 +510,7 @@ public class NamedPipeBridge : IIpcBridge
         };
     }
 
-    public async Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "render", bool fullContent = false)
+    public async Task<ScreenshotResult> CaptureScreenshotAsync(string? elementHandle, int maxWidth, int maxHeight, string mode = "auto", bool fullContent = false)
     {
         var session = EnsureConnected();
 
@@ -521,7 +528,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to capture screenshot");
+            throw new McpException(response.Error ?? "Failed to capture screenshot");
         }
 
         return new ScreenshotResult
@@ -530,7 +537,7 @@ public class NamedPipeBridge : IIpcBridge
             MimeType = "image/png",
             Width = response.Width,
             Height = response.Height,
-            ElementType = response.ElementType
+            ElementType = response.ElementType, CaptureMode = response.CaptureMode, Detail = response.Detail
         };
     }
 
@@ -548,7 +555,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to get DataContext");
+            throw new McpException(response.Error ?? "Failed to get DataContext");
         }
 
         return new DataContextResult
@@ -569,19 +576,20 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to clear binding errors");
+            throw new McpException(response.Error ?? "Failed to clear binding errors");
         }
     }
 
-    public async Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null)
+    public async Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null, double? x = null, double? y = null)
     {
         var session = EnsureConnected();
+        if (x.HasValue || y.HasValue) await EnsurePointerSupportAsync(session.ProcessId);
 
         var request = new ClickElementRequest
         {
             ElementHandle = elementHandle,
             Physical = physical,
-            ClickType = clickType
+            ClickType = clickType, X = x, Y = y
         };
 
         var response = await SendRequestAsync<ClickElementRequest, ClickElementResponse>(
@@ -589,7 +597,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to click element");
+            throw new McpException(response.Error ?? "Failed to click element");
         }
 
         return new ClickResult
@@ -608,6 +616,25 @@ public class NamedPipeBridge : IIpcBridge
             session.ProcessId, new TouchGestureRequest { Options = options });
         if (!response.Success) throw new McpException(response.Error ?? "Failed to inject touch gesture");
         return response.Result ?? throw new McpException("Inspector returned no touch result.");
+    }
+
+    public async Task<MousePointerResult> MousePointerAsync(MousePointerOptions options)
+    {
+        options.Validate();
+        var session = EnsureConnected();
+        var response = await SendRequestAsync<MousePointerRequest, MousePointerResponse>(
+            session.ProcessId, new MousePointerRequest { Options = options });
+        if (!response.Success) throw new McpException(response.Error ?? "Failed to send pointer input.");
+        return response.Result ?? throw new McpException("Inspector returned no pointer result. Update and reload the Inspector.");
+    }
+
+    private async Task EnsurePointerSupportAsync(int processId)
+    {
+        // Older Inspectors ignore unknown JSON fields. Without this read-only
+        // handshake a coordinate click could silently click the element center.
+        var response = await SendRequestAsync<GetCapabilitiesRequest, GetCapabilitiesResponse>(processId, new GetCapabilitiesRequest());
+        if (!response.Success || !response.CoordinatePointerInput)
+            throw new McpException("The attached app still has an older Inspector. Save your work, restart the app, and reattach using the updated server before sending coordinate clicks or replaying pointer workflows.");
     }
 
     public async Task<DragResult> DragAsync(DragOptions options)
@@ -637,7 +664,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to select item");
+            throw new McpException(response.Error ?? "Failed to select item");
         }
 
         return new SelectItemResult
@@ -664,7 +691,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to set element text");
+            throw new McpException(response.Error ?? "Failed to set element text");
         }
 
         return new SetTextResult
@@ -690,7 +717,7 @@ public class NamedPipeBridge : IIpcBridge
 
         if (!response.Success)
         {
-            throw new InvalidOperationException(response.Error ?? "Failed to send keys");
+            throw new McpException(response.Error ?? "Failed to send keys");
         }
 
         return new SendKeysResult
@@ -728,6 +755,15 @@ public class NamedPipeBridge : IIpcBridge
 
         _logger.LogDebug("Sending {RequestType} request to pipe {PipeName}",
             request.RequestType, pipeName);
+
+        // The CLI/MCP host may hold Windows foreground permission while the
+        // inspected app has been idle. Delegate that permission before asking
+        // its Dispatcher to activate. Input guards still verify the actual owner.
+        if (OperatingSystem.IsWindows() && request is ReplayRequest or DragRequest or TouchGestureRequest or MousePointerRequest or
+            SendKeysRequest or ClickElementRequest { Physical: true } or ClickElementRequest { X: not null } or
+            ClickElementRequest { ClickType: "double" or "right" } or SetTextRequest { Physical: true } or
+            CaptureScreenshotRequest { Mode: "screen" or "auto" })
+            AllowSetForegroundWindow((uint)processId);
 
         try
         {
@@ -839,6 +875,8 @@ public class NamedPipeBridge : IIpcBridge
             Name = element.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : null,
             Children = new List<VisualTreeNode>()
         };
+        if (element.TryGetProperty("nativeContent", out var native))
+            node.NativeContent = IpcSerializer.Deserialize<NativeContentInfo>(native.GetRawText());
 
         if (element.TryGetProperty("children", out var childrenProp))
         {
@@ -851,7 +889,7 @@ public class NamedPipeBridge : IIpcBridge
         return node;
     }
 
-    private ElementPropertiesResult ParseElementPropertiesResponse(GetElementPropertiesResponse response, string handle)
+    internal ElementPropertiesResult ParseElementPropertiesResponse(GetElementPropertiesResponse response, string handle)
     {
         var result = new ElementPropertiesResult
         {
@@ -861,18 +899,21 @@ public class NamedPipeBridge : IIpcBridge
 
         if (string.IsNullOrEmpty(response.PropertiesJson))
         {
-            return result;
+            throw new McpException("Inspector returned no property data. Reattach with an updated Inspector and retry.");
         }
 
         try
         {
             using var doc = JsonDocument.Parse(response.PropertiesJson);
             var root = doc.RootElement;
+            if (!root.TryGetProperty("element", out _) || !root.TryGetProperty("properties", out var propertyList) || propertyList.ValueKind != JsonValueKind.Array)
+                throw new JsonException("Expected element metadata and a properties array.");
 
             if (root.TryGetProperty("element", out var elem))
             {
                 result.Element.TypeName = elem.TryGetProperty("typeName", out var tp)
                     ? tp.GetString() ?? "Unknown" : "Unknown";
+                result.Element.Name = elem.TryGetProperty("name", out var en) ? en.GetString() : null;
             }
 
             if (root.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Array)
@@ -883,8 +924,15 @@ public class NamedPipeBridge : IIpcBridge
                     {
                         Name = prop.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
                         TypeName = prop.TryGetProperty("typeName", out var t) ? t.GetString() ?? "" : "",
-                        Value = prop.TryGetProperty("value", out var v) ? v.GetString() : null,
-                        Source = prop.TryGetProperty("source", out var s) ? s.GetString() ?? "Unknown" : "Unknown"
+                        OwnerType = prop.TryGetProperty("ownerType", out var owner) ? owner.GetString() : null,
+                        Value = prop.TryGetProperty("value", out var v) ? v.ValueKind switch
+                        {
+                            JsonValueKind.Null => null,
+                            JsonValueKind.String => v.GetString(),
+                            _ => v.GetRawText()
+                        } : null,
+                        Source = prop.TryGetProperty("source", out var s) ? s.GetString() ?? "Unknown" : "Unknown",
+                        IsBinding = prop.TryGetProperty("isBinding", out var binding) && binding.GetBoolean()
                     });
                 }
             }
@@ -892,6 +940,7 @@ public class NamedPipeBridge : IIpcBridge
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to parse properties JSON");
+            throw new McpException("Inspector returned invalid property data. Update the Inspector and restart the target application before reattaching. " + ex.Message);
         }
 
         return result;
@@ -951,6 +1000,9 @@ public class NamedPipeBridge : IIpcBridge
             AutomationId = elem.TryGetProperty("automationId", out var aid) ? aid.GetString() : null,
             Path = elem.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
         };
+
+        if (elem.TryGetProperty("nativeContent", out var native))
+            found.NativeContent = IpcSerializer.Deserialize<NativeContentInfo>(native.GetRawText());
 
         if (elem.TryGetProperty("isVisible", out var vis) &&
             (vis.ValueKind == JsonValueKind.True || vis.ValueKind == JsonValueKind.False))
@@ -1183,7 +1235,7 @@ public class NamedPipeBridge : IIpcBridge
         return result;
     }
 
-    private LayoutInfoResult ParseLayoutInfoResponse(GetLayoutInfoResponse response, string handle)
+    internal LayoutInfoResult ParseLayoutInfoResponse(GetLayoutInfoResponse response, string handle)
     {
         var result = new LayoutInfoResult
         {
@@ -1193,16 +1245,23 @@ public class NamedPipeBridge : IIpcBridge
 
         if (string.IsNullOrEmpty(response.LayoutJson))
         {
-            return result;
+            throw new McpException("Inspector returned no layout data.");
         }
 
         try
         {
             using var doc = JsonDocument.Parse(response.LayoutJson);
             var root = doc.RootElement;
+            if (!root.TryGetProperty("element", out _) || !root.TryGetProperty("layout", out var layoutData) || layoutData.ValueKind != JsonValueKind.Object)
+                throw new JsonException("Expected element metadata and a layout object.");
 
             if (root.TryGetProperty("layout", out var layout))
             {
+                if (root.TryGetProperty("element", out var element))
+                {
+                    result.Element.TypeName = element.GetProperty("typeName").GetString() ?? "Unknown";
+                    result.Element.Name = element.TryGetProperty("name", out var name) ? name.GetString() : null;
+                }
                 result.Layout.ActualWidth = layout.TryGetProperty("actualWidth", out var aw) ? aw.GetDouble() : 0;
                 result.Layout.ActualHeight = layout.TryGetProperty("actualHeight", out var ah) ? ah.GetDouble() : 0;
                 result.Layout.HorizontalAlignment = layout.TryGetProperty("horizontalAlignment", out var ha) ? ha.GetString() ?? "" : "";
@@ -1253,6 +1312,7 @@ public class NamedPipeBridge : IIpcBridge
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to parse layout info JSON");
+            throw new McpException("Inspector returned invalid layout data: " + ex.Message);
         }
 
         return result;
