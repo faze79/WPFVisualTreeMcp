@@ -519,8 +519,8 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_revert_property` | Undo `wpf_set_property` edits (one, filtered, or all) — restores the prior binding/value/default. |
 | `wpf_highlight_element` | Visually highlight an element |
 | `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
-| `wpf_move_mouse` | **Move/hover** at a local point without clicking. Available in the current source build. |
-| `wpf_scroll` | **Wheel input** vertically or horizontally; the app decides whether to scroll or zoom. Available in the current source build. |
+| `wpf_move_mouse` | **Move/hover** at a local point without clicking. Available from v0.17.0. |
+| `wpf_scroll` | **Wheel input** vertically or horizontally; the app decides whether to scroll or zoom. Available from v0.17.0. |
 | `wpf_drag` | **Drag with the mouse** — source and target elements or relative displacement, local points, left/right/middle button, gradual movement and release cleanup. *State-changing.* |
 | `wpf_touch_gesture` | **Native touch** — tap, long press, swipe, two-finger pinch and rotation inside a visible element. Requires application touch support. *State-changing.* |
 | `wpf_select_item` | **Select an item** in a ComboBox/ListBox/ListView/TabControl by visible text or index — works with virtualized items. *State-changing.* |
