@@ -3,16 +3,17 @@
 Where this project should be listed so people can actually find it, and the exact
 text to submit. Keep the entries in sync when the tool count or tagline changes.
 
-## Distribution status (release channels checked 2026-10-22; external requests checked 2026-10-24)
+## Distribution status (release channels checked 2026-10-25; external requests checked 2026-10-24)
 
 | Channel | Status |
 | --- | --- |
-| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.17.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.17.0) | v0.17.0 published. Release CI now builds and verifies both full and compact Windows x64 MCPB bundles automatically, including a compact-bundle workflow/xUnit round trip. Both expose all 38 tools; the compact variant is about 17 MiB. |
-| Official MCP Registry | v0.17.0 published as `io.github.faze79/wpf-visual-tree`; [publication workflow](https://github.com/faze79/WPFVisualTreeMcp/actions/runs/39738395096) succeeded. |
-| [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated; the [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) lists all 38 tools, including mouse hover and wheel input. The verified rebuild runs NuGet server **0.17.0**; Glama assigned this rebuild its own catalog revision **0.17.1**, marked **Latest**. Its first automatic build had picked up 0.16.0 during NuGet propagation; the build now pins the package version from the repository manifest to prevent that mismatch. |
+| [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.18.0) and [MCP/CLI NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.18.0) | Stable v0.18.0 published with portable, full/compact Windows x64 MCPB and Codex plugin assets. [Release CI](https://github.com/faze79/WPFVisualTreeMcp/actions/runs/40137121467) passed, including installed SDK consumers, the framework/architecture matrix and workflow/xUnit round trips. Public NuGet installation and all 38 MCP tools verified, including AutomationId action schemas. |
+| [C# automation SDK on NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp.Automation/0.18.0) | `WpfVisualTreeMcp.Automation` 0.18.0 published. The actual package downloaded from nuget.org passed fresh-consumer tests against .NET 8 x64 and .NET Framework 4.7.2 x86 apps, exact text waits, inspection/actions, recording/replay and exported xUnit tests. |
+| Official MCP Registry | v0.18.0 published as `io.github.faze79/wpf-visual-tree`; [publication workflow](https://github.com/faze79/WPFVisualTreeMcp/actions/runs/40138001855) succeeded. Public API confirms `active` and `isLatest: true`. The workflow now waits for NuGet indexing before publication. |
+| [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated for the SDK and AutomationId support. Catalog release **0.18.0** is **Latest**; the [successful build](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/admin/dockerfile/tests/01a17006-ae4f-758c-ba2a-f9c62d6ae7a7) installs NuGet server **0.18.0**, and the [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) exposes all 38 tools with AutomationId targeting. The first automatic build ran before NuGet indexing and failed; retrying after indexing succeeded. Build & Release initially assigned catalog revision 0.17.2, so a manual release aligned the catalog version with 0.18.0. |
 | [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) remains open for the description update. [Follow-up posted as faze79 on 2026-10-24](https://github.com/punkpeye/awesome-mcp-servers/pull/17013#issuecomment-6388117753) addresses the automated duplicate warning (one existing line replaced) and confirms the existing Glama badge and live 38-tool schema. Awaiting maintainer review. |
 | [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | [Correction #372](https://github.com/YugantM/hvtracker/issues/372) remains open. The profile still says no registry package. [Follow-up posted as faze79 on 2026-10-24](https://github.com/YugantM/hvtracker/issues/372#issuecomment-6388333638) provides verified NuGet v0.17.0 and Official MCP Registry evidence (`active`, `isLatest: true`) and requests the package association. No maintainer response yet. |
-| [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | On 2026-10-24, the [submission page](https://www.pulsemcp.com/submit) still explicitly pauses new submissions and changes to existing listings; it says it will ingest the Official MCP Registry when processing resumes. v0.17.0 is active/latest in that registry. The directory's [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) last checked on 2026-10-19 showed v0.12.0. |
+| [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | On 2026-10-24, the [submission page](https://www.pulsemcp.com/submit) still explicitly pauses new submissions and changes to existing listings; it says it will ingest the Official MCP Registry when processing resumes. v0.18.0 is now active/latest in that registry. The directory's [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) last checked on 2026-10-19 showed v0.12.0. |
 | mcp.so | On 2026-10-24 the prepared form still requires a **39 USD one-time fee**. No payment authorized or listing published. |
 | Smithery | No listing published. The last API attempt (2026-10-19) returned HTTP 403, `Updating servers has been removed`, and lookup/release submission returned HTTP 404. On 2026-10-24, sign-in as faze79 succeeded, but the web publishing form still requires an HTTP MCP URL; it cannot accept this local stdio server. The [service announcement](https://smithery.ai/future) confirms accounts, API, CLI and proxy shutdown on 2026-10-31, with a curated public directory remaining. The compact [MCPB bundle](MCPB.md) remains available through GitHub Releases. |
 
@@ -23,10 +24,11 @@ posting. An empty local issue/PR queue does not mean distribution requests are c
 ## Canonical pitch
 
 > **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI,
-> exposed over 38 MCP tools and matching CLI commands: visual trees, bindings,
+> exposed over 38 MCP tools, matching CLI commands and a C# automation SDK: visual trees, bindings,
 > diagnostic reports, full-content screenshots, mouse hover/wheel/dragging, native touch,
 > and workflow recording/replay with runnable xUnit export. Supports WPF apps on
 > .NET Framework 4.7.2/4.8 and .NET 8+ through runtime injection or self-hosting.
+> Target actions by AutomationId and await exact text/property values from C# tests.
 > Includes CLI self-update and a Codex companion skill. Native touch behavior
 > depends on the application's input support.
 
@@ -50,12 +52,14 @@ Manifest lives at `src/WpfVisualTreeMcp.Server/.mcp/server.json`
    `server.json` `name`.
 
 Then run the **"Publish to MCP Registry"** workflow (Actions tab → Run workflow).
+It waits for the exact NuGet version to become publicly available before publishing.
 It authenticates with GitHub OIDC — no secrets, no tokens: publishing under
 `io.github.faze79/*` is authorized simply by the workflow running in a repo owned by faze79.
 
 ## 2. NuGet.org (trusted publishing / OIDC — no API key)
 
-The release workflow publishes via **NuGet trusted publishing**: GitHub Actions gets a
+The release workflow publishes both `WpfVisualTreeMcp` (MCP/CLI tool) and
+`WpfVisualTreeMcp.Automation` (C# SDK) via **NuGet trusted publishing**: GitHub Actions gets a
 short-lived token over OIDC, so there is no long-lived API key to store or rotate. Works
 for a brand-new package (the first push creates `WpfVisualTreeMcp` on nuget.org), and the
 repo is public so there is no 7-day activation window.
@@ -65,20 +69,24 @@ One-time setup (already configured for this repository; retained for reference):
 1. **Create the trusted-publishing policy** at
    <https://www.nuget.org/account/trustedpublishing> → **Add**:
    - Package owner: your nuget.org account
-   - Package ID: `WpfVisualTreeMcp` (an exact ID that doesn't exist yet is fine — the "glob"
-     field can be left as the exact ID)
+   - Package scope: authorize both `WpfVisualTreeMcp` and `WpfVisualTreeMcp.Automation`.
+     If configuring a new policy, ensure its package scope covers the SDK as well as
+     the MCP tool; both were successfully published using the existing setup in v0.18.0.
    - Repository owner: `faze79`
    - Repository: `WPFVisualTreeMcp`
    - Workflow file: `release.yml`
    - Environment: *(leave blank — the workflow uses no `environment:`)*
 2. **Add the repo secret** `NUGET_USER` = your nuget.org **profile name** (not email),
    at Settings → Secrets and variables → Actions.
-3. Push a `v*` tag — the workflow packs, does `NuGet/login@v1` (OIDC), pushes to nuget.org
-   and attaches the `.nupkg` to the GitHub release. Until `NUGET_USER` is set the push step
+3. Push a `v*` tag — the workflow packs and tests both packages, does `NuGet/login@v1`
+   (OIDC), pushes to nuget.org and attaches both `.nupkg` files to the GitHub release.
+   Until `NUGET_USER` is set the push step
    is skipped with a notice, so tagging still produces the GitHub release.
 
 Users then install with `dotnet tool install -g WpfVisualTreeMcp` (gives the `wpfinspect`
-command) or run the MCP server with `dnx WpfVisualTreeMcp`.
+command) or run the MCP server with `dnx WpfVisualTreeMcp`. Test projects add the SDK
+with `dotnet add package WpfVisualTreeMcp.Automation --version 0.18.0`; no MCP server
+process is needed for the C# API.
 
 ## 3. awesome-mcp-servers (punkpeye/awesome-mcp-servers)
 
@@ -118,12 +126,15 @@ Keep the existing Glama badge and platform markers. Follow the upstream
      the tools; verify the actual server version in the build/handshake logs.
   4. Wait for release publication after the successful build: the UI can briefly
      show the previous version/schema while background processing completes.
+     **Build & Release** may increment Glama's previous catalog version instead
+     of using the NuGet version. Use **Build**, then the manual release form when
+     the catalog version needs to match the package version exactly.
      For a build that still needs manual publication, use **Make Release** /
      **Create Release**, enter the package version and release notes, then
      **Create & Publish Release**. See Glama's
      [release guide](https://glama.ai/blog/2026-03-15-how-to-make-a-release).
   5. Verify the expected version appears under **Releases**,
-     and the public schema lists all tools (38 in v0.17.0). Auto-release is enabled,
+     and the public schema lists all tools (38 in v0.18.0). Auto-release is enabled,
      but its completion must still be checked after each GitHub release.
 - **PulseMCP** — [existing listing](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree).
   Keep the Official MCP Registry manifest current. As of 2026-10-24, its
