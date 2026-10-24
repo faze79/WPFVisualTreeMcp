@@ -29,6 +29,32 @@ jobs:
       - name: Stage server.json
         run: cp src/WpfVisualTreeMcp.Server/.mcp/server.json server.json
 
+      - name: Wait for NuGet validation and indexing
+        run: |
+          python3 - <<'PY'
+          import json, time, urllib.error, urllib.request
+          manifest = json.load(open('server.json'))
+          for package in manifest['packages']:
+              if package['registryType'] != 'nuget':
+                  continue
+              name, version = package['identifier'], package['version']
+              url = f'https://api.nuget.org/v3-flatcontainer/{name.lower()}/index.json'
+              for attempt in range(45):
+                  try:
+                      request = urllib.request.Request(url, headers={'Cache-Control': 'no-cache'})
+                      with urllib.request.urlopen(request, timeout=15) as response:
+                          versions = json.load(response)['versions']
+                      if version in versions:
+                          print(f'{name} {version} is available on nuget.org', flush=True)
+                          break
+                  except (urllib.error.URLError, TimeoutError) as error:
+                      print(f'NuGet is not ready: {error}', flush=True)
+                  if attempt == 44:
+                      raise SystemExit(f'{name} {version} is still unavailable after waiting for NuGet validation')
+                  print(f'Waiting for {name} {version} ({attempt + 1}/45)', flush=True)
+                  time.sleep(20)
+          PY
+
       - name: Login to MCP Registry (GitHub OIDC)
         run: ./mcp-publisher login github-oidc
 
