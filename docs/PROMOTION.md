@@ -3,18 +3,22 @@
 Where this project should be listed so people can actually find it, and the exact
 text to submit. Keep the entries in sync when the tool count or tagline changes.
 
-## Distribution status (release channels checked 2026-10-22)
+## Distribution status (release channels checked 2026-10-22; external requests checked 2026-10-24)
 
 | Channel | Status |
 | --- | --- |
 | [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.17.0) and [NuGet](https://www.nuget.org/packages/WpfVisualTreeMcp/0.17.0) | v0.17.0 published. Release CI now builds and verifies both full and compact Windows x64 MCPB bundles automatically, including a compact-bundle workflow/xUnit round trip. Both expose all 38 tools; the compact variant is about 17 MiB. |
 | Official MCP Registry | v0.17.0 published as `io.github.faze79/wpf-visual-tree`; [publication workflow](https://github.com/faze79/WPFVisualTreeMcp/actions/runs/39738395096) succeeded. |
 | [Glama](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp) | Description and README updated; the [public schema](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp/schema) lists all 38 tools, including mouse hover and wheel input. The verified rebuild runs NuGet server **0.17.0**; Glama assigned this rebuild its own catalog revision **0.17.1**, marked **Latest**. Its first automatic build had picked up 0.16.0 during NuGet propagation; the build now pins the package version from the repository manifest to prevent that mismatch. |
-| [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) updates the description for workflows, touch and full-content screenshots. |
-| [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | Profile exists; [correction #372](https://github.com/YugantM/hvtracker/issues/372) requests the missing NuGet package association and refreshed metadata. Awaiting its maintainer. |
-| [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | Last checked 2026-10-19: existing listing found through its internal search; its [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) showed v0.12.0. The directory had [paused submissions and listing changes](https://www.pulsemcp.com/submit); it says it will ingest the Official MCP Registry when processing resumes. v0.17.0 is now published in that registry. |
-| mcp.so | Submission form prepared with the repository URL and project name. The site requires a **39 USD one-time fee**; no payment authorized or listing published. |
-| Smithery | Browser and CLI authentication completed. Publication is blocked by the service: the create-server API returns HTTP 403, `Updating servers has been removed`; server lookup and release submission return HTTP 404. No listing published. The compact [MCPB bundle](MCPB.md) passed the 12-case integration matrix and two workflow/xUnit round trips, including 24 steps with mouse and touch gestures. |
+| [awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers#os-automation) | Original [PR #9934](https://github.com/punkpeye/awesome-mcp-servers/pull/9934) merged on 2026-07-22. [PR #17013](https://github.com/punkpeye/awesome-mcp-servers/pull/17013) remains open for the description update. [Follow-up posted as faze79 on 2026-10-24](https://github.com/punkpeye/awesome-mcp-servers/pull/17013#issuecomment-6388117753) addresses the automated duplicate warning (one existing line replaced) and confirms the existing Glama badge and live 38-tool schema. Awaiting maintainer review. |
+| [HVTracker](https://hvtracker.net/agents/wpfvisualtreemcp/) | [Correction #372](https://github.com/YugantM/hvtracker/issues/372) remains open. The profile still says no registry package. [Follow-up posted as faze79 on 2026-10-24](https://github.com/YugantM/hvtracker/issues/372#issuecomment-6388333638) provides verified NuGet v0.17.0 and Official MCP Registry evidence (`active`, `isLatest: true`) and requests the package association. No maintainer response yet. |
+| [PulseMCP](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree) | On 2026-10-24, the [submission page](https://www.pulsemcp.com/submit) still explicitly pauses new submissions and changes to existing listings; it says it will ingest the Official MCP Registry when processing resumes. v0.17.0 is active/latest in that registry. The directory's [cached manifest](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree/serverjson) last checked on 2026-10-19 showed v0.12.0. |
+| mcp.so | On 2026-10-24 the prepared form still requires a **39 USD one-time fee**. No payment authorized or listing published. |
+| Smithery | No listing published. The last API attempt (2026-10-19) returned HTTP 403, `Updating servers has been removed`, and lookup/release submission returned HTTP 404. On 2026-10-24, sign-in as faze79 succeeded, but the web publishing form still requires an HTTP MCP URL; it cannot accept this local stdio server. The [service announcement](https://smithery.ai/future) confirms accounts, API, CLI and proxy shutdown on 2026-10-31, with a curated public directory remaining. The compact [MCPB bundle](MCPB.md) remains available through GitHub Releases. |
+
+For request follow-ups, check these external threads as well as this repository's
+issues and PRs. Use the `faze79` GitHub account and verify the active login before
+posting. An empty local issue/PR queue does not mean distribution requests are closed.
 
 ## Canonical pitch
 
@@ -94,7 +98,7 @@ Keep the existing Glama badge and platform markers. Follow the upstream
 
 ## 4. Other directories
 
-- **mcp.so** — <https://mcp.so/submit>. As of 2026-10-19 the form requires a
+- **mcp.so** — <https://mcp.so/submit>. As of 2026-10-24 the form requires a
   39 USD one-time payment. Do not treat a prepared form as a published listing.
 - **Glama** — [existing listing](https://glama.ai/mcp/servers/faze79/WPFVisualTreeMcp).
   Sign in with the repository owner's GitHub account (`faze79`) to manage it.
@@ -122,7 +126,7 @@ Keep the existing Glama badge and platform markers. Follow the upstream
      and the public schema lists all tools (38 in v0.17.0). Auto-release is enabled,
      but its completion must still be checked after each GitHub release.
 - **PulseMCP** — [existing listing](https://www.pulsemcp.com/servers/faze79-wpf-visual-tree).
-  Keep the Official MCP Registry manifest current. As of 2026-10-19, its
+  Keep the Official MCP Registry manifest current. As of 2026-10-24, its
   [submission page](https://www.pulsemcp.com/submit) explicitly pauses both new
   submissions and changes to existing listings; check again when intake resumes.
 - **Smithery** — <https://smithery.ai/servers/new>. Treat this server as local-only:

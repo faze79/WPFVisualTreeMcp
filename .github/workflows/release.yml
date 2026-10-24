@@ -24,6 +24,20 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Verify release versions
+      shell: pwsh
+      run: |
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        foreach ($project in @('Server', 'Automation')) {
+          [xml]$xml = Get-Content "src/WpfVisualTreeMcp.$project/WpfVisualTreeMcp.$project.csproj"
+          if ($xml.Project.PropertyGroup.Version -ne $version) { throw "$project version does not match $version" }
+        }
+        $manifest = Get-Content src/WpfVisualTreeMcp.Server/.mcp/server.json -Raw | ConvertFrom-Json
+        $plugin = Get-Content plugins/wpfvisualtreemcp/.codex-plugin/plugin.json -Raw | ConvertFrom-Json
+        if ($manifest.version -ne $version -or $manifest.packages[0].version -ne $version -or $plugin.version -ne $version) {
+          throw 'MCP or plugin manifest version does not match the release tag'
+        }
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -48,6 +62,9 @@ jobs:
     - name: Publish MCP Server
       run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish/server
 
+    - name: Pack C# automation SDK
+      run: dotnet pack src/WpfVisualTreeMcp.Automation/WpfVisualTreeMcp.Automation.csproj --no-build --configuration Release --output ./artifacts/packages
+
     - name: Install x86 .NET runtime for injection helper
       shell: pwsh
       run: |
@@ -55,6 +72,9 @@ jobs:
         & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
         & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime windowsdesktop -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
         "DOTNET_ROOT_X86=$env:RUNNER_TEMP/dotnet-x86" >> $env:GITHUB_ENV
+
+    - name: Test standalone NuGet consumer and exported xUnit tests
+      run: python ./scripts/test_automation_package.py --packages ./artifacts/packages
 
     - name: Test published injection (x64 and x86)
       shell: pwsh
@@ -92,15 +112,16 @@ jobs:
         $cli = Join-Path (npm root --global) '@openai/codex/bin/codex.js'
         python ./scripts/test-plugin.py --codex-cli $cli --archive ./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip
 
-    - name: Pack NuGet package
-      run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts
+    - name: Pack MCP NuGet package
+      run: dotnet pack src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --configuration Release --output ./artifacts/packages
 
     - name: Verify NuGet injection payload
       shell: pwsh
       run: |
-        $packages = @(Get-ChildItem ./artifacts/*.nupkg)
-        if ($packages.Count -ne 1) { throw 'Expected exactly one NuGet package' }
-        ./scripts/Test-NuGetPayload.ps1 -Package $packages[0].FullName
+        $version = "${{ github.ref_name }}".TrimStart('v')
+        $packages = @(Get-ChildItem ./artifacts/packages/*.nupkg)
+        if ($packages.Count -ne 2) { throw 'Expected the MCP and Automation NuGet packages' }
+        ./scripts/Test-NuGetPayload.ps1 -Package "./artifacts/packages/WpfVisualTreeMcp.$version.nupkg"
 
     - name: Build and verify full and compact MCPB bundles
       shell: pwsh
@@ -118,7 +139,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw 'Compact MCPB workflow test failed' }
 
     # Trusted publishing (OIDC): requires a policy at nuget.org/account/trustedpublishing
-    # for repo faze79/WPFVisualTreeMcp, workflow release.yml, package WpfVisualTreeMcp,
+    # for repo faze79/WPFVisualTreeMcp, workflow release.yml, both packages
+    # WpfVisualTreeMcp and WpfVisualTreeMcp.Automation (including new-package scope),
     # plus a repo secret NUGET_USER = the nuget.org profile name. Skipped with a notice
     # until NUGET_USER is set, so tagging still produces the GitHub release meanwhile.
     - name: NuGet login (OIDC)
@@ -132,9 +154,13 @@ jobs:
       if: env.HAS_NUGET_USER == 'true'
       shell: pwsh
       # pwsh does not expand the *.nupkg glob into the dotnet arg - resolve it explicitly
+      env:
+        NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
       run: |
-        $pkg = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
-        dotnet nuget push $pkg.FullName --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        foreach ($pkg in Get-ChildItem ./artifacts/packages/*.nupkg) {
+          dotnet nuget push $pkg.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { throw "NuGet publish failed: $($pkg.Name)" }
+        }
 
     - name: NuGet publish skipped
       if: env.HAS_NUGET_USER != 'true'
@@ -163,7 +189,7 @@ jobs:
         files: |
           ./WpfVisualTreeMcp-${{ github.ref_name }}-win-x64.zip
           ./WpfVisualTreeMcp-${{ github.ref_name }}-codex-plugin.zip
-          ./artifacts/*.nupkg
+          ./artifacts/packages/*.nupkg
           ./artifacts/mcpb-full/*.mcpb
           ./artifacts/mcpb-compact/*.mcpb
         draft: false

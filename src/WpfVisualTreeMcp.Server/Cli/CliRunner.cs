@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using System.Text.Json;
 using System.Globalization;
 using System.Text.Json.Nodes;
@@ -141,7 +142,7 @@ public static class CliRunner
                 case "assert":
                 {
                     await AttachAsync(processManager, cli, false);
-                    var actual = await bridge.AssertElementAsync(cli.GetRequired("handle"), cli.GetRequired("property"), cli.GetRequired("expected"));
+                    var actual = await bridge.AssertElementAsync(await ResolveInputTargetAsync(bridge, cli), cli.GetRequired("property"), cli.GetRequired("expected"));
                     WriteJson(new { success = true, actualValue = actual }, cli);
                     break;
                 }
@@ -214,7 +215,7 @@ public static class CliRunner
                         cli.GetStringOrNull("text"),
                         ParseFilter(cli.GetStringOrNull("filter")),
                         cli.Flags.Contains("visible-only"),
-                        cli.GetInt("max", 50));
+                        cli.GetInt("max", 50), cli.GetStringOrNull("automation-id"));
                     WriteJson(result, cli);
                     break;
                 }
@@ -225,12 +226,13 @@ public static class CliRunner
                     var type = cli.GetStringOrNull("type");
                     var name = cli.GetStringOrNull("name");
                     var text = cli.GetStringOrNull("text");
-                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text))
-                        throw new ArgumentException("find-deep requires --type, --name or --text to bound the search.");
+                    var automationId = cli.GetStringOrNull("automation-id");
+                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text) && automationId == null)
+                        throw new ArgumentException("find-deep requires --type, --name, --text or --automation-id to bound the search.");
                     WriteJson(await bridge.FindElementsDeepAsync(
                         cli.GetStringOrNull("root"), type, name, text,
                         ParseFilter(cli.GetStringOrNull("filter")),
-                        cli.Flags.Contains("visible-only")), cli);
+                        cli.Flags.Contains("visible-only"), automationId), cli);
                     break;
                 }
 
@@ -313,8 +315,10 @@ public static class CliRunner
                 case "click":
                 {
                     await AttachAsync(processManager, cli, false);
+                    var handle = await bridge.ResolveElementHandleAsync(cli.GetStringOrNull("handle"),
+                        cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root"));
                     var result = await bridge.ClickElementAsync(
-                        cli.GetRequired("handle"),
+                        handle,
                         cli.Flags.Contains("physical"),
                         cli.GetStringOrNull("click-type"), cli.GetDoubleOrNull("x"), cli.GetDoubleOrNull("y"));
                     WriteJson(new
@@ -332,13 +336,15 @@ public static class CliRunner
                 {
                     var options = new MousePointerOptions
                     {
-                        ElementHandle = cli.GetRequired("handle"), Action = command == "scroll" ? "scroll" : "move",
+                        ElementHandle = ElementTarget.Validate(cli.GetStringOrNull("handle"), cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root")),
+                        Action = command == "scroll" ? "scroll" : "move",
                         X = cli.GetDoubleOrNull("x"), Y = cli.GetDoubleOrNull("y"),
                         Delta = cli.GetInt("delta", 0), Horizontal = cli.Flags.Contains("horizontal"),
                         HoverMs = command == "move-mouse" ? cli.GetInt("hover-ms", 500) : 0
                     };
                     options.Validate();
                     await AttachAsync(processManager, cli, false);
+                    options.ElementHandle = await ResolveInputTargetAsync(bridge, cli);
                     WriteJson(await bridge.MousePointerAsync(options), cli);
                     break;
                 }
@@ -347,7 +353,8 @@ public static class CliRunner
                 {
                     var options = new DragOptions
                     {
-                        ElementHandle = cli.GetRequired("handle"), TargetHandle = cli.GetStringOrNull("target"),
+                        ElementHandle = ElementTarget.Validate(cli.GetStringOrNull("handle"), cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root")),
+                        TargetHandle = ElementTarget.ValidateOptional(cli.GetStringOrNull("target"), cli.GetStringOrNull("target-automation-id"), cli.GetStringOrNull("target-root")),
                         DeltaX = cli.GetDoubleOrNull("delta-x"), DeltaY = cli.GetDoubleOrNull("delta-y"),
                         StartX = cli.GetDoubleOrNull("start-x"), StartY = cli.GetDoubleOrNull("start-y"),
                         TargetX = cli.GetDoubleOrNull("target-x"), TargetY = cli.GetDoubleOrNull("target-y"),
@@ -355,6 +362,9 @@ public static class CliRunner
                     };
                     options.Validate();
                     await AttachAsync(processManager, cli, false);
+                    options.ElementHandle = await ResolveInputTargetAsync(bridge, cli);
+                    options.TargetHandle = await ElementTarget.ResolveOptionalAsync(bridge, cli.GetStringOrNull("target"),
+                        cli.GetStringOrNull("target-automation-id"), cli.GetStringOrNull("target-root"));
                     var result = await bridge.DragAsync(options);
                     WriteJson(new { success = true, result, coordinateSpace = "screen_pixels" }, cli);
                     break;
@@ -364,7 +374,8 @@ public static class CliRunner
                 {
                     var options = new TouchGestureOptions
                     {
-                        ElementHandle = cli.GetRequired("handle"), Gesture = cli.GetRequired("gesture"),
+                        ElementHandle = ElementTarget.Validate(cli.GetStringOrNull("handle"), cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root")),
+                        Gesture = cli.GetRequired("gesture"),
                         X = cli.GetDoubleOrNull("x"), Y = cli.GetDoubleOrNull("y"),
                         DeltaX = cli.GetDoubleOrNull("delta-x"), DeltaY = cli.GetDoubleOrNull("delta-y"),
                         Scale = cli.GetDoubleOrNull("scale"), AngleDegrees = cli.GetDoubleOrNull("angle"),
@@ -372,6 +383,7 @@ public static class CliRunner
                     };
                     options.Validate();
                     await AttachAsync(processManager, cli, false);
+                    options.ElementHandle = await ResolveInputTargetAsync(bridge, cli);
                     var result = await bridge.TouchGestureAsync(options);
                     WriteJson(new { success = true, result, coordinateSpace = "screen_pixels" }, cli);
                     break;
@@ -384,7 +396,7 @@ public static class CliRunner
                     var index = cli.GetIntOrNull("index");
                     if (string.IsNullOrEmpty(itemText) && index is null)
                         throw new ArgumentException("select-item requires --item-text or --index.");
-                    var result = await bridge.SelectItemAsync(cli.GetRequired("handle"), itemText, index);
+                    var result = await bridge.SelectItemAsync(await ResolveInputTargetAsync(bridge, cli), itemText, index);
                     WriteJson(new
                     {
                         success = true,
@@ -399,7 +411,7 @@ public static class CliRunner
                 {
                     await AttachAsync(processManager, cli, false);
                     var result = await bridge.SetTextAsync(
-                        cli.GetRequired("handle"),
+                        await ResolveInputTargetAsync(bridge, cli),
                         cli.GetRequired("text"),
                         cli.Flags.Contains("physical"));
                     WriteJson(new
@@ -416,7 +428,8 @@ public static class CliRunner
                 {
                     await AttachAsync(processManager, cli, false);
                     var result = await bridge.SendKeysAsync(
-                        cli.GetStringOrNull("handle"),
+                        await ElementTarget.ResolveOptionalAsync(bridge, cli.GetStringOrNull("handle"),
+                            cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root")),
                         cli.GetRequired("keys"));
                     WriteJson(new
                     {
@@ -434,13 +447,14 @@ public static class CliRunner
                     var type = cli.GetStringOrNull("type");
                     var name = cli.GetStringOrNull("name");
                     var text = cli.GetStringOrNull("text");
-                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text))
-                        throw new ArgumentException("wait-for requires --type, --name or --text to identify the element.");
+                    var automationId = cli.GetStringOrNull("automation-id");
+                    if (string.IsNullOrEmpty(type) && string.IsNullOrEmpty(name) && string.IsNullOrEmpty(text) && automationId == null)
+                        throw new ArgumentException("wait-for requires --type, --name, --text or --automation-id to identify the element.");
                     WriteJson(await bridge.WaitForElementAsync(
                         cli.GetStringOrNull("root"), type, name, text,
                         cli.GetString("condition", "visible"),
                         cli.GetInt("timeout", 10000),
-                        cli.GetInt("poll", 250)), cli);
+                        cli.GetInt("poll", 250), automationId), cli);
                     break;
                 }
 
@@ -448,7 +462,7 @@ public static class CliRunner
                 {
                     await AttachAsync(processManager, cli, false);
                     var result = await bridge.SetPropertyAsync(
-                        cli.GetRequired("handle"),
+                        await ResolveInputTargetAsync(bridge, cli),
                         cli.GetRequired("property"),
                         cli.GetString("value", ""));
                     WriteJson(new
@@ -464,10 +478,13 @@ public static class CliRunner
 
                 case "revert-property":
                 {
+                    if (cli.Flags.Contains("all") && (cli.GetStringOrNull("automation-id") != null || cli.GetStringOrNull("root") != null))
+                        throw new ArgumentException("--all cannot be combined with --automation-id or --root; omit --all to revert an edit on that control.");
                     await AttachAsync(processManager, cli, false);
                     var result = await bridge.RevertPropertyAsync(
                         cli.Flags.Contains("all"),
-                        cli.GetStringOrNull("handle"),
+                        await ElementTarget.ResolveOptionalAsync(bridge, cli.GetStringOrNull("handle"),
+                            cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root")),
                         cli.GetStringOrNull("property"));
                     WriteJson(new
                     {
@@ -606,6 +623,9 @@ public static class CliRunner
         }
     }
 
+    private static Task<string> ResolveInputTargetAsync(IIpcBridge bridge, CliArgs cli) =>
+        bridge.ResolveElementHandleAsync(cli.GetStringOrNull("handle"), cli.GetStringOrNull("automation-id"), cli.GetStringOrNull("root"));
+
     /// <summary>
     /// Establishes the lightweight session every IPC command needs. With
     /// <paramref name="autoInject"/> = false this only records the target PID;
@@ -671,12 +691,12 @@ COMMANDS
   report        --pid [--root H] [--max N] [--depth N] [--max-findings N]
   record        start|stop|status|clear --pid [--name N]
   get-recording --pid [--out workflow.json]
-  assert        --pid --handle H --property P --expected V
+  assert        --pid (--handle H | --automation-id ID [--root H]) --property P --expected V
   replay        --pid --file workflow.json [--timeout MS]                  (changes app state)
   export-test   --pid [--format xunit|json] [--out NEW_DIRECTORY]
   props         --pid --handle H
-  find          --pid [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]
-  find-deep     --pid (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]
+  find          --pid [--automation-id ID] [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]
+  find-deep     --pid (--type T | --name N | --text S | --automation-id ID) [--visible-only] [--root H] [--filter JSON]
   bindings      --pid --handle H
   binding-errors        --pid
   clear-binding-errors  --pid
@@ -685,17 +705,17 @@ COMMANDS
   styles        --pid --handle H
   watch-property        --pid --handle H --property P
   highlight     --pid --handle H [--duration MS]
-  click         --pid --handle H [--physical] [--click-type single|double|right] [--x X --y Y]  (changes app state)
-  move-mouse    --pid --handle H [--x X --y Y] [--hover-ms 0-5000]
-  scroll        --pid --handle H --delta N [--horizontal] [--x X --y Y]
-  drag          --pid --handle H (--target H | --delta-x X / --delta-y Y) [--duration MS] [--button left|right|middle]
-  touch         --pid --handle H --gesture tap|long_press|swipe|pinch|rotate [--delta-x X] [--scale N] [--angle N]
-  select-item   --pid --handle H (--item-text S | --index N)  (changes app state)
-  set-text      --pid --handle H --text 'value' [--physical]  (changes app state)
-  send-keys     --pid --keys 'Ctrl+S' [--handle H]            (changes app state)
-  wait-for      --pid (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout MS] [--poll MS]
-  set-property  --pid --handle H --property P --value V                    (changes app state, reversible)
-  revert-property --pid (--all | [--handle H] [--property P])              (undo set-property edits)
+  click         --pid (--handle H | --automation-id ID [--root H]) [--physical] [--click-type single|double|right] [--x X --y Y]  (changes app state)
+  move-mouse    --pid (--handle H | --automation-id ID [--root H]) [--x X --y Y] [--hover-ms 0-5000]
+  scroll        --pid (--handle H | --automation-id ID [--root H]) --delta N [--horizontal] [--x X --y Y]
+  drag          --pid (--handle H | --automation-id ID [--root H]) (--target H | --target-automation-id ID [--target-root H] | --delta-x X / --delta-y Y) [--duration MS] [--button left|right|middle]
+  touch         --pid (--handle H | --automation-id ID [--root H]) --gesture tap|long_press|swipe|pinch|rotate [--delta-x X] [--scale N] [--angle N]
+  select-item   --pid (--handle H | --automation-id ID [--root H]) (--item-text S | --index N)  (changes app state)
+  set-text      --pid (--handle H | --automation-id ID [--root H]) --text 'value' [--physical]  (changes app state)
+  send-keys     --pid --keys 'Ctrl+S' [--handle H | --automation-id ID [--root H]]            (changes app state)
+  wait-for      --pid (--type T | --name N | --text S | --automation-id ID) [--condition visible|exists|enabled|hidden] [--timeout MS] [--poll MS]
+  set-property  --pid (--handle H | --automation-id ID [--root H]) --property P --value V                    (changes app state, reversible)
+  revert-property --pid (--all | [--handle H | --automation-id ID [--root H]] [--property P])              (undo set-property edits)
   snapshot      --pid [--handle H] [--label L] [--depth N]                 (capture state for diff)
   diff          --pid --before L1 --after L2                               (compare two snapshots)
   evaluate-binding --pid --handle H --property P                           (why does this property have its value?)
@@ -743,7 +763,7 @@ TYPICAL WORKFLOW
                       + "  Storage lives in the target process. Stop/export before clear. Limit: 100 steps.",
             "get-recording" => "get-recording --pid <id> [--out workflow.json]\n"
                       + "  Return recording state or save workflow JSON to a new file.",
-            "assert" => "assert --pid <id> --handle H --property P --expected V\n"
+            "assert" => "assert --pid <id> (--handle H | --automation-id ID [--root H]) --property P --expected V\n"
                       + "  Compare a dependency-property value exactly (invariant string; {null} for null).\n"
                       + "  Exits 1 on mismatch. Successful assertions are recorded while recording is active.",
             "replay" => "replay --pid <id> --file workflow.json [--timeout 1000-120000]\n"
@@ -755,18 +775,18 @@ TYPICAL WORKFLOW
                       + "  Set WPF_TEST_APP and WPFINSPECT_PATH to absolute executable paths, then dotnet test.\n"
                       + "  The generated test starts a fresh app and terminates only its own app after testing.",
             "props" => "props --pid <id> --handle <handle>\n  List the dependency properties of an element.",
-            "find" => "find --pid <id> [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]\n"
+            "find" => "find --pid <id> [--automation-id ID] [--type T] [--name N] [--text S] [--visible-only] [--root H] [--max N] [--filter JSON]\n"
                     + "  Search elements (up to --max, default 50). Filters combine with AND:\n"
                     + "  --type: type name (partial match, e.g. Button)\n"
                     + "  --text: visible text content (button caption, TextBlock text, window\n"
                     + "          title, tooltip; case-insensitive substring)\n"
-                    + "  --name: x:Name substring\n"
+                    + "  --automation-id: exact, case-sensitive AutomationProperties.AutomationId; --name: x:Name substring\n"
                     + "  --visible-only: exclude collapsed/hidden elements\n"
                     + "  --filter: JSON object of property=value pairs, e.g. '{\"IsEnabled\":\"True\"}'\n"
                     + "  Results include text, automationId, isVisible/isEnabled and screenBounds.\n"
                     + "  Example: find --pid 1234 --type Button --text Save --visible-only",
-            "find-deep" => "find-deep --pid <id> (--type T | --name N | --text S) [--visible-only] [--root H] [--filter JSON]\n"
-                         + "  Unbounded search; requires --type, --name or --text. Same filters as 'find'.",
+            "find-deep" => "find-deep --pid <id> (--type T | --name N | --text S | --automation-id ID) [--visible-only] [--root H] [--filter JSON]\n"
+                         + "  Unbounded search; requires --type, --name, --text or --automation-id. Same filters as 'find'.",
             "bindings" => "bindings --pid <id> --handle <handle>\n  Show data bindings and their status for an element.",
             "binding-errors" => "binding-errors --pid <id>\n  List binding errors captured since the app started.",
             "clear-binding-errors" => "clear-binding-errors --pid <id>\n  Reset the captured binding-error list.",
@@ -779,8 +799,8 @@ TYPICAL WORKFLOW
                               + "  Register a property watch in the Inspector.",
             "highlight" => "highlight --pid <id> --handle <handle> [--duration <ms>]\n"
                          + "  Flash an element in the running app. --duration defaults to 2000.",
-            "click" => "click --pid <id> --handle <handle> [--physical] [--click-type single|double|right] [--x X --y Y]\n"
-                     + "  Click an element. Default: UI Automation invoke (buttons, checkboxes,\n"
+            "click" => "click --pid <id> (--handle H | --automation-id ID [--root H]) [--physical] [--click-type single|double|right] [--x X --y Y]\n"
+                     + "  Click by handle or exact unique AutomationId. --root scopes ID lookup; duplicates fail. Default: UI Automation invoke (buttons, checkboxes,\n"
                      + "  menu items, tabs, list items, expanders) — no cursor movement.\n"
                      + "  --x/--y: paired local WPF DIPs, imply physical input; default center.\n"
                      + "  --physical: real OS mouse click at the element (moves the cursor,\n"
@@ -788,12 +808,12 @@ TYPICAL WORKFLOW
                      + "  --click-type double/right: always physical; right opens context menus\n"
                      + "  (capture them with: screenshot --mode screen).\n"
                      + "  This command CHANGES application state.",
-            "move-mouse" => "move-mouse --pid <id> --handle H [--x X --y Y] [--hover-ms 0-5000]\n"
+            "move-mouse" => "move-mouse --pid <id> (--handle H | --automation-id ID [--root H]) [--x X --y Y] [--hover-ms 0-5000]\n"
                           + "  Moves the OS pointer without clicking; default hover 500 ms. Coordinates are local WPF DIPs.\n",
-            "scroll" => "scroll --pid <id> --handle H --delta N [--horizontal] [--x X --y Y]\n"
+            "scroll" => "scroll --pid <id> (--handle H | --automation-id ID [--root H]) --delta N [--horizontal] [--x X --y Y]\n"
                       + "  Wheel units: 120 per notch; positive up/right, negative down/left, nonzero -12000..12000.\n"
                       + "  The application may scroll, zoom or ignore input. Verify the effect.\n",
-            "drag" => "drag --pid <id> --handle <handle> (--target <handle> | --delta-x <x> / --delta-y <y>)\n"
+            "drag" => "drag --pid <id> (--handle H | --automation-id ID [--root H]) (--target H | --target-automation-id ID [--target-root H] | --delta-x <x> / --delta-y <y>)\n"
                     + "  [--start-x X --start-y Y] [--target-x X --target-y Y]\n"
                     + "  [--button left|right|middle] [--duration <100-10000 ms>]\n"
                     + "  Physical mouse drag; moves the cursor and brings the app forward.\n"
@@ -802,7 +822,7 @@ TYPICAL WORKFLOW
                     + "  Both endpoints must be visible and unobstructed. Result coordinates\n"
                     + "  are screen pixels. Success confirms input sent, not drop acceptance.\n"
                     + "  CHANGES application state. Example: drag --pid 123 --handle elem_1 --delta-x -80\n",
-            "touch" => "touch --pid <id> --handle <handle> --gesture tap|long_press|swipe|pinch|rotate\n"
+            "touch" => "touch --pid <id> (--handle H | --automation-id ID [--root H]) --gesture tap|long_press|swipe|pinch|rotate\n"
                      + "  [--x X --y Y] [--delta-x X --delta-y Y] [--scale N] [--angle N]\n"
                      + "  [--radius DIPS] [--duration MS]\n"
                      + "  Native Windows touch. swipe: nonzero delta; pinch: scale 0.1-10 except 1;\n"
@@ -812,27 +832,27 @@ TYPICAL WORKFLOW
                      + "  The path must stay visible inside the element. Requires an unlocked\n"
                      + "  Windows desktop and application touch support. CHANGES application state.\n"
                      + "  Success confirms injection; verify the application's response separately.",
-            "select-item" => "select-item --pid <id> --handle <handle> (--item-text <text> | --index <n>)\n"
+            "select-item" => "select-item --pid <id> (--handle H | --automation-id ID [--root H]) (--item-text <text> | --index <n>)\n"
                            + "  Select an item in a ComboBox/ListBox/ListView/TabControl by visible\n"
                            + "  text (case-insensitive substring) or zero-based index. Works with\n"
                            + "  virtualized items and raises proper selection events — prefer this\n"
                            + "  over clicking dropdown items. On failure the error lists available\n"
                            + "  items. This command CHANGES application state.",
-            "set-text" => "set-text --pid <id> --handle <handle> --text <value> [--physical]\n"
+            "set-text" => "set-text --pid <id> (--handle H | --automation-id ID [--root H]) --text <value> [--physical]\n"
                         + "  Replace the text/value of an element (TextBox, ComboBox, ...).\n"
                         + "  Default: UI Automation IValueProvider.SetValue, with a\n"
                         + "  TextBox.Text / PasswordBox.Password / reflected-Text fallback.\n"
                         + "  --physical: focus the element and type via OS keyboard input\n"
                         + "  (clears existing text with Ctrl+A/Delete first, then types each\n"
                         + "  character). This command CHANGES application state.",
-            "send-keys" => "send-keys --pid <id> --keys <combo> [--handle <handle>]\n"
+            "send-keys" => "send-keys --pid <id> --keys <combo> [--handle H | --automation-id ID [--root H]]\n"
                          + "  Send a keyboard shortcut to an element, or to whatever has focus\n"
-                         + "  when --handle is omitted. Modifiers: Ctrl, Shift, Alt, Win.\n"
+                         + "  when both --handle and --automation-id are omitted. Modifiers: Ctrl, Shift, Alt, Win.\n"
                          + "  Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace,\n"
                          + "        Delete, Insert, Home, End, PageUp, PageDown, Up/Down/Left/Right.\n"
                          + "  Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'F5', 'Alt+F4', 'Win+R'.\n"
                          + "  This command CHANGES application state.",
-            "wait-for" => "wait-for --pid <id> (--type T | --name N | --text S) [--condition visible|exists|enabled|hidden] [--timeout <ms>] [--poll <ms>]\n"
+            "wait-for" => "wait-for --pid <id> (--type T | --name N | --text S | --automation-id ID) [--condition visible|exists|enabled|hidden] [--timeout <ms>] [--poll <ms>]\n"
                         + "  Poll in the target app until an element matching the criteria satisfies\n"
                         + "  the condition, instead of sleep-and-retry. Conditions:\n"
                         + "    visible (default) - element exists and is on screen\n"
@@ -841,7 +861,7 @@ TYPICAL WORKFLOW
                         + "    hidden            - no matching visible element (e.g. a spinner cleared)\n"
                         + "  --timeout defaults to 10000 (max 25000); --poll defaults to 250.\n"
                         + "  Returns matched (bool), waitedMs, and matchedHandle/elementType when found.",
-            "set-property" => "set-property --pid <id> --handle <handle> --property <name> --value <value>\n"
+            "set-property" => "set-property --pid <id> (--handle H | --automation-id ID [--root H]) --property <name> --value <value>\n"
                             + "  Live-edit a dependency property to test a UI change without rebuilding.\n"
                             + "  The value is converted to the property's type:\n"
                             + "    --property Margin --value '20,0,20,0'   (Thickness)\n"
@@ -853,7 +873,7 @@ TYPICAL WORKFLOW
                             + "  property (Binding/Local/Unset). Setting a bound property replaces the\n"
                             + "  binding with a local value; revert-property restores it. Pair with\n"
                             + "  'screenshot' to see the effect. CHANGES app state (reversible).",
-            "revert-property" => "revert-property --pid <id> (--all | [--handle <handle>] [--property <name>])\n"
+            "revert-property" => "revert-property --pid <id> (--all | [--handle H | --automation-id ID [--root H]] [--property <name>])\n"
                                + "  Undo set-property edits. Default: revert the most recent edit.\n"
                                + "  --handle/--property target a specific one; --all reverts everything.\n"
                                + "  Restores the prior binding, local value, or default.",
@@ -947,7 +967,12 @@ TYPICAL WORKFLOW
             return a;
         }
 
-        public string? GetStringOrNull(string name) => Options.TryGetValue(name, out var v) ? v : null;
+        public string? GetStringOrNull(string name)
+        {
+            if (Flags.Contains(name) && name is ("handle" or "automation-id" or "root" or "target" or "target-automation-id" or "target-root"))
+                throw new ArgumentException($"--{name} requires a value.");
+            return Options.TryGetValue(name, out var v) ? v : null;
+        }
 
         public string GetString(string name, string fallback) => GetStringOrNull(name) ?? fallback;
 

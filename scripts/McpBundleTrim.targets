@@ -3,6 +3,7 @@
        SDK and IPC models while trimming unused framework implementation code. -->
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'WpfVisualTreeMcp.Server'">
     <TrimmerRootAssembly Include="WpfVisualTreeMcp.Server" />
+    <TrimmerRootAssembly Include="WpfVisualTreeMcp.Automation" />
     <TrimmerRootAssembly Include="WpfVisualTreeMcp.Shared" />
     <TrimmerRootAssembly Include="WpfVisualTreeMcp.Injector" />
     <TrimmerRootAssembly Include="ModelContextProtocol" />

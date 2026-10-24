@@ -337,7 +337,8 @@ public partial class InspectorService : IDisposable
     {
         return requestType switch
         {
-            "GetCapabilities" => new GetCapabilitiesResponse { CoordinatePointerInput = true },
+            "GetCapabilities" => new GetCapabilitiesResponse { CoordinatePointerInput = true, AutomationIdTargeting = true, AutomationIdOptionalResolution = true },
+            "ResolveAutomationId" => HandleResolveAutomationId(data),
             "Record" => HandleRecord(data),
             "AssertElement" => HandleAssertElement(data),
             "Report" => HandleReport(data),
@@ -462,11 +463,25 @@ public partial class InspectorService : IDisposable
         $"Element '{handle}' is a {element.GetType().Name}, which is not a {requiredType}; " +
         $"this operation requires a {requiredType}.";
 
+    private IpcResponse HandleResolveAutomationId(JsonElement data)
+    {
+        var request = IpcSerializer.DeserializeRequestData<ResolveAutomationIdRequest>(data)
+            ?? throw new ArgumentException("Invalid ResolveAutomationId request.");
+        IEnumerable<DependencyObject> roots = request.RootHandle == null ? TreeWalker.GetAllSearchRoots() :
+            new[] { _treeWalker.ResolveHandle(request.RootHandle)
+                ?? throw new InvalidOperationException(StaleHandleError(request.RootHandle)) };
+        var element = AutomationIdResolver.ResolveOrDefault(request.AutomationId, roots);
+        if (element == null)
+            return new ResolveAutomationIdResponse { Success = false, NotFound = true, Error = "AutomationId '" + request.AutomationId + "' was not found in the requested scope." };
+        return new ResolveAutomationIdResponse { ElementHandle = _treeWalker.GetOrCreateHandle(element) };
+    }
+
     private static FindCriteria BuildCriteria(string? typeName, string? elementName, string? text,
-        Dictionary<string, string>? propertyFilter, bool visibleOnly) => new()
+        Dictionary<string, string>? propertyFilter, bool visibleOnly, string? automationId) => new()
     {
         TypeName = typeName,
         ElementName = elementName,
+        AutomationId = automationId,
         Text = text,
         PropertyFilter = propertyFilter,
         VisibleOnly = visibleOnly
@@ -475,10 +490,11 @@ public partial class InspectorService : IDisposable
     private IpcResponse HandleFindElements(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
+        if (request != null) WorkflowCodec.ValidateRequest(request);
 
         var maxResults = request?.MaxResults ?? 50;
         var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
-            request?.PropertyFilter, request?.VisibleOnly ?? false);
+            request?.PropertyFilter, request?.VisibleOnly ?? false, request?.AutomationId);
 
         // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
@@ -545,9 +561,10 @@ public partial class InspectorService : IDisposable
     private IpcResponse HandleFindElementsDeep(JsonElement data)
     {
         var request = IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(data);
+        if (request != null) WorkflowCodec.ValidateRequest(request);
 
         var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
-            request?.PropertyFilter, request?.VisibleOnly ?? false);
+            request?.PropertyFilter, request?.VisibleOnly ?? false, request?.AutomationId);
 
         // If a specific root handle is given, search from there
         if (!string.IsNullOrEmpty(request?.RootHandle))
@@ -1024,16 +1041,18 @@ public partial class InspectorService : IDisposable
             };
         }
 
-        if (string.IsNullOrEmpty(request.TypeName) && string.IsNullOrEmpty(request.ElementName) && string.IsNullOrEmpty(request.Text))
+        if (string.IsNullOrEmpty(request.TypeName) && string.IsNullOrEmpty(request.ElementName) && string.IsNullOrEmpty(request.Text) && string.IsNullOrEmpty(request.AutomationId))
         {
             return new WaitForElementResponse
             {
                 Success = false,
-                Error = "At least type_name, element_name or text is required to identify the element to wait for."
+                Error = "At least type_name, element_name, text or automation_id is required to identify the element to wait for."
             };
         }
 
         // Keep under the IPC request timeout (30s) with headroom.
+        if (request.AutomationId != null && (string.IsNullOrWhiteSpace(request.AutomationId) || request.AutomationId.Length > 2048))
+            return new WaitForElementResponse { Success = false, Error = "automation_id must contain 1-2048 characters and cannot be blank." };
         var timeoutMs = Math.Max(0, Math.Min(request.TimeoutMs, 25000));
         var pollMs = Math.Max(50, request.PollIntervalMs);
 
@@ -1042,6 +1061,7 @@ public partial class InspectorService : IDisposable
         {
             TypeName = request.TypeName,
             ElementName = request.ElementName,
+            AutomationId = request.AutomationId,
             Text = request.Text,
             VisibleOnly = condition != "exists",
             PropertyFilter = condition == "enabled"

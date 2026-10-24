@@ -27,6 +27,21 @@ public class GetCapabilitiesRequest : IpcRequest
 public class GetCapabilitiesResponse : IpcResponse
 {
     public bool CoordinatePointerInput { get; set; }
+    public bool AutomationIdTargeting { get; set; }
+    public bool AutomationIdOptionalResolution { get; set; }
+}
+
+public class ResolveAutomationIdRequest : IpcRequest
+{
+    public override string RequestType => "ResolveAutomationId";
+    public string AutomationId { get; set; } = string.Empty;
+    public string? RootHandle { get; set; }
+}
+
+public class ResolveAutomationIdResponse : IpcResponse
+{
+    public string? ElementHandle { get; set; }
+    public bool NotFound { get; set; }
 }
 
 // Aggregate diagnostics
@@ -78,6 +93,8 @@ public class FindElementsRequest : IpcRequest
     public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
+    /// <summary>Exact, case-sensitive AutomationProperties.AutomationId match.</summary>
+    public string? AutomationId { get; set; }
 
     /// <summary>Case-insensitive substring match against the element's visible text content.</summary>
     public string? Text { get; set; }
@@ -103,6 +120,7 @@ public class FindElementsDeepRequest : IpcRequest
     public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
+    public string? AutomationId { get; set; }
 
     /// <summary>Case-insensitive substring match against the element's visible text content.</summary>
     public string? Text { get; set; }
@@ -238,6 +256,7 @@ public class WaitForElementRequest : IpcRequest
     public string? RootHandle { get; set; }
     public string? TypeName { get; set; }
     public string? ElementName { get; set; }
+    public string? AutomationId { get; set; }
     public string? Text { get; set; }
 
     /// <summary>"visible" (default), "exists", "enabled", or "hidden".</summary>

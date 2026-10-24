@@ -14,12 +14,12 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
-**New in [v0.17.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.17.0):**
-38 MCP tools and matching CLI commands, with mouse hover, vertical/horizontal wheel
-input and coordinate clicks. Native hosted canvases support direct mouse/touch input;
-screenshot `auto` mode captures their visible content. Property inspection now preserves
-WPF Auto/unbounded values, and backstage searches read composite and formatted labels.
-The [Codex companion skill](#codex-plugin) includes the new commands and upgrade guidance.
+**New in [v0.18.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.18.0):**
+Write C# tests with the new [`WpfVisualTreeMcp.Automation` NuGet SDK](https://www.nuget.org/packages/WpfVisualTreeMcp.Automation):
+attach to a PID, use AutomationId locators, perform mouse/touch actions and await
+exact property values. All input actions, assertions and property edits in the
+38-tool MCP server and CLI now also accept AutomationIds directly. Recording,
+replay and standalone xUnit export work through both interfaces.
 
 Workflow recording/replay/xUnit export, aggregate diagnostics, full-content screenshots
 and .NET Framework 4.7.2 support remain available from v0.16.0. Thanks to @miloszkukla
@@ -46,6 +46,35 @@ From v0.14.0, run `wpfinspect update` (or `WpfVisualTreeMcp.Server.exe update`)
 to update the installation you launched. See [updating](#updating).
 Using Codex? Follow the [plugin installation](#codex-plugin) to install the MCP
 configuration and skill together.
+
+## C# test SDK
+
+`WpfVisualTreeMcp.Automation` exposes the inspection and input engine as C# objects,
+with direct process attachment and AutomationId locators. The package includes the
+injection payload and works without starting an MCP server or CLI.
+
+```powershell
+dotnet add package WpfVisualTreeMcp.Automation --version 0.18.0
+```
+
+```csharp
+using WpfVisualTreeMcp.Automation;
+
+await using var app = await WpfApplication.AttachAsync(processId);
+await app.ByAutomationId("LoadButton").ClickAsync();
+await app.ByAutomationId("StatusTextBox").WaitForTextAsync(
+    "loaded", timeout: TimeSpan.FromSeconds(30));
+await app.ByAutomationId("Canvas").PanAsync(100, 0);
+await app.ByAutomationId("Canvas").ZoomAsync(1.5);
+```
+
+Text waits compare the exact property value: `not loaded` does not match `loaded`.
+Timeouts throw with the expected and last observed values. Property predicates,
+cancellation, drag, touch, assertions, inspection and recording/replay are also
+available. Disposing a session detaches without closing the application.
+
+The SDK is a separate package from the MCP tool `WpfVisualTreeMcp`.
+See [installation, API examples and requirements](src/WpfVisualTreeMcp.Automation/README.md).
 
 ## Overview
 
@@ -164,10 +193,10 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 #### Desktop extension (MCPB)
 
 Clients that support MCP bundles can import
-[`WpfVisualTreeMcp-v0.17.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.17.0/WpfVisualTreeMcp-v0.17.0-win-x64.mcpb).
+[`WpfVisualTreeMcp-v0.18.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.18.0/WpfVisualTreeMcp-v0.18.0-win-x64.mcpb).
 This Windows x64 bundle includes the server runtime and a self-contained x86
 injection helper. A smaller
-[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.17.0/WpfVisualTreeMcp-v0.17.0-win-x64-compact.mcpb)
+[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.18.0/WpfVisualTreeMcp-v0.18.0-win-x64-compact.mcpb)
 provides the same tools with a reduced runtime for catalogs with upload limits.
 Update either bundle through the client's extension UI. See the
 [MCPB guide](docs/MCPB.md) for requirements, packaging and verification.
@@ -320,7 +349,7 @@ Prerequisites for this installation method:
   the x86 .NET 8 runtime as well.
 
 From the repository root, register the local marketplace and install the plugin.
-You can also download `WpfVisualTreeMcp-v0.17.0-codex-plugin.zip` from
+You can also download `WpfVisualTreeMcp-v0.18.0-codex-plugin.zip` from
 [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
 extract it, and run these commands from the extracted root:
 
@@ -496,7 +525,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_attach` | Attach to a WPF application (supports `auto_inject` for DLL injection) |
 | `wpf_get_visual_tree` | Get the visual tree hierarchy (default depth: 25, max: 100) |
 | `wpf_get_element_properties` | Get all dependency properties of an element |
-| `wpf_find_elements` | Query elements by type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
+| `wpf_find_elements` | Query elements by exact **AutomationId**, type, x:Name, **visible text**, property values and visibility; results include text, automation id, enabled/visible state and screen bounds |
 | `wpf_find_elements_deep` | Same query filters without result limit, across all windows including adorners/popups |
 | `wpf_capture_screenshot` | Capture a screenshot of the window or element (returns image); `mode='screen'` includes popups and menus; `full_content=true` with render mode captures scrollable content |
 | `wpf_report` | Aggregate current binding/validation errors, UI state counts and recent binding traces, with explicit scan limits and coverage |
@@ -518,7 +547,7 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_set_property` | **Live-edit** a dependency property at runtime (type-converted), to test a change without rebuilding. *State-changing, reversible.* |
 | `wpf_revert_property` | Undo `wpf_set_property` edits (one, filtered, or all) — restores the prior binding/value/default. |
 | `wpf_highlight_element` | Visually highlight an element |
-| `wpf_click_element` | **Click a control** — UI Automation invoke (`Invoke`/`Toggle`/`Select`/`ExpandCollapse`) by default, `physical=true` for a real OS mouse click (auto-scrolls into view), `click_type='double'/'right'` for double/right clicks. *State-changing.* |
+| `wpf_click_element` | **Click a control by handle or AutomationId** — pass `automation_id="form.clear"` directly; optional `root_handle` scopes lookup and duplicate IDs fail. UI Automation invoke by default, `physical=true` for a real OS mouse click, `click_type='double'/'right'` for double/right clicks. *State-changing.* |
 | `wpf_move_mouse` | **Move/hover** at a local point without clicking. Available from v0.17.0. |
 | `wpf_scroll` | **Wheel input** vertically or horizontally; the app decides whether to scroll or zoom. Available from v0.17.0. |
 | `wpf_drag` | **Drag with the mouse** — source and target elements or relative displacement, local points, left/right/middle button, gradual movement and release cleanup. *State-changing.* |
@@ -531,6 +560,27 @@ For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITE
 | `wpf_export_tree` | Export visual tree to XAML or JSON |
 
 For complete tool documentation, see [docs/TOOLS_REFERENCE.md](docs/TOOLS_REFERENCE.md).
+
+All input actions accept `automation_id` instead of `element_handle`, including
+click, mouse movement, scrolling, drag, every touch gesture, selection, text and
+keyboard input. Assertions and property edits accept it too. IDs match
+`AutomationProperties.AutomationId` exactly and case-sensitively; duplicates fail.
+Use `root_handle` to scope lookup. Drag destinations accept `target_automation_id`
+and an independent `target_root_handle`. The same selectors work in recordings
+and exported tests.
+
+```text
+wpf_touch_gesture(automation_id="Canvas", gesture="tap")
+wpf_touch_gesture(automation_id="Canvas", gesture="swipe", delta_x=80)
+wpf_touch_gesture(automation_id="Canvas", gesture="pinch", scale=1.5)
+wpf_drag(automation_id="Source", target_automation_id="Destination")
+wpf_set_text(automation_id="UserName", text="test")
+wpf_assert(automation_id="UserName", property_name="Text", expected_value="test")
+```
+
+CLI equivalents use `--automation-id`, `--root`, `--target-automation-id` and
+`--target-root`. Touch pan uses `swipe`, zoom uses `pinch`; the app must support
+touch/manipulations to react to those gestures.
 
 ## Roadmap
 

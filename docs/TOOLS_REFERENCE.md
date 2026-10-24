@@ -30,7 +30,7 @@ CLI equivalent: `wpfinspect report --pid 1234 --root elem_00000001 --max 500 --d
    click (including coordinates), move-mouse, scroll, set-text, selection, send-keys, drag, touch, set/revert-property, find/deep-find,
    successful waits and successful `wpf_assert` calls. Calls must be sequential.
 3. Check asynchronous results with `wpf_wait_for_element`. Check exact values with
-   `wpf_assert(element_handle, property_name, expected_value)`, for example `Text="Alice"`
+   `wpf_assert(property_name, expected_value, element_handle?, automation_id?, root_handle?)`, for example `Text="Alice"`
    or `SelectedIndex="5"`. Comparison is ordinal, using an invariant string value;
    `{null}` means null. An unknown property or mismatch fails the call.
 4. Call `wpf_record(action="stop")`, then `wpf_export_test(format="xunit")`.
@@ -124,29 +124,55 @@ wpfinspect screenshot --pid 1234 --handle elem_42 --full-content --max-height 40
 
 ## Mouse Interaction
 
+Every input tool accepts `automation_id` in place of `element_handle`: click,
+move-mouse, scroll, drag, touch, select-item, set-text and send-keys. The same
+targeting works for `wpf_assert`, `wpf_set_property` and `wpf_revert_property`.
+The CLI flag is `--automation-id`. Use `root_handle` / `--root` to restrict ID
+lookup; IDs must be exact and unique within that scope. A missing or ambiguous ID
+fails before sending input. Send-keys retains current-focus behavior only when
+both ID and handle are omitted. Revert with an ID targets the latest matching edit;
+it cannot be combined with `all=true` / `--all`.
+
+Recorded actions resolve IDs to stable selectors, including both drag endpoints,
+so exported tests resolve new controls in fresh process instances. Existing
+handle-based MCP calls remain supported; MCP parameters are named.
+
 ### wpf_click_element
 
-`wpf_click_element(element_handle, physical=false, click_type="single", x?, y?)`
+`wpf_click_element(element_handle?, physical=false, click_type="single", x?, y?, automation_id?, root_handle?)`
 uses UI Automation by default. Paired local WPF DIP coordinates `x`/`y` imply
 physical input; omit both for the element center. `double` and `right` are also
 physical. Coordinates must be finite, nonnegative, visible and unobstructed.
 UI Automation `Toggle` changes a toggle's state and may not execute a custom
 control's click command; use physical input and verify the intended effect.
 
+Supply exactly one of `element_handle` or `automation_id`. For example,
+`wpf_click_element(automation_id="form.clear")` clicks without a prior handle lookup.
+The ID matches `AutomationProperties.AutomationId` exactly (case-sensitive),
+independently of `x:Name` or the control's text. Resolution includes all open WPF
+windows and hidden controls; duplicates are errors. Use `root_handle` to restrict
+ID lookup to a window or container, including the root itself. Missing, stale,
+ambiguous or incomplete searches return errors without clicking. Unique lookup
+is bounded to 10,000 elements / two seconds; narrow the scope if that limit is hit.
+Controls must be present in the tree; unrealized virtualized items are not searched.
+Recorded clicks retain stable selectors and work in exported tests.
+
 ```powershell
+wpfinspect click --pid 1234 --automation-id form.clear
+wpfinspect click --pid 1234 --automation-id form.clear --root elem_dialog
 wpfinspect click --pid 1234 --handle elem_42 --x 100 --y 60 --click-type right
 ```
 
 ### wpf_move_mouse
 
-`wpf_move_mouse(element_handle, x?, y?, hover_ms=500)` moves the OS pointer without
+`wpf_move_mouse(element_handle?, x?, y?, hover_ms=500, automation_id?, root_handle?)` moves the OS pointer without
 clicking and waits 0–5000 ms while the app remains responsive. Useful for hover
 handlers and tooltips. Coordinates are paired local WPF DIPs, default center.
 Capture tooltips using screen mode.
 
 ### wpf_scroll
 
-`wpf_scroll(element_handle, delta, horizontal=false, x?, y?)` moves the pointer to
+`wpf_scroll(delta, element_handle?, horizontal=false, x?, y?, automation_id?, root_handle?)` moves the pointer to
 the selected local point and sends a native wheel event. `delta` is signed wheel
 units: 120 is one notch, positive means up/right, negative down/left. Valid range
 is -12000 through 12000 excluding zero. The application may scroll, zoom or ignore
@@ -173,15 +199,19 @@ Useful for drag-and-drop, slider thumbs, splitters and custom canvas controls.
 
 | Parameter | Default | Meaning |
 |-----------|---------|---------|
-| `element_handle` | Required | Source element from `wpf_find_elements` |
+| `element_handle` | Omitted | Source handle; supply exactly one handle or AutomationId |
+| `automation_id` | Omitted | Exact, unique source AutomationId |
+| `root_handle` | Omitted | Scope source ID lookup to this subtree |
 | `target_handle` | Omitted | Destination element; mutually exclusive with displacement |
+| `target_automation_id` | Omitted | Destination ID instead of `target_handle`; also exclusive with displacement |
+| `target_root_handle` | Omitted | Scope destination ID lookup independently of the source |
 | `delta_x`, `delta_y` | Omitted | Displacement in the source element's local WPF DIPs; omitted axis is zero |
 | `start_x`, `start_y` | Source center | Optional pair, relative to the source's top-left, in WPF DIPs |
 | `target_x`, `target_y` | Target center | Optional pair, relative to the target's top-left, in WPF DIPs; requires `target_handle` |
 | `button` | `left` | `left`, `right`, or `middle` |
 | `duration_ms` | `500` | Movement duration, from 100 to 10000 ms (plus brief press/release settling) |
 
-Provide **either a target handle or a non-zero displacement**. Local coordinate
+Provide **either a target handle/ID or a non-zero displacement**. Local coordinate
 pairs must be complete and inside the respective element's rendered bounds.
 WPF transforms and DPI conversion are applied before sending OS input. For a
 slider, find its `Thumb` descendant and use that as the source.
@@ -235,7 +265,9 @@ surfaces. It simulates touchscreen contacts, not precision-touchpad gestures.
 
 | Parameter | Default | Meaning |
 |-----------|---------|---------|
-| `element_handle` | Required | Target element containing the complete gesture |
+| `element_handle` | Omitted | Target handle; supply exactly one handle or AutomationId |
+| `automation_id` | Omitted | Exact, unique ID of the element containing the complete gesture |
+| `root_handle` | Omitted | Scope ID lookup to this subtree |
 | `gesture` | Required | `tap`, `long_press`, `swipe`, `pinch`, or `rotate` |
 | `x`, `y` | Element center | Optional pair in local WPF DIPs; start point for swipe, center for other gestures |
 | `delta_x`, `delta_y` | Omitted | Swipe displacement; at least one non-zero axis required; omitted axis is zero |
@@ -257,6 +289,21 @@ Examples of MCP arguments:
 {"element_handle":"elem_42","gesture":"swipe","x":80,"y":120,"delta_x":200}
 {"element_handle":"elem_42","gesture":"pinch","scale":1.5,"radius":50}
 {"element_handle":"elem_42","gesture":"rotate","angle_degrees":-90,"radius":60}
+```
+
+The same gestures can target an ID directly. `swipe` is touch pan and `pinch`
+is touch zoom; both require application touch/manipulation support:
+
+```json
+{"automation_id":"Canvas","gesture":"tap"}
+{"automation_id":"Canvas","gesture":"swipe","delta_x":80}
+{"automation_id":"Canvas","gesture":"pinch","scale":1.5}
+```
+
+```powershell
+wpfinspect drag --pid 1234 --automation-id Source --target-automation-id Destination
+wpfinspect touch --pid 1234 --automation-id Canvas --gesture swipe --delta-x 80
+wpfinspect touch --pid 1234 --automation-id Canvas --gesture pinch --scale 1.5
 ```
 
 The result contains `success`, `method: "Physical.Touch"`, `gesture`, `element_type`,
@@ -430,7 +477,19 @@ Show me the visual tree of the main window, up to 5 levels deep.
 
 ### wpf_find_elements
 
-Search for elements by type, name, or property value.
+Search for elements by AutomationId, type, name, visible text or property value.
+Filters combine with AND. `automation_id` is an exact, case-sensitive match of
+`AutomationProperties.AutomationId`; all matches are returned, subject to the result limit.
+The same filter is available in `wpf_find_elements_deep` and `wpf_wait_for_element`.
+Their CLI equivalents accept `--automation-id ID` and optional `--root HANDLE`.
+An ID alone is sufficient for deep search or waiting. Waits retain their usual
+any-match semantics; only direct clicking requires a unique match.
+
+Use `wpf_find_elements(automation_id="user.name")` to retrieve a handle for
+property inspection or other handle-based inspection tools, or
+`wpf_wait_for_element(automation_id="user.name", condition="enabled")` before an action.
+An older Inspector must be updated by restarting the target app and reattaching;
+AutomationId requests fail explicitly until it supports the filter.
 
 **Parameters:**
 
@@ -438,6 +497,8 @@ Search for elements by type, name, or property value.
 |------|------|----------|-------------|
 | `type_name` | string | No | Element type (e.g., "Button", "TextBox") |
 | `element_name` | string | No | x:Name of the element |
+| `automation_id` | string | No | Exact AutomationProperties.AutomationId (case-sensitive, 1–2048 characters, nonblank) |
+| `root_handle` | string | No | Restrict search to this window or subtree |
 | `property_filter` | object | No | Property name/value pairs to filter by |
 
 **Returns:**

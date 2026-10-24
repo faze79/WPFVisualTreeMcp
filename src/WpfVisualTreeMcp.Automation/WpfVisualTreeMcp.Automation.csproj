@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>WpfVisualTreeMcp.Automation</PackageId>
+    <Version>0.18.0</Version>
+    <Description>Drive and inspect WPF applications from C# tests: attach, AutomationId locators, mouse and touch actions, exact property waits, recording and replay.</Description>
+    <PackageTags>wpf;automation;testing;ui;automationid</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/faze79/WPFVisualTreeMcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/faze79/WPFVisualTreeMcp</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Inspector/helper DLLs are payload for the target process, not test-project references. -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+    <BuildProjectReferences Condition="'$(NoBuild)' == 'true'">false</BuildProjectReferences>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAutomationDependencies</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <ProjectReference Include="..\WpfVisualTreeMcp.Shared\WpfVisualTreeMcp.Shared.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\WpfVisualTreeMcp.Injector\WpfVisualTreeMcp.Injector.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj"
+                      Condition="'$(NoBuild)' != 'true' and '$(BuildProjectReferences)' != 'false'"
+                      ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
+                      UndefineProperties="TargetFramework" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\WpfVisualTreeMcp.InjectorHelper\WpfVisualTreeMcp.InjectorHelper.csproj"
+                      Condition="'$(NoBuild)' != 'true' and '$(BuildProjectReferences)' != 'false'"
+                      ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
+                      UndefineProperties="Platform;RuntimeIdentifier" SkipGetTargetFrameworkProperties="true" />
+    <InternalsVisibleTo Include="WpfVisualTreeMcp.Tests" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="buildTransitive\WpfVisualTreeMcp.Automation.targets" Pack="true" PackagePath="buildTransitive/" />
+  </ItemGroup>
+  <Import Project="..\WpfVisualTreeMcp.Server\InjectionPayload.targets" />
+  <Target Name="IncludeAutomationDependencies" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)"
+        Condition="'%(Filename)' == 'WpfVisualTreeMcp.Shared' or '%(Filename)' == 'WpfVisualTreeMcp.Injector'" />
+    </ItemGroup>
+  </Target>
+  <Target Name="PackAutomationPayload" BeforeTargets="_GetPackageFiles" DependsOnTargets="CollectInjectionPayload;ValidateInjectionPayload">
+    <ItemGroup>
+      <None Include="@(ContentWithTargetPath)" Condition="$([System.String]::Copy('%(ContentWithTargetPath.TargetPath)').StartsWith('native\'))"
+            Pack="true" PackagePath="payload/%(ContentWithTargetPath.TargetPath)" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-25
+
+### Added
+
+- `WpfVisualTreeMcp.Automation` C# NuGet SDK: attach by
+  PID, reusable scoped AutomationId locators, typed inspection/input methods,
+  exact text/property waits, predicates, cancellation and actionable timeouts.
+  Bundles the Inspector and native injection payload; no MCP/CLI process required.
+  Supports recording/replay and standalone xUnit export referencing the SDK.
+  Package-consumer tests exercise .NET 8 x64 and .NET Framework 4.7.2 x86 targets,
+  delayed TextBox changes, inspection, actions and fresh-process exported tests.
+- Share process management and IPC between MCP, CLI and the SDK. Capability-gated
+  optional AutomationId resolution lets SDK waits retry absent controls without
+  hiding ambiguous IDs or recording polling requests as workflow steps.
+- Cross-architecture helpers ignore the test runner's generic `DOTNET_ROOT`,
+  preserving architecture-specific overrides, so xUnit can attach to x86 apps.
+  Helper startup failures now include the actual runtime error.
+- Target all input actions, assertions and property edits directly by `automation_id`
+  in MCP or `--automation-id` in the CLI: click, move, scroll, drag, touch (tap,
+  hold, pan/swipe, zoom/pinch, rotate), selection, text and keyboard input,
+  with optional `root_handle` / `--root` scope. Exact, case-sensitive matching;
+  missing, ambiguous or incomplete searches fail before input. Drag also accepts
+  `target_automation_id` / `--target-automation-id`, with independent destination scope.
+  Recorded actions retain stable selectors for replay and exported tests.
+- Filter `find`, `find-deep` and `wait-for` by AutomationId, including recorded
+  workflows and exported tests. Older Inspectors reject the feature with restart
+  guidance instead of silently ignoring the filter.
+
+### Distribution and upgrade
+
+- Publish the MCP/CLI tool and C# SDK as separate NuGet packages, both versioned
+  0.18.0. Release CI verifies the installed SDK and its exported tests before publishing.
+- SDK exports reference the generating package's version automatically. Portable,
+  full/compact MCPB and Codex plugin distributions include the shared automation engine.
+- Restart MCP clients and previously inspected apps after upgrading to reload the
+  Inspector. The SDK requires .NET 8+ on Windows; use an x64 test process to automate
+  both x64 and x86 apps. Native gestures require an interactive desktop and app support.
+
 ## [0.17.0] - 2026-10-22
 
 ### Fixed

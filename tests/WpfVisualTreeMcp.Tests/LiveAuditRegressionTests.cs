@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -95,7 +96,7 @@ public class LiveAuditRegressionTests
     public async Task Invalid_wheel_events_are_exposed_as_MCP_errors(int delta)
     {
         var tools = new WpfTools(new Mock<IProcessManager>().Object, new Mock<IIpcBridge>().Object);
-        var act = () => tools.WpfScroll("canvas", delta);
+        var act = () => tools.WpfScroll(element_handle: "canvas", delta: delta);
         await act.Should().ThrowAsync<McpException>().WithMessage("*120*");
     }
 }

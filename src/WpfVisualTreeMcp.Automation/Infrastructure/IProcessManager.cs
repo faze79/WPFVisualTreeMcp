@@ -1,4 +1,4 @@
-namespace WpfVisualTreeMcp.Server.Services;
+namespace WpfVisualTreeMcp.Automation.Infrastructure;
 
 /// <summary>
 /// Information about a WPF process.

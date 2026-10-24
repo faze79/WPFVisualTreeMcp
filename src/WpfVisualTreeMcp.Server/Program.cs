@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

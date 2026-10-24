@@ -10,7 +10,7 @@
 
     <!-- Package metadata -->
     <PackageId>WpfVisualTreeMcp</PackageId>
-    <Version>0.17.0</Version>
+    <Version>0.18.0</Version>
     <Authors>faze79</Authors>
     <Description>Inspect and drive WPF apps through MCP or CLI: visual trees, bindings, screenshots, mouse dragging and native touch gestures.</Description>
     <PackageTags>mcp;wpf;visual-tree;debugging;dotnet;ai-agents</PackageTags>
@@ -50,6 +50,7 @@
 
   <ItemGroup>
     <!-- Build both Inspector runtimes before collecting the injection payload. -->
+    <ProjectReference Include="..\WpfVisualTreeMcp.Automation\WpfVisualTreeMcp.Automation.csproj" />
     <ProjectReference Include="..\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj"
                       Condition="'$(NoBuild)' != 'true' and '$(BuildProjectReferences)' != 'false'"
                       ReferenceOutputAssembly="false"

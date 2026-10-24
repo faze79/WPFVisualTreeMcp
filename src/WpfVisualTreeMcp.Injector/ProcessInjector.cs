@@ -143,9 +143,18 @@ public class ProcessInjector
             RedirectStandardError = true,
         };
 
+        // Test runners set DOTNET_ROOT to their own runtime, which has the wrong
+        // bitness for this helper. Preserve explicit architecture-specific roots
+        // (DOTNET_ROOT_X86 / DOTNET_ROOT_X64 / DOTNET_ROOT(x86)); otherwise let the
+        // helper discover its globally installed matching runtime.
+        psi.EnvironmentVariables.Remove("DOTNET_ROOT");
+
         using var helperProc = Process.Start(psi);
         if (helperProc == null)
             return false;
+
+        var stdout = helperProc.StandardOutput.ReadToEndAsync();
+        var stderr = helperProc.StandardError.ReadToEndAsync();
 
         if (!helperProc.WaitForExit(15000))
         {
@@ -154,15 +163,15 @@ public class ProcessInjector
                 $"Architecture-mismatch helper timed out injecting into process {processId}.");
         }
 
-        // Drain output streams to avoid the helper hanging on a full pipe.
-        var stdout = helperProc.StandardOutput.ReadToEnd();
-        var stderr = helperProc.StandardError.ReadToEnd();
-        // (Streams are surfaced via the helper's exit code; we deliberately don't
-        // throw on non-empty stderr because warnings are informational.)
-        _ = stdout;
-        _ = stderr;
-
-        return helperProc.ExitCode == 0;
+        _ = stdout.GetAwaiter().GetResult();
+        var error = stderr.GetAwaiter().GetResult().Trim();
+        if (helperProc.ExitCode != 0)
+        {
+            if (error.Length > 2000) error = error.Substring(0, 2000);
+            throw new InvalidOperationException(
+                $"Injection helper exited with code {helperProc.ExitCode}: {error}");
+        }
+        return true;
     }
 
     /// <summary>

@@ -25,6 +25,9 @@ public class FindCriteria
     /// <summary>x:Name, matched as case-insensitive substring.</summary>
     public string? ElementName { get; set; }
 
+    /// <summary>Exact, case-sensitive AutomationProperties.AutomationId match.</summary>
+    public string? AutomationId { get; set; }
+
     /// <summary>
     /// Visible text content, matched as case-insensitive substring against the element's own text,
     /// text aggregated from shallow descendants (e.g. the TextBlock inside a Button),
@@ -495,6 +498,10 @@ public class TreeWalker
     private static bool MatchesCriteria(DependencyObject element, FindCriteria criteria)
     {
         var type = element.GetType();
+
+        if (criteria.AutomationId != null &&
+            !string.Equals(GetAutomationId(element), criteria.AutomationId, StringComparison.Ordinal))
+            return false;
 
         if (!string.IsNullOrEmpty(criteria.TypeName))
         {

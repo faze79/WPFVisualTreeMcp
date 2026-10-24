@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using FluentAssertions;
 using ModelContextProtocol;
 using Moq;

@@ -3,7 +3,7 @@ using System.IO.Pipes;
 using Microsoft.Extensions.Logging;
 using WpfVisualTreeMcp.Injector;
 
-namespace WpfVisualTreeMcp.Server.Services;
+namespace WpfVisualTreeMcp.Automation.Infrastructure;
 
 /// <summary>
 /// Implementation of process management for WPF applications.

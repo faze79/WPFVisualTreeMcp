@@ -20,25 +20,25 @@
         </Grid>
         <Grid Height="70">
             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="24"/><ColumnDefinition/></Grid.ColumnDefinitions>
-            <Border x:Name="DragSource" Background="#2563EB" Padding="12"
+            <Border x:Name="DragSource" AutomationProperties.AutomationId="drag.source" Background="#2563EB" Padding="12"
                     MouseLeftButtonDown="SourceDown" MouseMove="SourceMove">
                 <TextBlock Text="Drag this item" Foreground="White" VerticalAlignment="Center"/>
             </Border>
-            <Border x:Name="DropTarget" Grid.Column="2" Background="#DCFCE7" Padding="12"
+            <Border x:Name="DropTarget" AutomationProperties.AutomationId="drag.target" Grid.Column="2" Background="#DCFCE7" Padding="12"
                     AllowDrop="True" DragOver="TargetDragOver" Drop="TargetDrop">
-                <TextBlock x:Name="DropStatus" Text="Drop here" VerticalAlignment="Center"/>
+                <TextBlock x:Name="DropStatus" AutomationProperties.AutomationId="drag.status" Text="Drop here" VerticalAlignment="Center"/>
             </Border>
         </Grid>
         <TextBlock Text="Canvas: drag with left, right or middle button" Margin="0,16,0,8"/>
-        <Canvas x:Name="DragCanvas" Height="110" Background="#F1F5F9"
+        <Canvas x:Name="DragCanvas" AutomationProperties.AutomationId="drag.canvas" Height="110" Background="#F1F5F9"
                 PreviewMouseMove="PointerMove" PreviewMouseWheel="PointerWheel" PreviewMouseDown="PointerDown">
-            <Border x:Name="DragBox" Width="70" Height="60" Canvas.Left="20" Canvas.Top="20"
+            <Border x:Name="DragBox" AutomationProperties.AutomationId="drag.box" Width="70" Height="60" Canvas.Left="20" Canvas.Top="20"
                     Background="#F59E0B" MouseDown="BoxDown" MouseMove="BoxMove" MouseUp="BoxUp">
                 <TextBlock Text="Move" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Canvas>
         <TextBlock x:Name="DragStatus" Text="Ready" Margin="0,8,0,0"/>
-        <TextBlock x:Name="PointerStatus" Text="Pointer ready"/>
-        <TextBlock x:Name="WheelStatus" Text="Wheel:0; Horizontal:0"/>
+        <TextBlock x:Name="PointerStatus" AutomationProperties.AutomationId="drag.pointer" Text="Pointer ready"/>
+        <TextBlock x:Name="WheelStatus" AutomationProperties.AutomationId="drag.wheel" Text="Wheel:0; Horizontal:0"/>
     </StackPanel>
 </Window>

@@ -1,6 +1,6 @@
 using WpfVisualTreeMcp.Shared.Models;
 
-namespace WpfVisualTreeMcp.Server.Services;
+namespace WpfVisualTreeMcp.Automation.Infrastructure;
 
 /// <summary>
 /// Bridge for inter-process communication with the injected inspector DLL.
@@ -26,14 +26,14 @@ public interface IIpcBridge
     /// Finds elements matching the specified criteria (type, name, visible text, property values, visibility).
     /// </summary>
     Task<FindElementsResult> FindElementsAsync(string? rootHandle, string? typeName, string? elementName,
-        string? text, Dictionary<string, string>? propertyFilter, bool visibleOnly = false, int maxResults = 50);
+        string? text, Dictionary<string, string>? propertyFilter, bool visibleOnly = false, int maxResults = 50, string? automationId = null);
 
     /// <summary>
     /// Finds ALL elements matching the specified criteria without limit (deep search).
     /// WARNING: This can return a large number of results. Use with caution.
     /// </summary>
     Task<FindElementsResult> FindElementsDeepAsync(string? rootHandle, string? typeName, string? elementName,
-        string? text = null, Dictionary<string, string>? propertyFilter = null, bool visibleOnly = false);
+        string? text = null, Dictionary<string, string>? propertyFilter = null, bool visibleOnly = false, string? automationId = null);
 
     /// <summary>
     /// Gets bindings for an element.
@@ -111,7 +111,7 @@ public interface IIpcBridge
     /// ("visible", "exists", "enabled", or "hidden") or the timeout elapses.
     /// </summary>
     Task<WaitForResult> WaitForElementAsync(string? rootHandle, string? typeName, string? elementName,
-        string? text, string condition, int timeoutMs, int pollIntervalMs);
+        string? text, string condition, int timeoutMs, int pollIntervalMs, string? automationId = null);
 
     /// <summary>
     /// Exports the visual tree in the specified format.
@@ -145,6 +145,12 @@ public interface IIpcBridge
     /// double/right always use the physical path.
     /// </summary>
     Task<ClickResult> ClickElementAsync(string elementHandle, bool physical, string? clickType = null, double? x = null, double? y = null);
+
+    /// <summary>Accepts exactly one handle or exact AutomationId; ID resolution requires a unique match.</summary>
+    Task<string> ResolveElementHandleAsync(string? elementHandle, string? automationId, string? rootHandle = null);
+
+    /// <summary>Read-only unique ID lookup; only a missing element returns null. Ambiguity and transport errors throw.</summary>
+    Task<string?> TryResolveAutomationIdAsync(string automationId, string? rootHandle = null);
 
     Task<MousePointerResult> MousePointerAsync(MousePointerOptions options);
 

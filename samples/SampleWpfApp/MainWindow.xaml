@@ -42,6 +42,7 @@
                 <StackPanel Margin="16">
                     <TextBlock Text="Username:" Margin="0,0,0,4"/>
                     <TextBox x:Name="UserNameTextBox"
+                             AutomationProperties.AutomationId="user.name"
                              Text="{Binding UserName, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,16"/>
 
@@ -73,9 +74,16 @@
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Command="{Binding SubmitCommand}"/>
                         <Button x:Name="ClearButton"
+                                AutomationProperties.AutomationId="form.clear"
                                 Content="Clear"
                                 Command="{Binding ClearCommand}"
                                 Margin="4"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBox x:Name="TestStatusTextBox" AutomationProperties.AutomationId="test.status"
+                                 Text="idle" Width="140" IsReadOnly="True"/>
+                        <Button AutomationProperties.AutomationId="test.load" Content="Load test status"
+                                Click="LoadTestStatus" Margin="8,0,0,0"/>
                     </StackPanel>
                 </StackPanel>
             </GroupBox>
@@ -101,7 +109,7 @@
                     </StackPanel>
 
                     <ListBox Grid.Row="1"
-                             x:Name="ItemsListBox"
+                             x:Name="ItemsListBox" AutomationProperties.AutomationId="items.list"
                              ItemsSource="{Binding Items}"
                              SelectedItem="{Binding SelectedItem}">
                         <ListBox.ItemTemplate>
@@ -154,8 +162,8 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button x:Name="OpenDragDemoButton" Content="Drag demo" Click="OpenDragDemo" Margin="0,0,12,0"/>
-                    <Button x:Name="OpenTouchDemoButton" Content="Touch demo" Click="OpenTouchDemo" Margin="0,0,12,0"/>
+                    <Button x:Name="OpenDragDemoButton" AutomationProperties.AutomationId="open.drag" Content="Drag demo" Click="OpenDragDemo" Margin="0,0,12,0"/>
+                    <Button x:Name="OpenTouchDemoButton" AutomationProperties.AutomationId="open.touch" Content="Touch demo" Click="OpenTouchDemo" Margin="0,0,12,0"/>
                     <TextBlock Text="Items: " Foreground="Gray"/>
                     <TextBlock Text="{Binding Items.Count}" FontWeight="Bold"/>
                     <TextBlock Text="  |  " Foreground="LightGray"/>

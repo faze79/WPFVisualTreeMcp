@@ -25,8 +25,8 @@ Push-Location $source
 try {
     # Publish only the server for win-x64. Its x86 helper and multi-target Inspector
     # must not inherit this RID; their standard Release outputs were built earlier.
-    foreach ($project in @('Shared', 'Injector')) {
-        dotnet build "src/WpfVisualTreeMcp.$project/WpfVisualTreeMcp.$project.csproj" -c Release -f net8.0 -r win-x64 --verbosity quiet
+    foreach ($project in @('Shared', 'Injector', 'Automation')) {
+        dotnet build "src/WpfVisualTreeMcp.$project/WpfVisualTreeMcp.$project.csproj" -c Release -f net8.0 -r win-x64 -p:BuildProjectReferences=false --verbosity quiet
         if ($LASTEXITCODE -ne 0) { throw "$project build failed" }
     }
     dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Release -r win-x64 --self-contained true -p:BuildProjectReferences=false -o $server --verbosity quiet @publishOptions

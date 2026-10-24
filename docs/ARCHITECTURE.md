@@ -22,8 +22,23 @@ The MCP Server is the main entry point that communicates with AI agents via the 
 
 **Key Classes:**
 - `McpServer` - Main protocol handler
-- `ProcessManager` - Discovers and manages WPF processes
-- `NamedPipeBridge` - IPC communication with injected DLLs
+- `ProcessManager` (shared Automation infrastructure) - Discovers and manages WPF processes
+- `NamedPipeBridge` - Adapts the shared `InspectorBridge` errors to MCP
+
+### C# Automation SDK (`WpfVisualTreeMcp.Automation`)
+
+The NuGet SDK attaches directly to a target PID without starting the server.
+`WpfApplication` owns the session; `WpfElement` represents an AutomationId or handle
+locator. MCP and CLI reuse its process manager and pipe transport. The package
+bundles Shared/Injector assemblies and copies the native/Inspector payload through
+a `buildTransitive` target into consuming build and publish outputs.
+
+AutomationId locators resolve on each operation, optionally within an ancestor.
+Exact property waits poll read-only IPC with a deadline and caller cancellation,
+releasing the session gate between checks. Missing elements are retried; ambiguity,
+incomplete traversal and transport failures are errors. Client predicates are not
+serialized into workflow recordings. SDK xUnit export references the package and
+replays in a fresh app process owned by the test.
 
 ### 2. Inspector DLL (`WpfVisualTreeMcp.Inspector`)
 

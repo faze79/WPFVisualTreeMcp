@@ -145,6 +145,15 @@ public static class WorkflowCodec
 
     public static void ValidateRequest(IpcRequest request)
     {
+        var automationId = request switch
+        {
+            FindElementsRequest r => r.AutomationId,
+            FindElementsDeepRequest r => r.AutomationId,
+            WaitForElementRequest r => r.AutomationId,
+            _ => null
+        };
+        if (automationId != null && (string.IsNullOrWhiteSpace(automationId) || automationId.Length > 2048))
+            throw new ArgumentException("automation_id must contain 1-2048 characters and cannot be blank.");
         switch (request)
         {
             case DragRequest r: (r.Options ?? throw new ArgumentException("Drag options required.")).Validate(); break;
@@ -163,7 +172,7 @@ public static class WorkflowCodec
                 throw new ArgumentException("Assertion property and expectedValue required.");
             case WaitForElementRequest r when r.Condition is not ("visible" or "exists" or "enabled" or "hidden")
                 || r.TimeoutMs is < 0 or > 25000 || r.PollIntervalMs is < 50 or > 1000
-                || (string.IsNullOrWhiteSpace(r.TypeName) && string.IsNullOrWhiteSpace(r.ElementName) && string.IsNullOrWhiteSpace(r.Text)):
+                || (string.IsNullOrWhiteSpace(r.TypeName) && string.IsNullOrWhiteSpace(r.ElementName) && string.IsNullOrWhiteSpace(r.Text) && r.AutomationId == null):
                 throw new ArgumentException("Invalid wait condition, criteria or timeout/poll bounds.");
         }
     }

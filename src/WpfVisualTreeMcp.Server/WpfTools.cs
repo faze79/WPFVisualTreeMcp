@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol;
@@ -14,6 +15,7 @@ namespace WpfVisualTreeMcp.Server;
 [McpServerToolType]
 public class WpfTools
 {
+    private const string InputTargetDescription = " Target by exactly one of element_handle or automation_id (exact, case-sensitive AutomationProperties.AutomationId). Use root_handle with automation_id to scope lookup; missing or duplicate IDs fail before input.";
     private readonly IProcessManager _processManager;
     private readonly IIpcBridge _ipcBridge;
 
@@ -32,9 +34,13 @@ public class WpfTools
     public Task<RecordingState> WpfGetRecording() => _ipcBridge.RecordAsync("status");
 
     [McpServerTool]
-    [Description("Assert an element's dependency-property value using an exact ordinal comparison of its invariant string value; use {null} for null. Throws on mismatch. Successful assertions are saved while recording. Use wpf_wait_for_element first for asynchronous changes.")]
-    public async Task<object> WpfAssert(string element_handle, string property_name, string expected_value)
-        => new { success = true, actual_value = await _ipcBridge.AssertElementAsync(element_handle, property_name, expected_value) };
+    [Description("Assert an element's dependency-property value using an exact ordinal comparison of its invariant string value; use {null} for null. Throws on mismatch. Successful assertions are saved while recording. Use wpf_wait_for_element first for asynchronous changes." + InputTargetDescription)]
+    public async Task<object> WpfAssert(string property_name, string expected_value, string? element_handle = null,
+        string? automation_id = null, string? root_handle = null)
+    {
+        var handle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        return new { success = true, actual_value = await _ipcBridge.AssertElementAsync(handle, property_name, expected_value) };
+    }
 
     [McpServerTool]
     [Description("Replay a versioned workflow against the attached app, resolving fresh unique selectors. Changes app state; stop recording first. Explicit waits handle async UI changes. Stops at first failure without rollback; failedStep is one-based. Physical actions need an interactive desktop. Deadline max 120 seconds; queries stay available, other mutations are rejected.")]
@@ -114,7 +120,7 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Query elements across all open windows. Filters combine with AND: type_name (partial match, e.g. 'Button' matches 'System.Windows.Controls.Button'), element_name (x:Name substring), text (visible text content — matches a Button's caption, TextBlock text, Window title, AutomationProperties.Name, ToolTip; case-insensitive substring), property_filter (object of property name → expected value substring, e.g. {\"IsEnabled\": \"True\"}), visible_only (exclude collapsed/hidden elements — recommended when looking for something the user can see). PREFER text over dumping the tree: e.g. text='Save' + type_name='Button' finds the Save button directly. Results include text, automationId, isVisible, isEnabled and screenBounds (device pixels) so you can pick the right element without extra calls. Returns up to max_results (default 50).")]
+    [Description("Query elements across all open windows. Filters combine with AND: automation_id (exact, case-sensitive AutomationProperties.AutomationId), type_name (partial match, e.g. 'Button' matches 'System.Windows.Controls.Button'), element_name (x:Name substring), text (visible text content — matches a Button's caption, TextBlock text, Window title, AutomationProperties.Name, ToolTip; case-insensitive substring), property_filter (object of property name → expected value substring, e.g. {\"IsEnabled\": \"True\"}), visible_only (exclude collapsed/hidden elements — recommended when looking for something the user can see). PREFER text over dumping the tree: e.g. text='Save' + type_name='Button' finds the Save button directly. Results include text, automationId, isVisible, isEnabled and screenBounds (device pixels) so you can pick the right element without extra calls. Returns up to max_results (default 50).")]
     public async Task<object> WpfFindElements(
         string? root_handle = null,
         string? type_name = null,
@@ -122,32 +128,34 @@ public class WpfTools
         string? text = null,
         JsonElement? property_filter = null,
         bool visible_only = false,
-        int max_results = 50)
+        int max_results = 50,
+        string? automation_id = null)
     {
         var result = await _ipcBridge.FindElementsAsync(
             root_handle, type_name, element_name, text,
-            ToFilterDictionary(property_filter), visible_only, max_results);
+            ToFilterDictionary(property_filter), visible_only, max_results, automation_id);
         return result;
     }
 
     [McpServerTool]
-    [Description("Deep search for ALL elements matching criteria (no result limit). Requires at least type_name, element_name or text to avoid returning the entire tree. Same filters as wpf_find_elements: type_name (partial match), element_name (x:Name substring), text (visible text content), property_filter, visible_only. Use root_handle to limit scope.")]
+    [Description("Deep search for ALL elements matching criteria (no result limit). Requires at least type_name, element_name, text or automation_id to avoid returning the entire tree. Same filters as wpf_find_elements: automation_id (exact, case-sensitive), type_name (partial match), element_name (x:Name substring), text (visible text content), property_filter, visible_only. Use root_handle to limit scope.")]
     public async Task<object> WpfFindElementsDeep(
         string? root_handle = null,
         string? type_name = null,
         string? element_name = null,
         string? text = null,
         JsonElement? property_filter = null,
-        bool visible_only = false)
+        bool visible_only = false,
+        string? automation_id = null)
     {
-        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text) && automation_id == null)
         {
-            throw new McpException("At least type_name, element_name or text is required. Use wpf_get_visual_tree to browse the full tree instead.");
+            throw new McpException("At least type_name, element_name, text or automation_id is required. Use wpf_get_visual_tree to browse the full tree instead.");
         }
 
         var result = await _ipcBridge.FindElementsDeepAsync(
             root_handle, type_name, element_name, text,
-            ToFilterDictionary(property_filter), visible_only);
+            ToFilterDictionary(property_filter), visible_only, automation_id);
         return result;
     }
 
@@ -274,7 +282,7 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Wait until an element matching the criteria satisfies a condition, polling in the target app so you don't have to sleep-and-retry. Identify the element with type_name, element_name and/or text (same matching as wpf_find_elements). condition: 'visible' (default — element exists and is on screen), 'exists' (in the tree even if not visible), 'enabled' (visible and IsEnabled=true), 'hidden' (no matching visible element — e.g. a spinner disappeared). Returns matched (bool), waited_ms, and matched_handle/element_type when found. Use after a click that triggers async work (dialog opens, spinner clears, button enables) before the next step. timeout_ms default 10000 (max 25000); poll_interval_ms default 250.")]
+    [Description("Wait until an element matching the criteria satisfies a condition, polling in the target app so you don't have to sleep-and-retry. Identify the element with automation_id (exact, case-sensitive), type_name, element_name and/or text (same matching as wpf_find_elements). condition: 'visible' (default — element exists and is on screen), 'exists' (in the tree even if not visible), 'enabled' (visible and IsEnabled=true), 'hidden' (no matching visible element — e.g. a spinner disappeared). Returns matched (bool), waited_ms, and matched_handle/element_type when found. Use after a click that triggers async work (dialog opens, spinner clears, button enables) before the next step. timeout_ms default 10000 (max 25000); poll_interval_ms default 250.")]
     public async Task<object> WpfWaitForElement(
         string? type_name = null,
         string? element_name = null,
@@ -282,15 +290,16 @@ public class WpfTools
         string condition = "visible",
         int timeout_ms = 10000,
         int poll_interval_ms = 250,
-        string? root_handle = null)
+        string? root_handle = null,
+        string? automation_id = null)
     {
-        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(type_name) && string.IsNullOrEmpty(element_name) && string.IsNullOrEmpty(text) && automation_id == null)
         {
-            throw new McpException("At least type_name, element_name or text is required to identify the element to wait for.");
+            throw new McpException("At least type_name, element_name, text or automation_id is required to identify the element to wait for.");
         }
 
         var result = await _ipcBridge.WaitForElementAsync(
-            root_handle, type_name, element_name, text, condition, timeout_ms, poll_interval_ms);
+            root_handle, type_name, element_name, text, condition, timeout_ms, poll_interval_ms, automation_id);
         return new
         {
             matched = result.Matched,
@@ -366,19 +375,18 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Live-edit a dependency property on an element at runtime, to test whether a planned UI change is effective without rebuilding. The value is a string converted to the property's type: e.g. property_name='Margin' value='20,0,20,0', property_name='Visibility' value='Collapsed', property_name='Background' value='Red' (or '#FF0000'), property_name='Width' value='300', value='{null}' for null. Returns the coerced value read back and what previously held the property (Binding/Local/Unset). Setting a data-bound property replaces the binding with a local value; wpf_revert_property restores it. Pair with wpf_capture_screenshot to see the effect, then revert. STATE-CHANGING (reversible via wpf_revert_property).")]
-    public async Task<object> WpfSetProperty(string element_handle, string property_name, string value)
+    [Description("Live-edit a dependency property on an element at runtime, to test whether a planned UI change is effective without rebuilding. The value is a string converted to the property's type: e.g. property_name='Margin' value='20,0,20,0', property_name='Visibility' value='Collapsed', property_name='Background' value='Red' (or '#FF0000'), property_name='Width' value='300', value='{null}' for null. Returns the coerced value read back and what previously held the property (Binding/Local/Unset). Setting a data-bound property replaces the binding with a local value; wpf_revert_property restores it. Pair with wpf_capture_screenshot to see the effect, then revert. STATE-CHANGING (reversible via wpf_revert_property)." + InputTargetDescription)]
+    public async Task<object> WpfSetProperty(string property_name, string value, string? element_handle = null,
+        string? automation_id = null, string? root_handle = null)
     {
-        if (string.IsNullOrEmpty(element_handle))
-        {
-            throw new McpException("element_handle is required");
-        }
+        ElementTarget.Validate(element_handle, automation_id, root_handle);
         if (string.IsNullOrEmpty(property_name))
         {
             throw new McpException("property_name is required");
         }
 
-        var result = await _ipcBridge.SetPropertyAsync(element_handle, property_name, value ?? string.Empty);
+        var handle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.SetPropertyAsync(handle, property_name, value ?? string.Empty);
         return new
         {
             success = true,
@@ -390,10 +398,14 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Undo live property edits made with wpf_set_property. By default reverts the most recent edit; pass element_handle and/or property_name to target a specific one, or all=true to undo every pending edit. Restores whatever held the property before (a binding, a local value, or nothing — falling back to style/inherited/default). Returns how many were reverted and how many edits remain pending.")]
-    public async Task<object> WpfRevertProperty(string? element_handle = null, string? property_name = null, bool all = false)
+    [Description("Undo live property edits made with wpf_set_property. By default reverts the most recent edit; pass element_handle and/or property_name to target a specific one, or all=true to undo every pending edit. Restores whatever held the property before (a binding, a local value, or nothing — falling back to style/inherited/default). Returns how many were reverted and how many edits remain pending." + InputTargetDescription)]
+    public async Task<object> WpfRevertProperty(string? element_handle = null, string? property_name = null, bool all = false,
+        string? automation_id = null, string? root_handle = null)
     {
-        var result = await _ipcBridge.RevertPropertyAsync(all, element_handle, property_name);
+        if (all && (automation_id != null || root_handle != null))
+            throw new McpException("all=true cannot be combined with automation_id or root_handle; omit all to revert an edit on that control.");
+        var handle = await ElementTarget.ResolveOptionalAsync(_ipcBridge, element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.RevertPropertyAsync(all, handle, property_name);
         return new
         {
             success = true,
@@ -431,17 +443,14 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Click a UI element. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward; auto-scrolls the element into view first). Optional paired x/y select a point in local WPF DIPs and imply physical input; omitted coordinates use the center. click_type: 'single' (default), 'double' (open items), 'right' (context menus) — double and right are always physical. After opening a context menu or dropdown, use wpf_capture_screenshot with mode='screen' to see it. STATE-CHANGING.")]
-    public async Task<object> WpfClickElement(string element_handle, bool physical = false, string? click_type = null, double? x = null, double? y = null)
+    [Description("Click a UI element. Supply exactly one of element_handle or automation_id (exact, case-sensitive AutomationProperties.AutomationId; no handle lookup needed). IDs must match a unique control across all open windows, including hidden controls. Use root_handle with automation_id to scope to a window or subtree if IDs repeat. Missing or ambiguous IDs return an error without clicking. By default invokes the control's action via UI Automation (works for buttons, menu items, checkboxes, radio buttons, tabs, list items, expanders) without moving the mouse or focusing the window. Set physical=true to perform a real OS mouse click at the element's on-screen position (works on any visible element but moves the cursor and brings the window forward; auto-scrolls the element into view first). Optional paired x/y select a point in local WPF DIPs and imply physical input; omitted coordinates use the center. click_type: 'single' (default), 'double' (open items), 'right' (context menus) — double and right are always physical. After opening a context menu or dropdown, use wpf_capture_screenshot with mode='screen' to see it. STATE-CHANGING.")]
+    public async Task<object> WpfClickElement(string? element_handle = null, bool physical = false, string? click_type = null, double? x = null, double? y = null,
+        string? automation_id = null, string? root_handle = null)
     {
-        if (string.IsNullOrEmpty(element_handle))
-        {
-            throw new McpException("element_handle is required");
-        }
-
         try { MousePointerOptions.ValidatePoint(x, y); }
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
-        var result = await _ipcBridge.ClickElementAsync(element_handle, physical, click_type, x, y);
+        var handle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.ClickElementAsync(handle, physical, click_type, x, y);
         return new
         {
             success = true,
@@ -452,39 +461,48 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Move the real mouse to a visible element without clicking. Optional x/y are paired local WPF DIPs, default center. hover_ms (0-5000, default 500) waits with the UI responsive for hover/tooltip handlers. Supports native content hosted in HwndHost. Activates the target window; requires a visible unobstructed desktop. Verify tooltips with a screen screenshot. STATE-CHANGING.")]
-    public Task<MousePointerResult> WpfMoveMouse(string element_handle, double? x = null, double? y = null, int hover_ms = 500) =>
-        SendPointer(new MousePointerOptions { ElementHandle = element_handle, Action = "move", X = x, Y = y, HoverMs = hover_ms });
+    [Description("Move the real mouse to a visible element without clicking. Optional x/y are paired local WPF DIPs, default center. hover_ms (0-5000, default 500) waits with the UI responsive for hover/tooltip handlers. Supports native content hosted in HwndHost. Activates the target window; requires a visible unobstructed desktop. Verify tooltips with a screen screenshot. STATE-CHANGING." + InputTargetDescription)]
+    public Task<MousePointerResult> WpfMoveMouse(string? element_handle = null, double? x = null, double? y = null, int hover_ms = 500,
+        string? automation_id = null, string? root_handle = null) =>
+        SendPointer(new MousePointerOptions { Action = "move", X = x, Y = y, HoverMs = hover_ms }, element_handle, automation_id, root_handle);
 
     [McpServerTool]
-    [Description("Send a real mouse wheel event over a visible element. delta is signed wheel units: 120 = one notch, positive scrolls up (or right with horizontal=true), negative down/left; nonzero range -12000..12000. Optional paired x/y are local WPF DIPs, default center. Moves the mouse and activates the app. Supports native hosted canvases. The app decides whether to scroll, zoom or ignore input; verify the result. STATE-CHANGING.")]
-    public Task<MousePointerResult> WpfScroll(string element_handle, int delta, bool horizontal = false, double? x = null, double? y = null) =>
-        SendPointer(new MousePointerOptions { ElementHandle = element_handle, Action = "scroll", X = x, Y = y, Delta = delta, Horizontal = horizontal });
+    [Description("Send a real mouse wheel event over a visible element. delta is signed wheel units: 120 = one notch, positive scrolls up (or right with horizontal=true), negative down/left; nonzero range -12000..12000. Optional paired x/y are local WPF DIPs, default center. Moves the mouse and activates the app. Supports native hosted canvases. The app decides whether to scroll, zoom or ignore input; verify the result. STATE-CHANGING." + InputTargetDescription)]
+    public Task<MousePointerResult> WpfScroll(int delta, string? element_handle = null, bool horizontal = false, double? x = null, double? y = null,
+        string? automation_id = null, string? root_handle = null) =>
+        SendPointer(new MousePointerOptions { Action = "scroll", X = x, Y = y, Delta = delta, Horizontal = horizontal }, element_handle, automation_id, root_handle);
 
-    private Task<MousePointerResult> SendPointer(MousePointerOptions options)
+    private async Task<MousePointerResult> SendPointer(MousePointerOptions options, string? handle, string? automationId, string? rootHandle)
     {
+        options.ElementHandle = ElementTarget.Validate(handle, automationId, rootHandle);
         try { options.Validate(); }
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
-        return _ipcBridge.MousePointerAsync(options);
+        options.ElementHandle = await _ipcBridge.ResolveElementHandleAsync(handle, automationId, rootHandle);
+        return await _ipcBridge.MousePointerAsync(options);
     }
 
     [McpServerTool]
-    [Description("Drag using the real OS mouse: press, move gradually, release. Supply element_handle and either target_handle OR delta_x/delta_y (omitted delta axis is zero). start_x/start_y and target_x/target_y are optional coordinate pairs measured from the corresponding element's top-left in WPF DIPs; default is its center. Deltas are in the source element's local DIPs, including its transforms. button: left/right/middle. duration_ms: 100-10000, default 500. Brings the source window forward and moves the cursor. Both endpoints must be visible and unobstructed; no scrolling during the drag. Success reports input delivery, not drop acceptance: verify properties or a screenshot afterwards. STATE-CHANGING.")]
+    [Description("Drag using the real OS mouse: press, move gradually, release. Supply a source handle or automation_id and either target_handle, target_automation_id OR delta_x/delta_y (omitted delta axis is zero). target_root_handle scopes destination ID lookup independently of the source root_handle. start_x/start_y and target_x/target_y are optional coordinate pairs measured from the corresponding element's top-left in WPF DIPs; default is its center. Deltas are in the source element's local DIPs, including its transforms. button: left/right/middle. duration_ms: 100-10000, default 500. Brings the source window forward and moves the cursor. Both endpoints must be visible and unobstructed; no scrolling during the drag. Success reports input delivery, not drop acceptance: verify properties or a screenshot afterwards. STATE-CHANGING." + InputTargetDescription)]
     public async Task<object> WpfDrag(
-        string element_handle, string? target_handle = null,
+        string? element_handle = null, string? target_handle = null,
         double? delta_x = null, double? delta_y = null,
         double? start_x = null, double? start_y = null,
         double? target_x = null, double? target_y = null,
-        string button = "left", int duration_ms = 500)
+        string button = "left", int duration_ms = 500,
+        string? automation_id = null, string? root_handle = null,
+        string? target_automation_id = null, string? target_root_handle = null)
     {
         var options = new DragOptions
         {
-            ElementHandle = element_handle, TargetHandle = target_handle,
+            ElementHandle = ElementTarget.Validate(element_handle, automation_id, root_handle),
+            TargetHandle = ElementTarget.ValidateOptional(target_handle, target_automation_id, target_root_handle),
             DeltaX = delta_x, DeltaY = delta_y, StartX = start_x, StartY = start_y,
             TargetX = target_x, TargetY = target_y, Button = button, DurationMs = duration_ms
         };
         try { options.Validate(); }
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        options.ElementHandle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        options.TargetHandle = await ElementTarget.ResolveOptionalAsync(_ipcBridge, target_handle, target_automation_id, target_root_handle);
         var result = await _ipcBridge.DragAsync(options);
         return new
         {
@@ -497,18 +515,21 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Inject native Windows touch input into a visible WPF element. gesture: tap, long_press, swipe, pinch, rotate. x/y is an optional local WPF DIP pair (default center). swipe requires delta_x/delta_y (omitted axis zero). pinch requires scale (0.1-10, excluding 1; above 1 spreads two fingers). rotate requires angle_degrees (-360 to 360, nonzero; positive clockwise). radius optionally sets initial finger distance from center in local DIPs for pinch/rotate (minimum 4); default fits the element. The complete path must stay visible inside the element. duration_ms defaults: tap 100, long_press 1000, others 700; limits: tap 50-500, long_press 500-10000, others 100-10000. Requires an interactive Windows 8+ desktop. Activates the window. Success means touch input sent, not gesture recognition: the application must support touch/manipulations. STATE-CHANGING.")]
-    public async Task<object> WpfTouchGesture(string element_handle, string gesture,
+    [Description("Inject native Windows touch input into a visible WPF element. gesture: tap, long_press, swipe (pan), pinch (zoom), rotate. x/y is an optional local WPF DIP pair (default center). swipe requires delta_x/delta_y (omitted axis zero). pinch requires scale (0.1-10, excluding 1; above 1 spreads two fingers). rotate requires angle_degrees (-360 to 360, nonzero; positive clockwise). radius optionally sets initial finger distance from center in local DIPs for pinch/rotate (minimum 4); default fits the element. The complete path must stay visible inside the element. duration_ms defaults: tap 100, long_press 1000, others 700; limits: tap 50-500, long_press 500-10000, others 100-10000. Requires an interactive Windows 8+ desktop. Activates the window. Success means touch input sent, not gesture recognition: the application must support touch/manipulations. STATE-CHANGING." + InputTargetDescription)]
+    public async Task<object> WpfTouchGesture(string gesture, string? element_handle = null,
         double? x = null, double? y = null, double? delta_x = null, double? delta_y = null,
-        double? scale = null, double? angle_degrees = null, double? radius = null, int? duration_ms = null)
+        double? scale = null, double? angle_degrees = null, double? radius = null, int? duration_ms = null,
+        string? automation_id = null, string? root_handle = null)
     {
         var options = new TouchGestureOptions
         {
-            ElementHandle = element_handle, Gesture = gesture, X = x, Y = y, DeltaX = delta_x, DeltaY = delta_y,
+            ElementHandle = ElementTarget.Validate(element_handle, automation_id, root_handle),
+            Gesture = gesture, X = x, Y = y, DeltaX = delta_x, DeltaY = delta_y,
             Scale = scale, AngleDegrees = angle_degrees, Radius = radius, DurationMs = duration_ms
         };
         try { options.Validate(); }
         catch (ArgumentException ex) { throw new McpException(ex.Message); }
+        options.ElementHandle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
         var result = await _ipcBridge.TouchGestureAsync(options);
         return new
         {
@@ -519,19 +540,17 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Select an item in a ComboBox, ListBox, ListView or TabControl by visible text (item_text, case-insensitive substring) or zero-based index. PREFER this over clicking for dropdowns/lists: it works even when items are virtualized (not yet in the visual tree) and raises proper selection events. On failure the error lists the available items. STATE-CHANGING.")]
-    public async Task<object> WpfSelectItem(string element_handle, string? item_text = null, int? index = null)
+    [Description("Select an item in a ComboBox, ListBox, ListView or TabControl by visible text (item_text, case-insensitive substring) or zero-based index. PREFER this over clicking for dropdowns/lists: it works even when items are virtualized (not yet in the visual tree) and raises proper selection events. On failure the error lists the available items. STATE-CHANGING." + InputTargetDescription)]
+    public async Task<object> WpfSelectItem(string? element_handle = null, string? item_text = null, int? index = null,
+        string? automation_id = null, string? root_handle = null)
     {
-        if (string.IsNullOrEmpty(element_handle))
-        {
-            throw new McpException("element_handle is required");
-        }
         if (string.IsNullOrEmpty(item_text) && index == null)
         {
             throw new McpException("Provide item_text or index to choose the item to select");
         }
 
-        var result = await _ipcBridge.SelectItemAsync(element_handle, item_text, index);
+        var handle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.SelectItemAsync(handle, item_text, index);
         return new
         {
             success = true,
@@ -542,15 +561,12 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Set the text/value of a UI element (TextBox, ComboBox, etc.). By default uses UI Automation IValueProvider.SetValue (clean, no focus needed, raises proper events). Falls back to setting TextBox.Text or PasswordBox.Password directly, or a reflected string 'Text' property. Set physical=true to focus the element and type via OS keyboard input (clears existing text with Ctrl+A/Delete first, then types each character; moves window focus). STATE-CHANGING.")]
-    public async Task<object> WpfSetText(string element_handle, string text, bool physical = false)
+    [Description("Set the text/value of a UI element (TextBox, ComboBox, etc.). By default uses UI Automation IValueProvider.SetValue (clean, no focus needed, raises proper events). Falls back to setting TextBox.Text or PasswordBox.Password directly, or a reflected string 'Text' property. Set physical=true to focus the element and type via OS keyboard input (clears existing text with Ctrl+A/Delete first, then types each character; moves window focus). STATE-CHANGING." + InputTargetDescription)]
+    public async Task<object> WpfSetText(string text, string? element_handle = null, bool physical = false,
+        string? automation_id = null, string? root_handle = null)
     {
-        if (string.IsNullOrEmpty(element_handle))
-        {
-            throw new McpException("element_handle is required");
-        }
-
-        var result = await _ipcBridge.SetTextAsync(element_handle, text ?? string.Empty, physical);
+        var handle = await _ipcBridge.ResolveElementHandleAsync(element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.SetTextAsync(handle, text ?? string.Empty, physical);
         return new
         {
             success = true,
@@ -561,15 +577,17 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Send a keyboard shortcut / key combination to a WPF element (or to whatever currently has keyboard focus, when element_handle is omitted). Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'Escape', 'F5', 'Alt+F4', 'Win+R'. Modifiers: Ctrl, Shift, Alt, Win. Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right. Uses OS keyboard input - brings the target window to the foreground. STATE-CHANGING.")]
-    public async Task<object> WpfSendKeys(string keys, string? element_handle = null)
+    [Description("Send a keyboard shortcut / key combination to a WPF element (or to whatever currently has keyboard focus, when both element_handle and automation_id are omitted). Examples: 'Ctrl+S', 'Ctrl+Shift+F', 'Enter', 'Escape', 'F5', 'Alt+F4', 'Win+R'. Modifiers: Ctrl, Shift, Alt, Win. Keys: A-Z, 0-9, F1-F12, Enter, Esc, Tab, Space, Backspace, Delete, Insert, Home, End, PageUp, PageDown, Up, Down, Left, Right. Uses OS keyboard input - brings the target window to the foreground. STATE-CHANGING." + InputTargetDescription)]
+    public async Task<object> WpfSendKeys(string keys, string? element_handle = null,
+        string? automation_id = null, string? root_handle = null)
     {
         if (string.IsNullOrWhiteSpace(keys))
         {
             throw new McpException("keys is required (e.g. \"Ctrl+S\")");
         }
 
-        var result = await _ipcBridge.SendKeysAsync(element_handle, keys);
+        var handle = await ElementTarget.ResolveOptionalAsync(_ipcBridge, element_handle, automation_id, root_handle);
+        var result = await _ipcBridge.SendKeysAsync(handle, keys);
         return new
         {
             success = true,

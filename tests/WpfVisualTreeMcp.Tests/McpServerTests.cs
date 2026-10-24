@@ -1,3 +1,4 @@
+using WpfVisualTreeMcp.Automation.Infrastructure;
 using FluentAssertions;
 using Moq;
 using WpfVisualTreeMcp.Server;
@@ -256,7 +257,7 @@ public class WpfToolsTests
         };
 
         _ipcBridgeMock
-            .Setup(x => x.FindElementsAsync(null, "Button", null, null, null, false, 50))
+            .Setup(x => x.FindElementsAsync(null, "Button", null, null, null, false, 50, null))
             .ReturnsAsync(expectedResult);
 
         // Act
@@ -289,7 +290,7 @@ public class WpfToolsTests
         };
 
         _ipcBridgeMock
-            .Setup(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50))
+            .Setup(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50, null))
             .ReturnsAsync(expectedResult);
 
         // Act
@@ -297,7 +298,7 @@ public class WpfToolsTests
 
         // Assert
         result.Should().BeEquivalentTo(expectedResult);
-        _ipcBridgeMock.Verify(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50), Times.Once);
+        _ipcBridgeMock.Verify(x => x.FindElementsAsync(null, "Button", null, "Save", null, true, 50, null), Times.Once);
     }
 
     [Fact]
@@ -306,7 +307,7 @@ public class WpfToolsTests
         // Arrange
         var expectedResult = new FindElementsResult { Count = 0 };
         _ipcBridgeMock
-            .Setup(x => x.FindElementsDeepAsync(null, null, null, "Save", null, false))
+            .Setup(x => x.FindElementsDeepAsync(null, null, null, "Save", null, false, null))
             .ReturnsAsync(expectedResult);
 
         // Act
@@ -427,7 +428,8 @@ public class WpfToolsTests
             .Setup(x => x.SetPropertyAsync("elem_1", "Margin", "20,0,20,0"))
             .ReturnsAsync(expected);
 
-        var result = await _tools.WpfSetProperty("elem_1", "Margin", "20,0,20,0");
+        _ipcBridgeMock.Setup(x => x.ResolveElementHandleAsync("elem_1", null, null)).ReturnsAsync("elem_1");
+        var result = await _tools.WpfSetProperty(element_handle: "elem_1", property_name: "Margin", value: "20,0,20,0");
 
         result.Should().BeEquivalentTo(new
         {
@@ -443,7 +445,7 @@ public class WpfToolsTests
     [Fact]
     public async Task WpfSetProperty_WithEmptyHandle_Throws()
     {
-        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfSetProperty("", "Margin", "0"));
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => _tools.WpfSetProperty(element_handle: "", property_name: "Margin", value: "0"));
     }
 
     [Fact]
@@ -477,7 +479,7 @@ public class WpfToolsTests
             WaitedMs = 480
         };
         _ipcBridgeMock
-            .Setup(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100))
+            .Setup(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100, null))
             .ReturnsAsync(expected);
 
         // Act
@@ -492,7 +494,7 @@ public class WpfToolsTests
             matched_handle = "elem_00000005",
             element_type = "System.Windows.Controls.Button"
         });
-        _ipcBridgeMock.Verify(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100), Times.Once);
+        _ipcBridgeMock.Verify(x => x.WaitForElementAsync(null, "Button", null, "Save", "enabled", 5000, 100, null), Times.Once);
     }
 
     [Fact]

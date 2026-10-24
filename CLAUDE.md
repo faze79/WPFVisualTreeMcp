@@ -27,6 +27,11 @@ dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj -c Rel
 # Run as CLI (any subcommand switches from MCP server mode to CLI mode)
 dotnet run --project src/WpfVisualTreeMcp.Server -- list
 ./publish/WpfVisualTreeMcp.Server.exe help
+
+# Package the C# SDK and test the installed package against fresh WPF apps
+dotnet pack src/WpfVisualTreeMcp.Automation -c Release -o artifacts/packages
+python scripts/test_automation_package.py --packages artifacts/packages
+# Add --gestures on an unlocked desktop to exercise real drag/touch and replay
 ```
 
 ## Architecture
@@ -67,8 +72,9 @@ Target WPF Application (.NET Framework)
 | Property Writer | `src/WpfVisualTreeMcp.Inspector/PropertyWriter.cs` | Live-edits dependency properties (TypeConverter coercion) with a per-session undo stack (restores prior binding/local/default) |
 | Snapshot / Diff | `TreeWalker.CaptureSnapshot` + `InspectorService.ComputeDiff` | Capture a subtree's curated state keyed by element handle; diff two snapshots (handle stable → changed/added/removed) |
 | Injector Helper | `src/WpfVisualTreeMcp.InjectorHelper/Program.cs` | 32-bit .NET 8 helper exe spawned by `ProcessInjector` for cross-arch injection (v0.6.0) |
-| IPC Bridge | `src/WpfVisualTreeMcp.Server/Services/NamedPipeBridge.cs` | Named pipe communication to Inspector |
-| Process Manager | `src/WpfVisualTreeMcp.Server/Services/ProcessManager.cs` | WPF process discovery and attachment |
+| C# Test SDK | `src/WpfVisualTreeMcp.Automation/` | WpfApplication/WpfElement, async actions and exact property/predicate waits; standalone NuGet payload |
+| IPC Bridge | `src/WpfVisualTreeMcp.Automation/Infrastructure/InspectorBridge.cs` | Shared pipe transport; Server/Services/NamedPipeBridge adapts errors to MCP |
+| Process Manager | `src/WpfVisualTreeMcp.Automation/Infrastructure/ProcessManager.cs` | Shared WPF process discovery and attachment |
 | Inspector Entry | `src/WpfVisualTreeMcp.Inspector/InspectorService.cs` | Injected DLL main entry point |
 | Screenshot Capture | `src/WpfVisualTreeMcp.Inspector/ScreenshotCapture.cs` | RenderTargetBitmap element/window capture |
 | IPC Server | `src/WpfVisualTreeMcp.Inspector/IpcServer.cs` | Named pipe server in target process |
@@ -78,6 +84,13 @@ Target WPF Application (.NET Framework)
 
 ## Threading Model
 
+- The C# SDK serializes calls per attached session. Client-side waits release the
+  session gate between polls and resolve IDs each time; optional-resolution IPC
+  retries only a missing ID, never ambiguity or incomplete traversal. Polling is
+  read-only and is not recorded. Arbitrary C# predicates are not exported into
+  workflows; use explicit assertions or the recorded Inspector-side wait.
+- SDK IPC cancellation links the caller token and session disposal token to pipe
+  connect/read deadlines. It cannot undo input already sent to the target app.
 - WPF apps are single-threaded (STA). All visual tree operations must run on the UI Dispatcher thread.
 - Inspector wraps Dispatcher.Invoke in `Task.Run()` to avoid blocking the IPC thread.
 - 10-second timeout for UI operations.
@@ -139,6 +152,7 @@ Target WPF Application (.NET Framework)
 - Restarting the target WPF app invalidates all handles
 - Handle cache uses weak references: elements removed from the UI can be garbage-collected (their handles then expire)
 - If a handle is not found, the tool returns an error explaining how to recover (re-run `wpf_find_elements`)
+- All input tools, assertions and property edits accept exactly one `element_handle` or `automation_id` (send-keys/revert may omit both for their existing default behavior). IDs match `AutomationProperties.AutomationId` exactly, case-sensitively. `root_handle` scopes ID lookup; missing/ambiguous IDs fail without input. Find/deep/wait also accept `automation_id` (`--automation-id` in CLI). The capability handshake prevents older Inspectors from ignoring the new filters. ID resolution returns handles before the existing action path, so recording still captures stable selectors. Drag also resolves `target_automation_id` with an independent `target_root_handle`; both endpoints resolve before input. Shared `ElementTarget` validation prevents invalid selectors from falling back to keyboard focus. MCP parameters are named; required non-target parameters remain required in the tool schema.
 
 ### IPC Request Serialization (IMPORTANT)
 `IpcSerializer.SerializeRequest` must serialize the payload by its **runtime** type

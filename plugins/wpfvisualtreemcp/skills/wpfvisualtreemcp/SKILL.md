@@ -17,6 +17,7 @@ Call `wpf_list_processes` to identify the running application, then `wpf_attach`
 
 - Start a broad diagnosis with `wpf_report`; use `root_handle` to narrow it. Check `truncationReasons` and coverage before interpreting results. Disabled/invisible/zero-size counts are observations, while recent binding traces are process-wide history even for a subtree report. Follow current findings with the specific inspection tools below.
 - Locate controls with `wpf_find_elements`, filtering by visible text, name or type. Use the returned handles; do not invent or reuse handles from a previous process instance. Use a bounded `wpf_get_visual_tree` when hierarchy is relevant.
+- All input tools, assertions and property edits accept `automation_id` directly instead of `element_handle`. IDs match `AutomationProperties.AutomationId` exactly and case-sensitively; missing or duplicate IDs fail before input. Use `root_handle` to scope ID lookup. Drag also accepts `target_automation_id` and independent `target_root_handle`; a destination is exclusive with deltas. CLI equivalents: `--automation-id`, `--root`, `--target-automation-id`, `--target-root`. Find/deep/wait support the same ID filter. Other inspection tools use the handle returned by find. Restart and reattach with the updated Inspector if the capability is unavailable.
 - For binding failures, combine `wpf_get_binding_errors`, `wpf_get_bindings`, and `wpf_get_data_context`. Use `wpf_evaluate_binding` to find the failing path segment or explain a property's value source. An empty error list alone does not prove a binding is correct.
 - For unexpected styling or disabled controls, inspect properties and use `wpf_explain_triggers` to check the current style/template conditions. `ownerType` distinguishes same-name attached properties; use the control's actual dependency property.
 - Backstage pages are included through adorner traversal; find their tabs by type and header text, including composite headers. `visible_only` means WPF visibility, not freedom from overlays. Verify the selected page after clicking and use physical input if a custom control's automation action does not execute its command.
@@ -30,8 +31,8 @@ For requested UI interaction, prefer `wpf_click_element`, `wpf_select_item`, and
 
 - For hover, use `wpf_move_mouse` with optional paired local `x`/`y` and `hover_ms` (0-5000). For vertical/horizontal wheel input use `wpf_scroll`, signed `delta` in wheel units (120 per notch, nonzero -12000..12000), and optional `horizontal=true`. The app may scroll or zoom; verify the result.
 - `wpf_click_element` accepts paired local `x`/`y`, which imply physical input. This supports arbitrary points inside native hosts without substituting touch for mouse. UI Automation Toggle may only change state; use physical input when a custom button needs its click command.
-- For mouse dragging, use `wpf_drag` with `element_handle` and either `target_handle` or nonzero `delta_x`/`delta_y`. Optional paired start/target coordinates are local to their elements; `button` is left/right/middle and `duration_ms` controls the sequence.
-- For touch, use `wpf_touch_gesture` with `element_handle` and `gesture`: `tap`, `long_press`, `swipe`, `pinch`, or `rotate`. Swipe needs nonzero deltas; pinch needs `scale` (above 1 spreads, below 1 contracts); rotation uses `angle_degrees` (positive clockwise). Optional `x`/`y` select the center and `radius` sets the initial finger radius for pinch/rotate. Use the tool schema for bounds and duration limits.
+- For mouse dragging, use `wpf_drag` with `element_handle` or `automation_id` and either `target_handle`, `target_automation_id` or nonzero `delta_x`/`delta_y`. Optional paired start/target coordinates are local to their elements; `button` is left/right/middle and `duration_ms` controls the sequence.
+- For touch, use `wpf_touch_gesture` with `element_handle` or `automation_id` and `gesture`: `tap`, `long_press`, `swipe`, `pinch`, or `rotate`. Swipe performs a touch pan and needs nonzero deltas; pinch performs a touch zoom and needs `scale` (above 1 spreads, below 1 contracts); rotation uses `angle_degrees` (positive clockwise). Optional `x`/`y` select the center and `radius` sets the initial finger radius for pinch/rotate. Use the tool schema for bounds and duration limits.
 - Drag/touch coordinates are local WPF DIPs, not absolute screen pixels. Targets must be visible and unobstructed on an interactive desktop; touch paths must fit inside the element. Mutating interactions are serialized, while inspection remains available during a gesture.
 - Success confirms input submission, not a recognized gesture or accepted drop. Verify the resulting value, layout or UI state. WPF applications must handle touch/manipulations; legacy input stacks can ignore injected touch. Do not change the target application's input configuration to force support.
 
@@ -64,5 +65,11 @@ CLI self-update changes only the invoked installation and is not an MCP tool. On
 For an available CLI fallback, use `help` or `<command> --help`. Mouse and touch equivalents are `click --x/--y`, `move-mouse`, `scroll`, `drag` and `touch`; CLI rotation uses `--angle`, while the MCP parameter is `angle_degrees`. Never append a CLI subcommand to the plugin's stdio launch configuration.
 
 ## Version compatibility
+
+Direct AutomationId targeting and scoped drag destinations require v0.18.0 or newer.
+For hand-written C# tests, use the `WpfVisualTreeMcp.Automation` NuGet package:
+`WpfApplication.AttachAsync(pid)` and `app.ByAutomationId(id)` expose the same engine.
+`WaitForTextAsync("loaded")` compares the exact Text property and throws on timeout;
+client-side property waits and predicates are not serialized into recordings.
 
 The hover/wheel commands, click coordinates and screenshot auto mode require v0.17.0 or newer (38 tools). Release 0.16.0 has 36 tools. Discover the live schema before using them. CLI `update` installs the published stable release. Restart and reattach the target after replacing an injected Inspector; an already loaded DLL is not hot-reloaded.

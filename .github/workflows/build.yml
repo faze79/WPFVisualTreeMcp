@@ -68,6 +68,9 @@ jobs:
     - name: Publish MCP Server
       run: dotnet publish src/WpfVisualTreeMcp.Server/WpfVisualTreeMcp.Server.csproj --no-build --configuration Release --output ./publish
 
+    - name: Pack C# automation SDK
+      run: dotnet pack src/WpfVisualTreeMcp.Automation/WpfVisualTreeMcp.Automation.csproj --no-build --configuration Release --output ./artifacts/packages
+
     - name: Install x86 .NET runtime for injection helper
       shell: pwsh
       run: |
@@ -75,6 +78,15 @@ jobs:
         & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
         & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime windowsdesktop -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
         "DOTNET_ROOT_X86=$env:RUNNER_TEMP/dotnet-x86" >> $env:GITHUB_ENV
+
+    - name: Test standalone NuGet consumer and exported xUnit tests
+      run: python ./scripts/test_automation_package.py --packages ./artifacts/packages
+
+    - name: Upload C# automation SDK
+      uses: actions/upload-artifact@v4
+      with:
+        name: wpf-automation-nuget
+        path: ./artifacts/packages/*.nupkg
 
     - name: Test published injection (x64 and x86)
       shell: pwsh
