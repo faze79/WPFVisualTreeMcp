@@ -33,7 +33,6 @@ internal static class AutomationTestExporter
             </Project>
             """;
         files["RecordedWorkflowTest.cs"] = """
-            using System.Diagnostics;
             using WpfVisualTreeMcp.Automation;
             using WpfVisualTreeMcp.Shared.Ipc;
             using WpfVisualTreeMcp.Shared.Models;
@@ -46,21 +45,12 @@ internal static class AutomationTestExporter
                 {
                     var path = Environment.GetEnvironmentVariable("WPF_TEST_APP")
                         ?? throw new InvalidOperationException("Set WPF_TEST_APP to the full path of the application executable.");
-                    using var process = Process.Start(new ProcessStartInfo(path) { UseShellExecute = false })!;
-                    try
-                    {
-                        if (!process.WaitForInputIdle(10000)) throw new TimeoutException("Application did not become ready.");
-                        await using var app = await WpfApplication.AttachAsync(process.Id);
-                        var workflow = IpcSerializer.Deserialize<RecordedWorkflow>(
-                            await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "workflow.json")))!;
-                        var result = await app.ReplayAsync(workflow);
-                        Assert.True(result.Success, $"Replay failed at step {result.FailedStep}: {result.Error}");
-                    }
-                    finally
-                    {
-                        // Terminate only the process this test started.
-                        if (!process.HasExited) { process.Kill(); await process.WaitForExitAsync(); }
-                    }
+                    // Launch waits for readiness and disposes only the process this test owns.
+                    await using var app = await WpfApplication.LaunchAsync(new LaunchOptions { FileName = path });
+                    var workflow = IpcSerializer.Deserialize<RecordedWorkflow>(
+                        await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "workflow.json")))!;
+                    var result = await app.ReplayAsync(workflow);
+                    Assert.True(result.Success, $"Replay failed at step {result.FailedStep}: {result.Error}");
                 }
             }
             """;

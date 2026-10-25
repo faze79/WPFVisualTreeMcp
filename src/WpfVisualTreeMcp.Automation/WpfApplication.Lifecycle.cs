@@ -48,6 +48,9 @@ public sealed partial class WpfApplication
             throw new ArgumentOutOfRangeException(nameof(options.StartupTimeout));
         cancellationToken.ThrowIfCancellationRequested();
         var start = new ProcessStartInfo(options.FileName) { UseShellExecute = false };
+        // VSTest may set this to its own x64 runtime. The launched app can be
+        // x86: preserve architecture-specific roots and explicit caller overrides.
+        start.Environment.Remove("DOTNET_ROOT");
         if (options.WorkingDirectory != null) start.WorkingDirectory = options.WorkingDirectory;
         foreach (var argument in options.Arguments) start.ArgumentList.Add(argument);
         foreach (var entry in options.Environment) start.Environment[entry.Key] = entry.Value;

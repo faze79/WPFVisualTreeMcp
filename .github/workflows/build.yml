@@ -80,7 +80,7 @@ jobs:
         Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
         foreach ($channel in @('8.0', '9.0', '10.0')) {
           foreach ($runtime in @('dotnet', 'windowsdesktop')) {
-            & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel $channel -Runtime $runtime -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
+            & pwsh -NoProfile -File "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel $channel -Runtime $runtime -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
             if ($LASTEXITCODE -ne 0) { throw "Failed to install x86 $runtime $channel" }
           }
         }

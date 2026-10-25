@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The CoreCLR Inspector runtime configuration now declares its actual .NET 8
   minimum, with major-version roll-forward for .NET 9 and 10 target processes.
 - The x86 injection helper can roll forward to .NET 9/10 when .NET 8 is absent.
+- Launching x86 applications from an x64 test runner no longer inherits the
+  runner's generic `DOTNET_ROOT`. Architecture-specific roots and explicit launch
+  overrides are preserved. Exported xUnit tests use the SDK's owned launch API
+  for readiness, cross-architecture runtime resolution and cleanup.
 
 ### Compatibility
 

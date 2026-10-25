@@ -171,6 +171,8 @@ def main():
         for sdk_framework in MATRIX["sdkFrameworks"]:
             case_env = dict(env, WPF_TEST_SDK_MAJOR=sdk_framework[3:].split(".")[0],
                             WPF_TEST_TARGET_MAJOR=framework[3:].split(".")[0] if framework.endswith("-windows") else "4")
+            # Reproduce VSTest's x64 root in an x64 consumer launching x86 apps.
+            case_env["DOTNET_ROOT"] = str(Path(shutil.which("dotnet")).resolve().parent)
             sdk_major = case_env["WPF_TEST_SDK_MAJOR"]
             if architecture == "x86" and sdk_major in isolated_runtimes and (
                     framework == "net481" or framework == sdk_framework):
