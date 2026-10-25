@@ -4,14 +4,17 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+$matrix = Get-Content (Join-Path $PSScriptRoot 'compatibility-matrix.json') -Raw | ConvertFrom-Json
+$frameworkRelease = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -Name Release).Release
+if ($frameworkRelease -lt 533320) { throw 'The compatibility matrix requires .NET Framework 4.8.1.' }
 if (-not $WorkDirectory) { $WorkDirectory = Join-Path $root "TestResults/matrix-$([Guid]::NewGuid().ToString('N'))" }
 $work = [IO.Path]::GetFullPath($WorkDirectory)
 if (Test-Path -LiteralPath $work) { throw 'Use a new integration work directory.' }
 New-Item -ItemType Directory -Path $work | Out-Null
 $inspectorProject = Join-Path $root 'src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj'
-foreach ($framework in @('net472', 'net48', 'net8.0-windows')) {
-    foreach ($architecture in @('x86', 'x64')) {
-        foreach ($mode in @('SelfHosted', 'AutoInjection')) {
+foreach ($framework in $matrix.targetFrameworks) {
+    foreach ($architecture in $matrix.architectures) {
+        foreach ($mode in $matrix.inspectionModes) {
             $sampleRoot = Join-Path $work "samples/$framework/$architecture/$mode"
             $source = Join-Path $work "source/$framework/$architecture/$mode"
             New-Item -ItemType Directory -Force $source | Out-Null
@@ -27,7 +30,7 @@ foreach ($framework in @('net472', 'net48', 'net8.0-windows')) {
             $arguments = @('publish', $project, '-c', 'Release', "-p:SampleTargetFramework=$framework",
                 "-p:PlatformTarget=$architecture", "-p:EnableInspectorSelfHosting=$hosting",
                 "-p:ArtifactsPath=$sampleArtifacts", '--output', $sampleRoot, '--verbosity', 'quiet')
-            if ($framework -eq 'net8.0-windows') { $arguments += @('--runtime', "win-$architecture", '--self-contained', 'false') }
+            if ($framework.EndsWith('-windows')) { $arguments += @('--runtime', "win-$architecture", '--self-contained', 'false') }
             & dotnet @arguments
             if ($LASTEXITCODE -ne 0) { throw "Sample build failed: $framework/$architecture/$mode" }
         }

@@ -4,7 +4,7 @@
     "rollForward": "LatestMajor",
     "framework": {
       "name": "Microsoft.WindowsDesktop.App",
-      "version": "6.0.0"
+      "version": "8.0.0"
     }
   }
 }

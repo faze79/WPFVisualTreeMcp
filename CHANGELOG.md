@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-25
+
+### Added
+
+- Verified WPF target support for .NET 9, .NET 10 and .NET Framework 4.8.1,
+  retaining .NET 8 and Framework 4.7.2/4.8. One shared compatibility matrix drives
+  24 target/architecture/hosting combinations: x86/x64, self-hosting/auto-injection.
+  Modern runtime versions are checked in the running process.
+- Installed-NuGet coverage for all 12 target/architecture combinations, including
+  inspection, AutomationId actions and exported xUnit replay. Advanced grid/tree,
+  validation, property streams and window/lifecycle tests run from .NET 8, 9 and
+  10 consumers against every target. CI installs all required modern runtimes.
+
+### Fixed
+
+- The CoreCLR Inspector runtime configuration now declares its actual .NET 8
+  minimum, with major-version roll-forward for .NET 9 and 10 target processes.
+- The x86 injection helper can roll forward to .NET 9/10 when .NET 8 is absent.
+
+### Compatibility
+
+- WPF targets: .NET Framework 4.7.2/4.8/4.8.1 and .NET 8/9/10, Windows x86/x64.
+  SDK consumers: .NET 8/9/10. Framework 4.x target builds are tested on the
+  installed 4.8.1 runtime (in-place servicing), not separate side-by-side runtimes.
+  The existing API and `net8.0` SDK asset remain unchanged.
+
 ## [0.19.0] - 2026-10-25
 
 ### Added

@@ -14,13 +14,16 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
-**New in [v0.19.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.19.0):**
+**New in [v0.20.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.20.0):**
+Verified support for **WPF on .NET 9, .NET 10 and .NET Framework 4.8.1**, on both
+x86 and x64. CI exercises automatic injection and self-hosting across all six
+supported target frameworks, plus the installed C# SDK from .NET 8, 9 and 10 test
+projects. The x86 injection helper can also use .NET 9 or 10 when .NET 8 is absent.
+
 The [`WpfVisualTreeMcp.Automation` C# SDK](https://www.nuget.org/packages/WpfVisualTreeMcp.Automation)
-now drives virtualized WPF DataGrids and TreeViews, waits for controls before input,
-sets exact selection/checked/expanded states, launches apps and manages WPF windows.
-Live property subscriptions deliver changes directly to C# tests, with disposal and
-disconnect cleanup. The 38-tool MCP server and CLI continue to share the inspection
-and input engine, including direct AutomationId targeting.
+drives virtualized DataGrids/TreeViews, waits for controls, manages WPF windows and
+streams property changes. The 38-tool MCP server and CLI share the inspection and
+input engine, including direct AutomationId targeting.
 
 Workflow recording/replay/xUnit export, aggregate diagnostics, full-content screenshots
 and .NET Framework 4.7.2 support remain available from v0.16.0. Thanks to @miloszkukla
@@ -28,7 +31,7 @@ for the compatibility and screenshot work in [PR #22](https://github.com/faze79/
 
 ## Quickstart (60 seconds)
 
-1. Download and extract `WpfVisualTreeMcp-vX.Y.Z-win-x64.zip` from the [latest release](https://github.com/faze79/WPFVisualTreeMcp/releases/latest) (requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)).
+1. Download and extract `WpfVisualTreeMcp-vX.Y.Z-win-x64.zip` from the [latest release](https://github.com/faze79/WPFVisualTreeMcp/releases/latest) (requires a [.NET 8, 9 or 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet)).
 2. Register it in your MCP client — for Claude Code, add to `.mcp.json`:
    ```json
    {
@@ -54,8 +57,21 @@ configuration and skill together.
 with direct process attachment and AutomationId locators. The package includes the
 injection payload and works without starting an MCP server or CLI.
 
+| Component | Supported frameworks |
+| --- | --- |
+| WPF application being automated | .NET Framework 4.7.2, 4.8, 4.8.1; .NET 8, 9, 10 |
+| C# project consuming the Automation NuGet | .NET 8, 9, 10 |
+| Architectures | Windows x86 and x64; use an x64 test process to control either |
+
+The application and test project can use different frameworks: for example, a
+.NET 10 test can automate a .NET Framework 4.8.1 application. The SDK's `net8.0`
+library works in .NET 9/10 test projects; it is not a .NET Framework test library.
+The [compatibility matrix](tests/compatibility-matrix.json) is exercised before
+release, including actual runtime-version checks. Framework 4.x target builds run
+on the installed 4.8.1 runtime, since those runtimes update in place.
+
 ```powershell
-dotnet add package WpfVisualTreeMcp.Automation --version 0.19.0
+dotnet add package WpfVisualTreeMcp.Automation --version 0.20.0
 ```
 
 ```csharp
@@ -177,6 +193,9 @@ In short: UIA-based tools see what accessibility exposes, and computer-use agent
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later
 - A WPF application to inspect
 
+Building and running the complete compatibility suite requires the .NET 10 SDK,
+.NET 8/9/10 Desktop runtimes for x64 and x86, and .NET Framework 4.8.1.
+
 ### Installation
 
 #### Option 1: .NET tool / NuGet (Recommended)
@@ -203,10 +222,10 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 #### Desktop extension (MCPB)
 
 Clients that support MCP bundles can import
-[`WpfVisualTreeMcp-v0.19.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.19.0/WpfVisualTreeMcp-v0.19.0-win-x64.mcpb).
+[`WpfVisualTreeMcp-v0.20.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.20.0/WpfVisualTreeMcp-v0.20.0-win-x64.mcpb).
 This Windows x64 bundle includes the server runtime and a self-contained x86
 injection helper. A smaller
-[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.19.0/WpfVisualTreeMcp-v0.19.0-win-x64-compact.mcpb)
+[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.20.0/WpfVisualTreeMcp-v0.20.0-win-x64-compact.mcpb)
 provides the same tools with a reduced runtime for catalogs with upload limits.
 Update either bundle through the client's extension UI. See the
 [MCPB guide](docs/MCPB.md) for requirements, packaging and verification.
@@ -359,7 +378,7 @@ Prerequisites for this installation method:
   the x86 .NET 8 runtime as well.
 
 From the repository root, register the local marketplace and install the plugin.
-You can also download `WpfVisualTreeMcp-v0.19.0-codex-plugin.zip` from
+You can also download `WpfVisualTreeMcp-v0.20.0-codex-plugin.zip` from
 [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
 extract it, and run these commands from the extracted root:
 
@@ -711,7 +730,7 @@ WpfVisualTreeMcp/
 │   │   ├── WpfTools.cs                 # 38 inspection, interaction and workflow tools
 │   │   ├── Cli/CliRunner.cs            # One-shot CLI front-end (v0.4.0)
 │   │   └── Services/                   # Process & IPC management
-│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (.NET Framework 4.7.2/4.8 and .NET 8)
+│   ├── WpfVisualTreeMcp.Inspector/     # Injected DLL (Framework 4.7.2/4.8/4.8.1; .NET 8/9/10)
 │   ├── WpfVisualTreeMcp.Injector/      # Managed injection logic (CreateRemoteThread; net48 + net8.0)
 │   ├── WpfVisualTreeMcp.InjectorHelper/# x86 .NET 8 helper exe for cross-arch injection (v0.6.0)
 │   ├── WpfVisualTreeMcp.Bootstrapper/  # Native C++ DLL for CLR hosting

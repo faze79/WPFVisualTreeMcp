@@ -27,7 +27,7 @@ posting. An empty local issue/PR queue does not mean distribution requests are c
 > exposed over 38 MCP tools, matching CLI commands and a C# automation SDK: visual trees, bindings,
 > diagnostic reports, full-content screenshots, mouse hover/wheel/dragging, native touch,
 > and workflow recording/replay with runnable xUnit export. Supports WPF apps on
-> .NET Framework 4.7.2/4.8 and .NET 8+ through runtime injection or self-hosting.
+> .NET Framework 4.7.2/4.8/4.8.1 and .NET 8/9/10 through runtime injection or self-hosting.
 > Target actions by AutomationId and await exact text/property values from C# tests.
 > Includes CLI self-update and a Codex companion skill. Native touch behavior
 > depends on the application's input support.

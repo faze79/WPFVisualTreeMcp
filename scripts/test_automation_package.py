@@ -1,9 +1,12 @@
 """Install the actual Automation nupkg in an isolated C# consumer and exercise it live.
 
-Run on Windows with .NET 8 (including the x86 runtime for cross-bitness injection).
+Run on Windows with the .NET 10 SDK, .NET 8/9/10 Desktop runtimes (x64 and x86)
+and .NET Framework 4.8.1. The matrix also verifies older application targets.
 --gestures additionally requires an unlocked interactive desktop.
 """
 import argparse
+import itertools
+import json
 import os
 from pathlib import Path
 import shutil
@@ -15,6 +18,8 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
+MATRIX = json.loads((ROOT / "tests" / "compatibility-matrix.json").read_text(encoding="utf-8"))
+TARGET_CASES = list(itertools.product(MATRIX["targetFrameworks"], MATRIX["architectures"]))
 
 
 def run(command, name, work, env):
@@ -29,6 +34,37 @@ def run(command, name, work, env):
         print(log.read_text(encoding="utf-8", errors="replace"), flush=True)
     elif name.startswith("replay-"):
         print("\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]), flush=True)
+
+
+def isolated_x86_runtime(major, work, env):
+    """Expose only one installed runtime major to the unmodified NuGet helper.
+
+    Junctions avoid copying hundreds of MB and require no symlink privilege.
+    These fixtures are confined to this run's artifact directory.
+    """
+    program_files = env.get("PROGRAMFILES(X86)") or env.get("ProgramFiles(x86)")
+    installed = Path(env["DOTNET_ROOT_X86"]) if env.get("DOTNET_ROOT_X86") else Path(program_files) / "dotnet"
+    root = work / f"dotnet-x86-only-{major}"
+    root.mkdir()
+    shutil.copy2(installed / "dotnet.exe", root / "dotnet.exe")
+    for relative in ("host/fxr", "shared/Microsoft.NETCore.App", "shared/Microsoft.WindowsDesktop.App"):
+        # The host resolver is shared across runtime versions; match normal
+        # apphost behavior by using the latest installed hostfxr. Only the
+        # shared frameworks are restricted to the selected runtime major.
+        candidates = [p for p in (installed / relative).iterdir()
+                      if p.is_dir() and "-" not in p.name
+                      and (relative == "host/fxr" or p.name.startswith(f"{major}."))]
+        if not candidates:
+            raise RuntimeError(f"Install the x86 .NET {major} Desktop runtime in {installed}")
+        selected = max(candidates, key=lambda p: tuple(map(int, p.name.split('.'))))
+        link = root / relative / selected.name
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link_env = dict(env, WPF_TEST_LINK=str(link), WPF_TEST_LINK_TARGET=str(selected))
+        run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+             "$ErrorActionPreference = 'Stop'; New-Item -ItemType Junction "
+             "-Path $env:WPF_TEST_LINK -Target $env:WPF_TEST_LINK_TARGET | Out-Null"],
+            f"runtime-link-{major}-{selected.parent.name}", work, link_env)
+    return root
 
 
 def main():
@@ -60,7 +96,10 @@ def main():
     work.mkdir(parents=True)
     print(f"Artifacts: {work}", flush=True)
     env = os.environ.copy()
+    # Do not let a developer's global setting silently run a net9 app on net10.
+    env.pop("DOTNET_ROLL_FORWARD", None)
     env["NUGET_PACKAGES"] = str(work / "nuget-cache")
+    isolated_runtimes = {str(major): isolated_x86_runtime(major, work, env) for major in (9, 10)}
     (work / "NuGet.Config").write_text(f"""<configuration><packageSources><clear />
       <add key="local-sdk" value="{escape(str(packages), {'"': '&quot;'})}" />
       <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
@@ -83,7 +122,7 @@ def main():
             if name.startswith("payload/native/"):
                 assert (folder / name.removeprefix("payload/")).is_file(), (folder, name)
 
-    for framework, architecture in (("net8.0-windows", "x64"), ("net472", "x86")):
+    for framework, architecture in TARGET_CASES:
         case = f"{framework}-{architecture}"
         source = work / f"source-{case}"
         source.mkdir()
@@ -94,7 +133,7 @@ def main():
         command = ["dotnet", "publish", source / "SampleWpfApp.csproj", "-c", "Release",
                    f"-p:SampleTargetFramework={framework}", f"-p:PlatformTarget={architecture}",
                    "-p:EnableInspectorSelfHosting=false", "-o", sample, "--verbosity", "quiet"]
-        if framework == "net8.0-windows":
+        if framework.endswith("-windows"):
             command += ["--runtime", f"win-{architecture}", "--self-contained", "false"]
         run(command, f"sample-build-{case}", work, env)
         executable = sample / "SampleWpfApp.exe"
@@ -112,8 +151,10 @@ def main():
     advanced_project = advanced / "AdvancedConsumer.csproj"
     advanced_project.write_text(project.read_text(encoding="utf-8"), encoding="utf-8")
     shutil.copy2(ROOT / "tests" / "WpfVisualTreeMcp.Automation.Smoke" / "Program.cs", advanced / "Program.cs")
-    run(["dotnet", "build", advanced_project, "-c", "Release", "--verbosity", "quiet"], "advanced-consumer-build", work, env)
-    for framework, architecture in (("net8.0-windows", "x64"), ("net472", "x86")):
+    for sdk_framework in MATRIX["sdkFrameworks"]:
+        run(["dotnet", "build", advanced_project, "-c", "Release", f"-p:TargetFramework={sdk_framework}",
+             "--verbosity", "quiet"], f"advanced-consumer-build-{sdk_framework}", work, env)
+    for framework, architecture in TARGET_CASES:
         case = f"{framework}-{architecture}"
         source = work / f"advanced-source-{case}"
         source.mkdir()
@@ -122,13 +163,26 @@ def main():
                 shutil.copy2(file, source / file.name)
         target = work / f"advanced-app-{case}"
         command = ["dotnet", "publish", source / "WpfVisualTreeMcp.Automation.TestApp.csproj", "-c", "Release", "-f", framework,
-                   f"-p:PlatformTarget={architecture}", "-p:EnableInspectorSelfHosting=false", "-o", target, "--verbosity", "quiet"]
-        if framework == "net8.0-windows":
+                   f"-p:TargetFrameworks={framework}", f"-p:PlatformTarget={architecture}",
+                   "-p:EnableInspectorSelfHosting=false", "-o", target, "--verbosity", "quiet"]
+        if framework.endswith("-windows"):
             command += ["--runtime", f"win-{architecture}", "--self-contained", "false"]
         run(command, f"advanced-app-build-{case}", work, env)
-        run([advanced / "bin" / "Release" / "net8.0-windows" / "AdvancedConsumer.exe",
-             target / "WpfVisualTreeMcp.Automation.TestApp.exe", "--inject"], f"smoke-advanced-{case}", work, env)
-    print(f"PASS: standalone NuGet consumer, exact waits, inspection, actions, export/replay. Artifacts: {work}", flush=True)
+        for sdk_framework in MATRIX["sdkFrameworks"]:
+            case_env = dict(env, WPF_TEST_SDK_MAJOR=sdk_framework[3:].split(".")[0],
+                            WPF_TEST_TARGET_MAJOR=framework[3:].split(".")[0] if framework.endswith("-windows") else "4")
+            sdk_major = case_env["WPF_TEST_SDK_MAJOR"]
+            if architecture == "x86" and sdk_major in isolated_runtimes and (
+                    framework == "net481" or framework == sdk_framework):
+                case_env["DOTNET_ROOT_X86"] = str(isolated_runtimes[sdk_major])
+                case_env["DOTNET_MULTILEVEL_LOOKUP"] = "0"
+                print(f"Verifying x86 injection with only .NET {sdk_major} available", flush=True)
+            run([advanced / "bin" / "Release" / sdk_framework / "AdvancedConsumer.exe",
+                 target / "WpfVisualTreeMcp.Automation.TestApp.exe", "--inject"],
+                f"smoke-advanced-{sdk_framework}-to-{case}", work, case_env)
+    print(f"PASS: {len(TARGET_CASES)} target/architecture cases, "
+          f"{len(MATRIX['sdkFrameworks'])} SDK runtimes, exact waits, inspection, actions, export/replay. "
+          f"Artifacts: {work}", flush=True)
 
 
 if __name__ == "__main__":

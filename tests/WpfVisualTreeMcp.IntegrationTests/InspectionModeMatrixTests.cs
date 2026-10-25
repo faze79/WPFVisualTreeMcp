@@ -15,21 +15,20 @@ public class InspectionModeMatrixTests
     private const uint Th32csSnapModule32 = 0x00000010;
     private static readonly IntPtr InvalidHandleValue = new(-1);
 
-    public static TheoryData<string, string, string> Cases => new()
+    public static TheoryData<string, string, string> Cases
     {
-        { "net472", "x86", "SelfHosted" },
-        { "net472", "x86", "AutoInjection" },
-        { "net472", "x64", "SelfHosted" },
-        { "net472", "x64", "AutoInjection" },
-        { "net48", "x86", "SelfHosted" },
-        { "net48", "x86", "AutoInjection" },
-        { "net48", "x64", "SelfHosted" },
-        { "net48", "x64", "AutoInjection" },
-        { "net8.0-windows", "x86", "SelfHosted" },
-        { "net8.0-windows", "x86", "AutoInjection" },
-        { "net8.0-windows", "x64", "SelfHosted" },
-        { "net8.0-windows", "x64", "AutoInjection" },
-    };
+        get
+        {
+            using var matrix = JsonDocument.Parse(File.ReadAllText(
+                Path.Combine(AppContext.BaseDirectory, "compatibility-matrix.json")));
+            var cases = new TheoryData<string, string, string>();
+            foreach (var framework in matrix.RootElement.GetProperty("targetFrameworks").EnumerateArray())
+            foreach (var architecture in matrix.RootElement.GetProperty("architectures").EnumerateArray())
+            foreach (var mode in matrix.RootElement.GetProperty("inspectionModes").EnumerateArray())
+                cases.Add(framework.GetString()!, architecture.GetString()!, mode.GetString()!);
+            return cases;
+        }
+    }
 
     [Fact]
     public void CalculateRealizedPixelAdvance_VariableHeightContainers_UsesSharedContainerGeometry()
@@ -77,8 +76,16 @@ public class InspectionModeMatrixTests
             await WaitForMainWindowAsync(sample, TimeSpan.FromSeconds(30));
 
             GetProcessArchitecture(sample).Should().Be(architecture);
-            var runtimeModule = targetFramework == "net8.0-windows" ? "coreclr.dll" : "clr.dll";
+            var modernDotNet = targetFramework.EndsWith("-windows", StringComparison.Ordinal);
+            var runtimeModule = modernDotNet ? "coreclr.dll" : "clr.dll";
             await WaitForModuleAsync(sample.Id, runtimeModule, present: true, TimeSpan.FromSeconds(10));
+            if (modernDotNet)
+            {
+                var expectedMajor = int.Parse(targetFramework[3..targetFramework.IndexOf('.')]);
+                var runtimePath = GetModulePaths(sample.Id)[runtimeModule];
+                FileVersionInfo.GetVersionInfo(runtimePath).FileMajorPart.Should().Be(expectedMajor,
+                    "each case must exercise its actual runtime, not roll forward to a different major");
+            }
 
             var autoInject = mode == "AutoInjection";
             if (autoInject)
@@ -219,6 +226,7 @@ public class InspectionModeMatrixTests
         };
         startInfo.Environment["WPF_VISUAL_TREE_MCP_SELF_HOSTED"] =
             mode == "SelfHosted" ? "true" : "false";
+        startInfo.Environment.Remove("DOTNET_ROLL_FORWARD");
         startInfo.Environment["DOTNET_ROOT_X86"] = Environment.GetEnvironmentVariable("DOTNET_ROOT_X86")
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet");
 
@@ -246,7 +254,7 @@ public class InspectionModeMatrixTests
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (GetModuleNames(processId).Contains(moduleName) == present)
+            if (GetModulePaths(processId).ContainsKey(moduleName) == present)
                 return;
             await Task.Delay(100);
         }
@@ -264,7 +272,7 @@ public class InspectionModeMatrixTests
         return isWow64 ? "x86" : "x64";
     }
 
-    private static HashSet<string> GetModuleNames(int processId)
+    private static Dictionary<string, string> GetModulePaths(int processId)
     {
         for (var attempt = 0; attempt < 5; attempt++)
         {
@@ -278,14 +286,14 @@ public class InspectionModeMatrixTests
 
             try
             {
-                var modules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var modules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 var entry = new ModuleEntry32 { Size = (uint)Marshal.SizeOf<ModuleEntry32>() };
                 if (!Module32First(snapshot, ref entry))
                     throw new Win32Exception(Marshal.GetLastWin32Error());
 
                 do
                 {
-                    modules.Add(entry.Module);
+                    modules[entry.Module] = entry.ExePath;
                 }
                 while (Module32Next(snapshot, ref entry));
 

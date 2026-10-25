@@ -33,7 +33,7 @@ def main():
             f"{len(tools)} MCP tools for inspecting and automating running WPF apps on Windows x64. "
             "Read visual trees, dependency properties, bindings and DataContext; capture full-content screenshots; "
             "move/click/scroll/drag with the mouse, send native touch gestures, record/replay workflows and export runnable xUnit tests.\n\n"
-            "Supports .NET Framework 4.7.2/4.8 and .NET 8+ WPF targets, including x86 targets. "
+            "Supports .NET Framework 4.7.2/4.8/4.8.1 and .NET 8/9/10 WPF targets, including x86 targets. "
             "The server and x86 helper include their .NET runtimes. The target app still needs its own runtime. "
             "Run in the same local Windows desktop session as the target application. "
             "Touch behavior depends on application support.\n\n"

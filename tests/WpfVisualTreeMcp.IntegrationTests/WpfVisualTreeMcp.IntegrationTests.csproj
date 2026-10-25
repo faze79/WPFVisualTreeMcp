@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../compatibility-matrix.json" Link="compatibility-matrix.json" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Automation\WpfVisualTreeMcp.Automation.csproj" />
   </ItemGroup>

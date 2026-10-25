@@ -7,6 +7,8 @@ if (args.Length == 0) throw new ArgumentException("Pass the TestApp executable p
 var executable = Path.GetFullPath(args[0]);
 var inject = args.Contains("--inject");
 void Check(bool condition, string message) { if (!condition) throw new Exception(message); Console.WriteLine("PASS " + message); }
+var expectedSdk = Environment.GetEnvironmentVariable("WPF_TEST_SDK_MAJOR");
+if (expectedSdk != null) Check(Environment.Version.Major.ToString() == expectedSdk, "SDK runs on .NET " + expectedSdk);
 async Task Throws<T>(Func<Task> action, string message) where T : Exception
 {
     try { await action(); throw new Exception("Expected " + typeof(T).Name + ": " + message); }
@@ -24,6 +26,10 @@ var pid = app.ProcessId;
 try
 {
     Check(app.OwnsProcess, "launch owns only its started process");
+    var expectedTarget = Environment.GetEnvironmentVariable("WPF_TEST_TARGET_MAJOR");
+    if (expectedTarget != null)
+        Check(await app.ByAutomationId("Main").GetPropertyAsync("Tag") == expectedTarget,
+            "target runs on CLR major " + expectedTarget);
     Check((await app.ByAutomationId("Arguments").GetPropertyAsync("Text"))!.StartsWith("space argument"), "arguments retain spaces");
     Check(await app.ByAutomationId("WorkingDirectory").GetPropertyAsync("Text") == launch.WorkingDirectory, "working directory");
     Check(await app.ByAutomationId("EnvironmentValue").GetPropertyAsync("Text") == "test value", "environment override");

@@ -44,7 +44,8 @@ replays in a fresh app process owned by the test.
 
 The Inspector is a .NET Framework library that gets loaded into target WPF applications to perform inspection operations.
 
-**Technology:** .NET Framework 4.7.2/4.8 and .NET 8.0-windows. Injection packages
+**Technology:** .NET Framework 4.7.2/4.8 and .NET 8.0-windows binaries, supporting
+WPF targets on Framework 4.7.2/4.8/4.8.1 and .NET 8/9/10. Injection packages
 use the net472 payload for .NET Framework applications and the separate CoreCLR
 payload for modern .NET applications.
 

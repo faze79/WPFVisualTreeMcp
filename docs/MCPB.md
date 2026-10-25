@@ -9,9 +9,9 @@ The bundle requires Windows 10/11 x64 and a local desktop session. It includes
 the .NET runtime for the server and a self-contained x86 injection helper; no
 separate .NET installation is required to start these two executables. The WPF
 application being inspected still needs its own runtime. Supported targets are
-.NET Framework 4.7.2/4.8 and .NET 8+, on x64 or x86.
+.NET Framework 4.7.2/4.8/4.8.1 and .NET 8/9/10, on x64 or x86.
 
-The 36 MCP tools include visual trees, bindings, diagnostics, screenshots, mouse
+The 38 MCP tools include visual trees, bindings, diagnostics, screenshots, mouse
 dragging, native touch gestures and workflow recording/replay/xUnit export. Touch
 requires application support. This is a local Windows server, not a hosted HTTP
 endpoint. The bundle does not install the separate Codex companion skill.

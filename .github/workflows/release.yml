@@ -41,7 +41,10 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        dotnet-version: |
+          8.0.x
+          9.0.x
+          10.0.x
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1.3
@@ -65,12 +68,16 @@ jobs:
     - name: Pack C# automation SDK
       run: dotnet pack src/WpfVisualTreeMcp.Automation/WpfVisualTreeMcp.Automation.csproj --no-build --configuration Release --output ./artifacts/packages
 
-    - name: Install x86 .NET runtime for injection helper
+    - name: Install x86 .NET 8, 9 and 10 runtimes for compatibility tests
       shell: pwsh
       run: |
         Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile "$env:RUNNER_TEMP/dotnet-install.ps1"
-        & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime dotnet -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
-        & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel 8.0 -Runtime windowsdesktop -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
+        foreach ($channel in @('8.0', '9.0', '10.0')) {
+          foreach ($runtime in @('dotnet', 'windowsdesktop')) {
+            & "$env:RUNNER_TEMP/dotnet-install.ps1" -Channel $channel -Runtime $runtime -Architecture x86 -InstallDir "$env:RUNNER_TEMP/dotnet-x86" -NoPath
+            if ($LASTEXITCODE -ne 0) { throw "Failed to install x86 $runtime $channel" }
+          }
+        }
         "DOTNET_ROOT_X86=$env:RUNNER_TEMP/dotnet-x86" >> $env:GITHUB_ENV
 
     - name: Test standalone NuGet consumer and exported xUnit tests

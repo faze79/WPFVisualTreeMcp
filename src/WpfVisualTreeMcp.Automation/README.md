@@ -4,8 +4,11 @@ Write C# tests against running Windows WPF applications. The package includes th
 Inspector, x64/x86 native bootstrapper and x86 injection helper. It talks directly
 to the same inspection engine used by MCP and the CLI; neither server needs to run.
 
-The test project targets .NET 8 or later and runs as x64 or x86 on Windows. The
-target application may use .NET Framework 4.7.2/4.8 or .NET 8 WPF.
+The test project targets .NET 8, 9 or 10 and runs as x64 or x86 on Windows. The
+target WPF application may use .NET Framework 4.7.2, 4.8, 4.8.1 or .NET 8, 9, 10.
+The test project and application do not need to use the same framework. The SDK
+ships a `net8.0` library usable by .NET 9/10 consumers; a .NET Framework test
+project cannot reference it directly.
 Use an x64 test process to automate both x64 and x86 apps; an x86 test process
 can inject into x86 apps. Custom helper runtime locations use `DOTNET_ROOT_X86`
 (the test runner's generic `DOTNET_ROOT` is ignored for the cross-bitness helper).
@@ -215,18 +218,22 @@ property subscriptions remain C# test setup/teardown, not recorded workflow step
 Install from nuget.org in your test project:
 
 ```powershell
-dotnet add YourTests.csproj package WpfVisualTreeMcp.Automation --version 0.19.0
+dotnet add YourTests.csproj package WpfVisualTreeMcp.Automation --version 0.20.0
 ```
 
 The Inspector and native bootstrapper are included. Cross-architecture injection
-into an x86 app also needs the x86 .NET 8 runtime for the bundled helper.
+into an x86 app also needs an x86 .NET 8, 9 or 10 runtime for the bundled helper.
 For an app already self-hosting the Inspector, use `AttachAsync(pid, autoInject: false)`.
 An older loaded Inspector requires restarting the target before the new features can be used.
 
 Verify the installed package and its exported tests with
 `python scripts/test_automation_package.py --packages artifacts/packages`.
-This also runs advanced grid/tree, validation, notification, modal-window and
-lifecycle scenarios against .NET 8 x64 and .NET Framework 4.7.2 x86 applications.
+This runs inspection/input/export/replay against all six supported target frameworks
+on x86 and x64. Advanced grid/tree, validation, notification, modal-window and
+lifecycle scenarios run from .NET 8, 9 and 10 consumers against every target.
+Build the suite with the .NET 10 SDK and install .NET 8/9/10 Desktop runtimes for
+both architectures plus .NET Framework 4.8.1. Framework 4.x target builds run on
+the installed 4.8.1 runtime; the suite does not install older runtimes side by side.
 Add `--gestures` on an unlocked desktop for real mouse drag and touch checks.
 For a source build, first run `scripts/Build-NativeBootstrapper.ps1`, then
 `dotnet pack src/WpfVisualTreeMcp.Automation -c Release -o artifacts/packages`.

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$ServerDirectory,
-    [ValidateSet('net472', 'net48')][string[]]$Frameworks = @('net472', 'net48')
+    [ValidateSet('net472', 'net48', 'net481')][string[]]$Frameworks = @('net472', 'net48', 'net481')
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent

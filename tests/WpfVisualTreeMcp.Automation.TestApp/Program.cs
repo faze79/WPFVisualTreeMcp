@@ -36,7 +36,8 @@ public static class Program
         var multi = Id(new ListBox { SelectionMode = SelectionMode.Multiple, Height = 65 }, "Multi");
         foreach (var text in new[] { "A", "AB", "C" }) multi.Items.Add(text); top.Children.Add(multi);
         var actions = new WrapPanel(); top.Children.Add(actions);
-        var main = Id(new Window { Title = "Automation test app", Width = 850, Height = 750, Content = layout }, "Main");
+        var main = Id(new Window { Title = "Automation test app", Width = 850, Height = 750, Content = layout,
+            Tag = Environment.Version.Major.ToString() }, "Main");
         Button Button(string name, Action action)
         {
             var button = Id(new Button { Content = name, Margin = new Thickness(3) }, name);

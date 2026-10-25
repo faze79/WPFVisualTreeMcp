@@ -1,0 +1,6 @@
+{
+  "targetFrameworks": ["net472", "net48", "net481", "net8.0-windows", "net9.0-windows", "net10.0-windows"],
+  "architectures": ["x86", "x64"],
+  "inspectionModes": ["SelfHosted", "AutoInjection"],
+  "sdkFrameworks": ["net8.0-windows", "net9.0-windows", "net10.0-windows"]
+}

@@ -8,7 +8,7 @@ $root = Split-Path $PSScriptRoot -Parent
 foreach ($configuration in $Configurations) {
     $architecture = $configuration.Substring($configuration.LastIndexOf('-') + 1)
     $framework = $configuration.Substring(0, $configuration.LastIndexOf('-'))
-    if ($architecture -notin @('x86', 'x64') -or $framework -notin @('net472', 'net48', 'net8.0-windows')) {
+    if ($architecture -notin @('x86', 'x64') -or $framework -notin @('net472', 'net48', 'net481', 'net8.0-windows', 'net9.0-windows', 'net10.0-windows')) {
         throw "Unsupported configuration: $configuration"
     }
     $sampleDirectory = Join-Path $root "TestResults/$TestKind/$configuration"
@@ -16,7 +16,7 @@ foreach ($configuration in $Configurations) {
     New-Item -ItemType Directory -Force $sampleSource | Out-Null
     Get-ChildItem "$root/samples/SampleWpfApp/*" -Include *.cs,*.xaml | Copy-Item -Destination $sampleSource
     $inspectorProject = [System.Security.SecurityElement]::Escape("$root/src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj")
-    $runtimeProperties = if ($framework -eq 'net8.0-windows') {
+    $runtimeProperties = if ($framework.EndsWith('-windows')) {
         "<RuntimeIdentifier>win-$architecture</RuntimeIdentifier><SelfContained>false</SelfContained>"
     } else { '' }
     @"
