@@ -149,11 +149,12 @@ def main():
     advanced = work / "advanced-consumer"
     advanced.mkdir()
     advanced_project = advanced / "AdvancedConsumer.csproj"
-    advanced_project.write_text(project.read_text(encoding="utf-8"), encoding="utf-8")
+    advanced_project.write_text(project.read_text(encoding="utf-8").replace(
+        "<TargetFramework>net8.0-windows</TargetFramework>",
+        f"<TargetFrameworks>{';'.join(MATRIX['sdkFrameworks'])}</TargetFrameworks>"), encoding="utf-8")
     shutil.copy2(ROOT / "tests" / "WpfVisualTreeMcp.Automation.Smoke" / "Program.cs", advanced / "Program.cs")
-    for sdk_framework in MATRIX["sdkFrameworks"]:
-        run(["dotnet", "build", advanced_project, "-c", "Release", f"-p:TargetFramework={sdk_framework}",
-             "--verbosity", "quiet"], f"advanced-consumer-build-{sdk_framework}", work, env)
+    run(["dotnet", "build", advanced_project, "-c", "Release", "--verbosity", "quiet"],
+        "advanced-consumer-build", work, env)
     for framework, architecture in TARGET_CASES:
         case = f"{framework}-{architecture}"
         source = work / f"advanced-source-{case}"
