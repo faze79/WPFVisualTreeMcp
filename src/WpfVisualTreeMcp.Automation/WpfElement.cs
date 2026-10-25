@@ -19,12 +19,14 @@ public sealed partial class WpfElement
         Application = application; _automationId = automationId; _handle = handle; _root = root;
     }
 
-    public WpfElement ByAutomationId(string automationId) => new(Application, automationId, null, this);
+    public WpfElement ByAutomationId(string automationId) => new(Application, automationId, null, this) { _actionOptions = _actionOptions };
     public override string ToString() => (_root == null ? "" : _root + " / ") +
         (_automationId == null ? $"Handle='{_handle}'" : $"AutomationId='{_automationId}'");
 
     internal async Task<string> ResolveAsync(IIpcBridge bridge)
     {
+        if (_customResolver != null) return await _customResolver(bridge).ConfigureAwait(false)
+            ?? throw new WpfAutomationException("The virtualized control is not ready.");
         var root = _root == null ? null : await _root.ResolveAsync(bridge).ConfigureAwait(false);
         return await bridge.ResolveElementHandleAsync(_handle, _automationId, root).ConfigureAwait(false);
     }
@@ -42,7 +44,7 @@ public sealed partial class WpfElement
     {
         if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
         MousePointerOptions.ValidatePoint(position?.X, position?.Y);
-        return OnElementAsync((b, h) => b.ClickElementAsync(h, physical, kind.ToString().ToLowerInvariant(), position?.X, position?.Y), cancellationToken);
+        return OnActionAsync((b, h) => b.ClickElementAsync(h, physical, kind.ToString().ToLowerInvariant(), position?.X, position?.Y), cancellationToken);
     }
 
     public Task<MousePointerResult> MoveMouseAsync(LocalPoint? position = null, int hoverMs = 500, CancellationToken cancellationToken = default) =>
@@ -52,7 +54,7 @@ public sealed partial class WpfElement
     private Task<MousePointerResult> PointerAsync(MousePointerOptions options, CancellationToken token)
     {
         options.Validate();
-        return OnElementAsync((b, h) => { options.ElementHandle = h; return b.MousePointerAsync(options); }, token);
+        return OnActionAsync((b, h) => { options.ElementHandle = h; return b.MousePointerAsync(options); }, token);
     }
 
     public Task<DragResult> DragToAsync(WpfElement destination, DragSettings? settings = null, CancellationToken cancellationToken = default)
@@ -73,12 +75,12 @@ public sealed partial class WpfElement
             Button = settings.Button.ToString().ToLowerInvariant(), DurationMs = settings.DurationMs
         };
         options.Validate();
-        return Application.RunAsync(async bridge =>
+        return OnActionAsync(async (bridge, handle) =>
         {
-            options.ElementHandle = await ResolveAsync(bridge).ConfigureAwait(false);
+            options.ElementHandle = handle;
             options.TargetHandle = destination == null ? null : await destination.ResolveAsync(bridge).ConfigureAwait(false);
             return await bridge.DragAsync(options).ConfigureAwait(false);
-        }, token);
+        }, token, destination);
     }
 
     public Task<TouchGestureResult> TapAsync(TouchSettings? settings = null, CancellationToken cancellationToken = default) =>
@@ -102,28 +104,28 @@ public sealed partial class WpfElement
             DeltaX = deltaX, DeltaY = deltaY, Scale = scale, AngleDegrees = angleDegrees, Radius = settings.Radius, DurationMs = settings.DurationMs
         };
         options.Validate();
-        return OnElementAsync((b, h) => { options.ElementHandle = h; return b.TouchGestureAsync(options); }, cancellationToken);
+        return OnActionAsync((b, h) => { options.ElementHandle = h; return b.TouchGestureAsync(options); }, cancellationToken);
     }
 
     public Task<SelectItemResult> SelectItemAsync(string itemText, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(itemText);
-        return OnElementAsync((b, h) => b.SelectItemAsync(h, itemText, null), cancellationToken);
+        return OnActionAsync((b, h) => b.SelectItemAsync(h, itemText, null), cancellationToken);
     }
     public Task<SelectItemResult> SelectItemAsync(int index, CancellationToken cancellationToken = default)
     {
         if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
-        return OnElementAsync((b, h) => b.SelectItemAsync(h, null, index), cancellationToken);
+        return OnActionAsync((b, h) => b.SelectItemAsync(h, null, index), cancellationToken);
     }
     public Task<SetTextResult> SetTextAsync(string text, bool physical = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return OnElementAsync((b, h) => b.SetTextAsync(h, text, physical), cancellationToken);
+        return OnActionAsync((b, h) => b.SetTextAsync(h, text, physical), cancellationToken);
     }
     public Task<SendKeysResult> SendKeysAsync(string keys, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(keys);
-        return OnElementAsync((b, h) => b.SendKeysAsync(h, keys), cancellationToken);
+        return OnActionAsync((b, h) => b.SendKeysAsync(h, keys), cancellationToken);
     }
     public Task<string?> AssertPropertyAsync(string propertyName, string? expectedValue, CancellationToken cancellationToken = default) =>
         OnElementAsync((b, h) => b.AssertElementAsync(h, propertyName, expectedValue ?? "{null}"), cancellationToken);

@@ -14,7 +14,9 @@ public class AutomationSdkTests
     private static ElementPropertiesResult Text(string? value) => new()
     {
         Element = new ElementInfo { TypeName = "TextBox" },
-        Properties = new() { new PropertyInfo { Name = "Text", Value = value } }
+        Properties = new() { new PropertyInfo { Name = "Text", Value = value },
+            new() { Name = "IsVisible", OwnerType = "System.Windows.UIElement", Value = "true" },
+            new() { Name = "IsEnabled", OwnerType = "System.Windows.UIElement", Value = "true" } }
     };
     private static WaitOptions Fast => new() { Timeout = TimeSpan.FromSeconds(1), PollInterval = TimeSpan.FromMilliseconds(5) };
 
@@ -86,8 +88,7 @@ public class AutomationSdkTests
         var bridge = new Mock<IIpcBridge>(MockBehavior.Strict);
         bridge.Setup(x => x.TryResolveAutomationIdAsync("status", null)).ReturnsAsync("handle");
         bridge.Setup(x => x.GetElementPropertiesAsync("handle")).Returns(() => { observed.TrySetResult(); return Task.FromResult(Text(text)); });
-        bridge.Setup(x => x.ResolveElementHandleAsync(null, "status", null)).ReturnsAsync("handle");
-        bridge.Setup(x => x.SetTextAsync("handle", "loaded", false)).Returns(() => { text = "loaded"; return Task.FromResult(new SetTextResult()); });
+                bridge.Setup(x => x.SetTextAsync("handle", "loaded", false)).Returns(() => { text = "loaded"; return Task.FromResult(new SetTextResult()); });
         await using var app = App(bridge);
         var element = app.ByAutomationId("status");
         var wait = element.WaitForPropertyAsync("Text", "loaded", Fast);
@@ -100,8 +101,10 @@ public class AutomationSdkTests
     public async Task Element_actions_resolve_new_handles_and_both_drag_endpoints()
     {
         var bridge = new Mock<IIpcBridge>(MockBehavior.Strict);
-        bridge.SetupSequence(x => x.ResolveElementHandleAsync(null, "source", null)).ReturnsAsync("first").ReturnsAsync("replacement");
+        bridge.SetupSequence(x => x.TryResolveAutomationIdAsync("source", null)).ReturnsAsync("first").ReturnsAsync("replacement");
+        bridge.Setup(x => x.TryResolveAutomationIdAsync("target", null)).ReturnsAsync("destination");
         bridge.Setup(x => x.ResolveElementHandleAsync(null, "target", null)).ReturnsAsync("destination");
+        bridge.Setup(x => x.GetElementPropertiesAsync(It.IsAny<string>())).ReturnsAsync(Text(null));
         bridge.Setup(x => x.ClickElementAsync("first", false, "single", null, null)).ReturnsAsync(new ClickResult());
         bridge.Setup(x => x.DragAsync(It.Is<DragOptions>(o => o.ElementHandle == "replacement" && o.TargetHandle == "destination" && o.StartX == 10 && o.StartY == 20)))
             .ReturnsAsync(new DragResult());

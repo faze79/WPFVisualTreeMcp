@@ -12,7 +12,7 @@ public static class WorkflowCodec
     public const int MaxJsonLength = 512 * 1024;
     public static bool IsRecordable(string action) => action is "ClickElement" or "SetText" or "SelectItem" or "SendKeys"
         or "Drag" or "TouchGesture" or "MousePointer" or "SetProperty" or "RevertProperty" or "FindElements" or "FindElementsDeep"
-        or "WaitForElement" or "AssertElement";
+        or "WaitForElement" or "AssertElement" or "ControlOperation";
 
     public static void Validate(RecordedWorkflow workflow)
     {
@@ -26,7 +26,7 @@ public static class WorkflowCodec
             ValidateSelector(step.Target); ValidateSelector(step.Destination); ValidateSelector(step.Root);
             var request = ReadRequest(step.Action, step.Arguments);
             var needsTarget = request is ClickElementRequest or SetTextRequest or SelectItemRequest or SendKeysRequest
-                or DragRequest or TouchGestureRequest or MousePointerRequest or SetPropertyRequest or AssertElementRequest;
+                or ControlOperationRequest or DragRequest or TouchGestureRequest or MousePointerRequest or SetPropertyRequest or AssertElementRequest;
             if (needsTarget && step.Target == null) throw new ArgumentException($"{step.Action} requires a target selector.");
             BindHandles(request, step.Target == null ? null : "selector", step.Destination == null ? null : "selector", step.Root == null ? null : "selector");
             ValidateRequest(request);
@@ -82,6 +82,7 @@ public static class WorkflowCodec
             "FindElementsDeep" => IpcSerializer.DeserializeRequestData<FindElementsDeepRequest>(arguments)!,
             "WaitForElement" => IpcSerializer.DeserializeRequestData<WaitForElementRequest>(arguments)!,
             "AssertElement" => IpcSerializer.DeserializeRequestData<AssertElementRequest>(arguments)!,
+            "ControlOperation" => IpcSerializer.DeserializeRequestData<ControlOperationRequest>(arguments)!,
             _ => throw new ArgumentException("Unsupported workflow action.")
         };
     }
@@ -101,6 +102,7 @@ public static class WorkflowCodec
 
     public static (string? target, string? destination, string? root) Handles(IpcRequest request) => request switch
     {
+        ControlOperationRequest r => (r.ElementHandle, null, null),
         ClickElementRequest r => (r.ElementHandle, null, null),
         SetTextRequest r => (r.ElementHandle, null, null),
         SelectItemRequest r => (r.ElementHandle, null, null),
@@ -121,6 +123,7 @@ public static class WorkflowCodec
     {
         switch (request)
         {
+            case ControlOperationRequest r: r.ElementHandle = target!; break;
             case ClickElementRequest r: r.ElementHandle = target!; break;
             case SetTextRequest r: r.ElementHandle = target!; break;
             case SelectItemRequest r: r.ElementHandle = target!; break;
@@ -156,6 +159,7 @@ public static class WorkflowCodec
             throw new ArgumentException("automation_id must contain 1-2048 characters and cannot be blank.");
         switch (request)
         {
+            case ControlOperationRequest r: r.Validate(); break;
             case DragRequest r: (r.Options ?? throw new ArgumentException("Drag options required.")).Validate(); break;
             case TouchGestureRequest r: (r.Options ?? throw new ArgumentException("Touch options required.")).Validate(); break;
             case MousePointerRequest r: (r.Options ?? throw new ArgumentException("Pointer options required.")).Validate(); break;

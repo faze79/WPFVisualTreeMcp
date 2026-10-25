@@ -26,9 +26,12 @@ public class PropertyWatcher : IDisposable
     /// <param name="element">The element to watch.</param>
     /// <param name="propertyName">The property to watch.</param>
     /// <returns>A watch ID and the initial value.</returns>
-    public (string watchId, string? initialValue) Watch(DependencyObject element, string propertyName)
+    public (string watchId, string? initialValue) Watch(DependencyObject element, string propertyName, string? watchId = null)
     {
-        var watchId = Guid.NewGuid().ToString("N");
+        if (_disposed) throw new ObjectDisposedException(nameof(PropertyWatcher));
+        watchId ??= Guid.NewGuid().ToString("N");
+        if (!Guid.TryParseExact(watchId, "N", out _) || _watches.ContainsKey(watchId))
+            throw new ArgumentException("WatchId must be a unique GUID in N format.");
 
         // Find the dependency property
         var dpd = FindDependencyProperty(element, propertyName);
@@ -44,7 +47,8 @@ public class PropertyWatcher : IDisposable
         EventHandler handler = (sender, args) =>
         {
             var newValue = element.GetValue(dpd.DependencyProperty);
-            OnPropertyChanged(watchId, propertyName, initialValueStr, FormatValue(newValue));
+            if (_watches.TryGetValue(watchId, out var current))
+                OnPropertyChanged(watchId, propertyName, current.LastValue, FormatValue(newValue));
         };
 
         dpd.AddValueChanged(element, handler);
@@ -144,10 +148,10 @@ public class PropertyWatcher : IDisposable
     {
         foreach (PropertyDescriptor pd in TypeDescriptor.GetProperties(element))
         {
-            if (pd.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
-            {
-                return DependencyPropertyDescriptor.FromProperty(pd);
-            }
+            var descriptor = DependencyPropertyDescriptor.FromProperty(pd);
+            if (descriptor != null && (pd.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase) ||
+                descriptor.DependencyProperty.OwnerType.FullName + "." + pd.Name == propertyName))
+                return descriptor;
         }
 
         return null;
@@ -161,7 +165,7 @@ public class PropertyWatcher : IDisposable
 
         if (type == typeof(string)) return (string)value;
         if (type == typeof(bool)) return ((bool)value).ToString().ToLower();
-        if (type.IsPrimitive || type == typeof(decimal)) return value.ToString();
+        if (type.IsPrimitive || type == typeof(decimal)) return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
 
         // For complex types, return type name and a truncated ToString
         var str = value.ToString() ?? "";

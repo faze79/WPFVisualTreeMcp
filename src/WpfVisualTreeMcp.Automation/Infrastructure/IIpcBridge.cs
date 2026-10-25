@@ -1,4 +1,5 @@
 using WpfVisualTreeMcp.Shared.Models;
+using WpfVisualTreeMcp.Shared.Ipc;
 
 namespace WpfVisualTreeMcp.Automation.Infrastructure;
 
@@ -7,6 +8,10 @@ namespace WpfVisualTreeMcp.Automation.Infrastructure;
 /// </summary>
 public interface IIpcBridge
 {
+    Task<ControlOperationResponse> ControlOperationAsync(ControlOperationRequest request);
+    Task<WindowResponse> WindowAsync(WindowRequest request);
+    Task<PropertySubscription> ObservePropertyAsync(string elementHandle, string propertyName);
+    Task UnwatchPropertyAsync(string watchId);
     Task<RecordingState> RecordAsync(string action, string? name = null);
     Task<ReplayResult> ReplayAsync(RecordedWorkflow workflow, int timeoutMs = 120000);
     Task<string?> AssertElementAsync(string elementHandle, string propertyName, string expectedValue);

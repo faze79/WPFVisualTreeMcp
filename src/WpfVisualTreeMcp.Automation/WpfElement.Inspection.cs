@@ -30,8 +30,11 @@ public sealed partial class WpfElement
         OnElementAsync((b, h) => b.GetResourcesAsync("window", h), cancellationToken);
     public Task<StylesResult> GetStylesAsync(CancellationToken cancellationToken = default) =>
         OnElementAsync((b, h) => b.GetStylesAsync(h), cancellationToken);
-    public Task<string> WatchPropertyAsync(string propertyName, CancellationToken cancellationToken = default) =>
-        OnElementAsync((b, h) => b.WatchPropertyAsync(h, propertyName), cancellationToken);
+    /// <summary>Compatibility API: use Application.GetPropertyWatch(id) to consume changes, or prefer ObservePropertyAsync.</summary>
+    public async Task<string> WatchPropertyAsync(string propertyName, CancellationToken cancellationToken = default) =>
+        (await ObservePropertyAsync(propertyName, cancellationToken).ConfigureAwait(false)).WatchId;
+    public Task<PropertySubscription> ObservePropertyAsync(string propertyName, CancellationToken cancellationToken = default) =>
+        OnElementAsync(async (b, h) => Application.TrackSubscription(await b.ObservePropertyAsync(h, propertyName).ConfigureAwait(false)), cancellationToken);
     public Task HighlightAsync(int durationMs = 2000, CancellationToken cancellationToken = default) =>
         OnElementAsync((b, h) => b.HighlightElementAsync(h, durationMs), cancellationToken);
     public Task<LayoutInfoResult> GetLayoutInfoAsync(CancellationToken cancellationToken = default) =>

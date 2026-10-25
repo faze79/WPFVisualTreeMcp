@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net8.0-windows;net472</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <EnableInspectorSelfHosting Condition="'$(EnableInspectorSelfHosting)' == ''">true</EnableInspectorSelfHosting>
+    <DefineConstants Condition="'$(EnableInspectorSelfHosting)' == 'true'">$(DefineConstants);SELF_HOST_INSPECTOR</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/WpfVisualTreeMcp.Inspector/WpfVisualTreeMcp.Inspector.csproj" Condition="'$(EnableInspectorSelfHosting)' == 'true'" />
+  </ItemGroup>
+</Project>

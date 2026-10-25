@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-25
+
+### Added
+
+- C# wrappers for standard WPF DataGrid rows/cells and TreeView paths. Resolve rows
+  by exact key, text or view index; columns by header, binding or collection index.
+  Realize virtualized controls and edit through WPF bindings and validation.
+  Cell/node locators expose existing input/inspection methods via `AsElement()`.
+- Configurable automatic action waits for existence, visibility and enabled state.
+  Preparation retries missing data/containers; ambiguous selectors and failed
+  delivered actions fail immediately. Polling releases the session for other work.
+- Idempotent check/uncheck, expand/collapse, exact item selection and multi-selection
+  replace/add/remove. Resolve the complete selection before changing control state.
+- `LaunchAsync` with structured arguments, working directory, environment and startup
+  deadline; explicit ownership and cleanup. Enumerate/find WPF windows, scope element
+  queries to dialogs, activate/change state/request close and wait for closure.
+  Attached processes remain alive on disposal; launched processes are owned by default.
+- Dedicated property notification streams via `ObservePropertyAsync` and
+  `PropertySubscription.ReadAllAsync`. Initial values and ordered changes, bounded
+  buffering with explicit overflow errors, cancellation and disconnect cleanup.
+  The ID-returning SDK watch API exposes the same stream through `GetPropertyWatch`.
+- Record/replay/export for grid edits, tree paths and desired-state operations using
+  stable parent selectors and data locators. New Inspector capabilities fail with
+  restart guidance when an older payload is already loaded.
+- Installed-NuGet tests for virtualized grids/trees, binding validation, concurrent
+  notifications, modal dialogs, cancelled close and ownership on .NET 8 x64 and
+  .NET Framework 4.7.2 x86. WPF/SDK regression tests cover ambiguity, action delivery,
+  notification registration races, overflow and disconnect cleanup.
+
+### Fixed
+
+- Property notifications report the actual preceding value after each change,
+  instead of always reporting the initial value, and format primitive values invariantly.
+
+### Compatibility
+
+- The new control/window/subscription APIs are in the C# SDK; the existing MCP/CLI
+  tool surface remains compatible. Standard WPF controls are supported; vendor-specific
+  grid editors require adapters. Native OS dialogs remain outside the WPF window API.
+- Restart previously inspected applications to load the updated Inspector. The SDK
+  still targets .NET 8+ on Windows and includes x64/x86 injection payloads.
+
 ## [0.18.0] - 2026-10-25
 
 ### Added

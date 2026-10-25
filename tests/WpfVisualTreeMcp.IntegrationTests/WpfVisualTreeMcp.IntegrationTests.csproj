@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Inspector\WpfVisualTreeMcp.Inspector.csproj" />
+    <ProjectReference Include="..\..\src\WpfVisualTreeMcp.Automation\WpfVisualTreeMcp.Automation.csproj" />
   </ItemGroup>
 
 </Project>

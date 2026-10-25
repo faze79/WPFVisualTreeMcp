@@ -55,6 +55,7 @@ public sealed partial class WpfElement
 
     private async Task<string?> TryResolveAsync(IIpcBridge bridge)
     {
+        if (_customResolver != null) return await _customResolver(bridge).ConfigureAwait(false);
         if (_handle != null) return _handle;
         var root = _root == null ? null : await _root.TryResolveAsync(bridge).ConfigureAwait(false);
         if (_root != null && root == null) return null; // Never broaden a missing scoped root to all windows.

@@ -12,7 +12,7 @@ namespace WpfVisualTreeMcp.Inspector;
 /// <summary>
 /// Named pipe server for receiving inspection requests from the MCP server.
 /// </summary>
-public class IpcServer : IDisposable
+public partial class IpcServer : IDisposable
 {
     private readonly string _pipeName;
     private readonly Func<string, JsonElement, Task<IpcResponse>> _requestHandler;
@@ -145,6 +145,14 @@ public class IpcServer : IDisposable
                             }
 
                             DebugLog($"HandleClientAsync: Received line (length={line.Length})");
+
+                            // A property subscription owns this connection until disposal/disconnect.
+                            var parsed = IpcSerializer.DeserializeRequest(line);
+                            if (parsed?.type == "SubscribeProperty")
+                            {
+                                await StreamPropertyAsync(pipeServer, parsed.Value.data, cancellationToken);
+                                return;
+                            }
 
                             // Process the request
                             DebugLog("HandleClientAsync: Processing request...");

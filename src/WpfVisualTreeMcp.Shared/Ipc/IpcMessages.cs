@@ -29,6 +29,8 @@ public class GetCapabilitiesResponse : IpcResponse
     public bool CoordinatePointerInput { get; set; }
     public bool AutomationIdTargeting { get; set; }
     public bool AutomationIdOptionalResolution { get; set; }
+    public bool AdvancedAutomation { get; set; }
+    public bool PropertySubscriptions { get; set; }
 }
 
 public class ResolveAutomationIdRequest : IpcRequest
@@ -374,6 +376,7 @@ public class HighlightElementResponse : IpcResponse { }
 public class WatchPropertyRequest : IpcRequest
 {
     public override string RequestType => "WatchProperty";
+    public string? WatchId { get; set; }
     public string ElementHandle { get; set; } = string.Empty;
     public string PropertyName { get; set; } = string.Empty;
 }

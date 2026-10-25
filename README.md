@@ -14,12 +14,13 @@
 
 *An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
 
-**New in [v0.18.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.18.0):**
-Write C# tests with the new [`WpfVisualTreeMcp.Automation` NuGet SDK](https://www.nuget.org/packages/WpfVisualTreeMcp.Automation):
-attach to a PID, use AutomationId locators, perform mouse/touch actions and await
-exact property values. All input actions, assertions and property edits in the
-38-tool MCP server and CLI now also accept AutomationIds directly. Recording,
-replay and standalone xUnit export work through both interfaces.
+**New in [v0.19.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.19.0):**
+The [`WpfVisualTreeMcp.Automation` C# SDK](https://www.nuget.org/packages/WpfVisualTreeMcp.Automation)
+now drives virtualized WPF DataGrids and TreeViews, waits for controls before input,
+sets exact selection/checked/expanded states, launches apps and manages WPF windows.
+Live property subscriptions deliver changes directly to C# tests, with disposal and
+disconnect cleanup. The 38-tool MCP server and CLI continue to share the inspection
+and input engine, including direct AutomationId targeting.
 
 Workflow recording/replay/xUnit export, aggregate diagnostics, full-content screenshots
 and .NET Framework 4.7.2 support remain available from v0.16.0. Thanks to @miloszkukla
@@ -54,7 +55,7 @@ with direct process attachment and AutomationId locators. The package includes t
 injection payload and works without starting an MCP server or CLI.
 
 ```powershell
-dotnet add package WpfVisualTreeMcp.Automation --version 0.18.0
+dotnet add package WpfVisualTreeMcp.Automation --version 0.19.0
 ```
 
 ```csharp
@@ -71,7 +72,16 @@ await app.ByAutomationId("Canvas").ZoomAsync(1.5);
 Text waits compare the exact property value: `not loaded` does not match `loaded`.
 Timeouts throw with the expected and last observed values. Property predicates,
 cancellation, drag, touch, assertions, inspection and recording/replay are also
-available. Disposing a session detaches without closing the application.
+available. Attached sessions leave the app running on disposal; launched sessions
+own and clean up their process by default.
+
+```csharp
+await app.ByAutomationId("Orders").AsDataGrid()
+    .RowByKey("Id", "42").Cell("Quantity").SetTextAsync("7");
+await app.ByAutomationId("Folders").AsTreeView().Node("Projects", "WPF").SelectAsync();
+await app.ByAutomationId("Enabled").CheckAsync();
+await using var changes = await app.ByAutomationId("StatusTextBox").ObservePropertyAsync("Text");
+```
 
 The SDK is a separate package from the MCP tool `WpfVisualTreeMcp`.
 See [installation, API examples and requirements](src/WpfVisualTreeMcp.Automation/README.md).
@@ -193,10 +203,10 @@ Download the latest release from [GitHub Releases](https://github.com/faze79/Wpf
 #### Desktop extension (MCPB)
 
 Clients that support MCP bundles can import
-[`WpfVisualTreeMcp-v0.18.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.18.0/WpfVisualTreeMcp-v0.18.0-win-x64.mcpb).
+[`WpfVisualTreeMcp-v0.19.0-win-x64.mcpb`](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.19.0/WpfVisualTreeMcp-v0.19.0-win-x64.mcpb).
 This Windows x64 bundle includes the server runtime and a self-contained x86
 injection helper. A smaller
-[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.18.0/WpfVisualTreeMcp-v0.18.0-win-x64-compact.mcpb)
+[`compact` bundle](https://github.com/faze79/WPFVisualTreeMcp/releases/download/v0.19.0/WpfVisualTreeMcp-v0.19.0-win-x64-compact.mcpb)
 provides the same tools with a reduced runtime for catalogs with upload limits.
 Update either bundle through the client's extension UI. See the
 [MCPB guide](docs/MCPB.md) for requirements, packaging and verification.
@@ -349,7 +359,7 @@ Prerequisites for this installation method:
   the x86 .NET 8 runtime as well.
 
 From the repository root, register the local marketplace and install the plugin.
-You can also download `WpfVisualTreeMcp-v0.18.0-codex-plugin.zip` from
+You can also download `WpfVisualTreeMcp-v0.19.0-codex-plugin.zip` from
 [GitHub Releases](https://github.com/faze79/WPFVisualTreeMcp/releases/latest),
 extract it, and run these commands from the extracted root:
 

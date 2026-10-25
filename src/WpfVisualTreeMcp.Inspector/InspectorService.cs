@@ -226,7 +226,8 @@ public partial class InspectorService : IDisposable
             // Input sequences share the OS mouse. Fail fast instead of interleaving
             // concurrent mutations or queuing them past the IPC timeout.
             if (requestType is "Drag" or "TouchGesture" or "MousePointer" or "ClickElement" or "SelectItem" or "SetText" or "SendKeys"
-                or "SetProperty" or "RevertProperty" or "Record" or "Replay" or "AssertElement"
+                or "ControlOperation" or "SetProperty" or "RevertProperty" or "Record" or "Replay" or "AssertElement"
+                || requestType == "Window" && IpcSerializer.DeserializeRequestData<WindowRequest>(data)!.Action != "list"
                 || fullContent || (_recorder.Active && WorkflowCodec.IsRecordable(requestType)))
             {
                 ownsInteraction = _interactionGate.Wait(0);
@@ -238,7 +239,8 @@ public partial class InspectorService : IDisposable
                 return await HandleReplayAsync(data).ConfigureAwait(false);
 
             WorkflowStep? recordedStep = null;
-            if (ownsInteraction && _recorder.Active && WorkflowCodec.IsRecordable(requestType))
+            if (ownsInteraction && _recorder.Active && WorkflowCodec.IsRecordable(requestType)
+                && (requestType != "ControlOperation" || IpcSerializer.DeserializeRequestData<ControlOperationRequest>(data)!.Mutates))
                 recordedStep = await OnDispatcher(() => _recorder.Prepare(requestType, data), _inputShutdown.Token);
 
             using var captureTimeout = fullContent
@@ -247,9 +249,10 @@ public partial class InspectorService : IDisposable
             var captureToken = captureTimeout?.Token ?? CancellationToken.None;
 
             var result = await ExecuteOperationAsync(requestType, data, captureToken).ConfigureAwait(false);
-            if (ownsInteraction && result.Success)
+            if (ownsInteraction && result.Success && requestType != "Window")
                 await OnDispatcher(() => true, _inputShutdown.Token, System.Windows.Threading.DispatcherPriority.Background);
-            if (recordedStep != null && result.Success && (result is not WaitForElementResponse wait || wait.Matched))
+            if (recordedStep != null && result.Success && (result is not WaitForElementResponse wait || wait.Matched)
+                && (result is not ControlOperationResponse control || !control.NotReady))
                 await OnDispatcher(() => { _recorder.Commit(recordedStep); return true; }, _inputShutdown.Token);
 
             DebugLog($"HandleRequest completed successfully");
@@ -337,7 +340,7 @@ public partial class InspectorService : IDisposable
     {
         return requestType switch
         {
-            "GetCapabilities" => new GetCapabilitiesResponse { CoordinatePointerInput = true, AutomationIdTargeting = true, AutomationIdOptionalResolution = true },
+            "GetCapabilities" => new GetCapabilitiesResponse { CoordinatePointerInput = true, AutomationIdTargeting = true, AutomationIdOptionalResolution = true, AdvancedAutomation = true, PropertySubscriptions = true },
             "ResolveAutomationId" => HandleResolveAutomationId(data),
             "Record" => HandleRecord(data),
             "AssertElement" => HandleAssertElement(data),
@@ -353,6 +356,9 @@ public partial class InspectorService : IDisposable
             "HighlightElement" => HandleHighlightElement(data),
             "GetLayoutInfo" => HandleGetLayoutInfo(data),
             "WatchProperty" => HandleWatchProperty(data),
+            "UnwatchProperty" => HandleUnwatchProperty(data),
+            "ControlOperation" => HandleControlOperation(data),
+            "Window" => HandleWindow(data),
             "ExportTree" => HandleExportTree(data),
             "CaptureScreenshot" => HandleCaptureScreenshot(data, captureToken),
             "GetDataContext" => HandleGetDataContext(data),
@@ -1151,7 +1157,7 @@ public partial class InspectorService : IDisposable
 
         try
         {
-            var (watchId, initialValue) = _propertyWatcher.Watch(element, request.PropertyName);
+            var (watchId, initialValue) = _propertyWatcher.Watch(element, request.PropertyName, request.WatchId);
             return new WatchPropertyResponse
             {
                 RequestId = request.RequestId,

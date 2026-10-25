@@ -118,6 +118,11 @@ public partial class InspectorService
                 }, timeout.Token).ConfigureAwait(false);
                 using var document = JsonDocument.Parse(IpcSerializer.Serialize<object>(operation));
                 var response = await ExecuteOperationAsync(operation.RequestType, document.RootElement, timeout.Token).ConfigureAwait(false);
+                while (response is ControlOperationResponse control && control.NotReady)
+                {
+                    await Task.Delay(100, timeout.Token).ConfigureAwait(false);
+                    response = await ExecuteOperationAsync(operation.RequestType, document.RootElement, timeout.Token).ConfigureAwait(false);
+                }
                 if (!response.Success) throw new InvalidOperationException(response.Error ?? "Step failed.");
                 if (response is WaitForElementResponse wait && !wait.Matched)
                     throw new InvalidOperationException("Recorded wait condition was not satisfied before its timeout.");

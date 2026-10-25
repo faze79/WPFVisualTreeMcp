@@ -4,8 +4,8 @@ using WpfVisualTreeMcp.Shared.Models;
 
 namespace WpfVisualTreeMcp.Automation;
 
-/// <summary>A session attached to one WPF process. Disposing detaches; it never terminates the application.</summary>
-public sealed class WpfApplication : IAsyncDisposable
+/// <summary>A session attached to one WPF process. Disposing detaches from an attached process; applications launched by this session are closed by default.</summary>
+public sealed partial class WpfApplication : IAsyncDisposable
 {
     private readonly IIpcBridge _bridge;
     private readonly IProcessManager _processes;
@@ -14,6 +14,7 @@ public sealed class WpfApplication : IAsyncDisposable
     private int _disposed;
     internal InspectionSession Session { get; }
     public int ProcessId => Session.ProcessId;
+    public ActionOptions DefaultActionOptions { get; set; } = new();
 
     internal WpfApplication(IIpcBridge bridge, IProcessManager processes, InspectionSession session)
         => (_bridge, _processes, Session) = (bridge, processes, session);
@@ -33,7 +34,16 @@ public sealed class WpfApplication : IAsyncDisposable
         var manager = new ProcessManager(NullLogger<ProcessManager>.Instance);
         try
         {
-            var session = await manager.AttachToProcessAsync(processId, null, autoInject).ConfigureAwait(false);
+            // Injection includes native work that cannot be interrupted. Keep it off the caller thread;
+            // cancellation stops waiting and the isolated manager is detached when it finishes.
+            var attach = Task.Run(() => manager.AttachToProcessAsync(processId, null, autoInject), cancellationToken);
+            Infrastructure.InspectionSession session;
+            try { session = await attach.WaitAsync(cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException)
+            {
+                _ = CleanupCancelledAttachAsync(attach, manager);
+                throw;
+            }
             cancellationToken.ThrowIfCancellationRequested();
             if (!session.InspectorReady) throw new WpfAutomationException($"Cannot attach to process {processId}: {session.InspectorStatus}");
             return new WpfApplication(new InspectorBridge(NullLogger.Instance, manager), manager, session);
@@ -43,6 +53,12 @@ public sealed class WpfApplication : IAsyncDisposable
             if (manager.CurrentSession is { } session) await manager.DetachAsync(session.SessionId).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private static async Task CleanupCancelledAttachAsync(Task<InspectionSession> attach, IProcessManager manager)
+    {
+        try { var session = await attach.ConfigureAwait(false); await manager.DetachAsync(session.SessionId).ConfigureAwait(false); }
+        catch { /* The caller already receives cancellation; observe any late attach failure. */ }
     }
 
     public WpfElement ByAutomationId(string automationId) => new(this, automationId, null, null);
@@ -145,12 +161,29 @@ public sealed class WpfApplication : IAsyncDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _lifetime.Cancel();
         await _gate.WaitAsync().ConfigureAwait(false);
-        try { await _processes.DetachAsync(Session.SessionId).ConfigureAwait(false); }
-        finally { _gate.Release(); }
+        try
+        {
+            foreach (var subscription in _subscriptions.Values) await subscription.DisposeAsync().ConfigureAwait(false);
+            await _processes.DetachAsync(Session.SessionId).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+            if (_ownedProcess != null)
+            {
+                if (_closeOnDispose) await StopOwnedProcessAsync(_ownedProcess).ConfigureAwait(false);
+                _ownedProcess.Dispose();
+            }
+        }
         // Keep synchronization objects valid for concurrent callers unwinding after cancellation.
     }
 
-    public ValueTask DetachAsync() => DisposeAsync();
+    /// <summary>Detach and leave the process running, including one launched by this session.</summary>
+    public ValueTask DetachAsync()
+    {
+        _closeOnDispose = false;
+        return DisposeAsync();
+    }
 
     private static void RequireWindows()
     {

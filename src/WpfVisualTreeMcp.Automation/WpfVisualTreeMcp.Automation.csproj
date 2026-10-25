@@ -4,8 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>WpfVisualTreeMcp.Automation</PackageId>
-    <Version>0.18.0</Version>
-    <Description>Drive and inspect WPF applications from C# tests: attach, AutomationId locators, mouse and touch actions, exact property waits, recording and replay.</Description>
+    <Version>0.19.0</Version>
+    <Description>Drive and inspect WPF applications from C# tests: launch/attach, AutomationId locators, virtualized grids/trees, automatic waits, mouse/touch actions, property notifications, windows, recording and replay.</Description>
     <PackageTags>wpf;automation;testing;ui;automationid</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/faze79/WPFVisualTreeMcp</RepositoryUrl>
@@ -31,6 +31,7 @@
                       ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
                       UndefineProperties="Platform;RuntimeIdentifier" SkipGetTargetFrameworkProperties="true" />
     <InternalsVisibleTo Include="WpfVisualTreeMcp.Tests" />
+    <InternalsVisibleTo Include="WpfVisualTreeMcp.IntegrationTests" />
     <None Include="README.md" Pack="true" PackagePath="/" />
     <None Include="buildTransitive\WpfVisualTreeMcp.Automation.targets" Pack="true" PackagePath="buildTransitive/" />
   </ItemGroup>

@@ -25,8 +25,10 @@ def run(command, name, work, env):
                                 stdout=output, stderr=subprocess.STDOUT, timeout=300)
     if result.returncode:
         raise RuntimeError(f"{name} failed; {log}\n{log.read_text(encoding='utf-8', errors='replace')[-12000:]}")
-    if name.startswith(("smoke-", "replay-")):
+    if name.startswith("smoke-"):
         print(log.read_text(encoding="utf-8", errors="replace"), flush=True)
+    elif name.startswith("replay-"):
+        print("\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]), flush=True)
 
 
 def main():
@@ -104,6 +106,28 @@ def main():
         replay_env = dict(env, WPF_TEST_APP=str(executable))
         run(["dotnet", "test", exported / "RecordedWorkflow.Tests.csproj", "-c", "Release", "--verbosity", "normal"],
             f"replay-{case}", work, replay_env)
+
+    advanced = work / "advanced-consumer"
+    advanced.mkdir()
+    advanced_project = advanced / "AdvancedConsumer.csproj"
+    advanced_project.write_text(project.read_text(encoding="utf-8"), encoding="utf-8")
+    shutil.copy2(ROOT / "tests" / "WpfVisualTreeMcp.Automation.Smoke" / "Program.cs", advanced / "Program.cs")
+    run(["dotnet", "build", advanced_project, "-c", "Release", "--verbosity", "quiet"], "advanced-consumer-build", work, env)
+    for framework, architecture in (("net8.0-windows", "x64"), ("net472", "x86")):
+        case = f"{framework}-{architecture}"
+        source = work / f"advanced-source-{case}"
+        source.mkdir()
+        for file in (ROOT / "tests" / "WpfVisualTreeMcp.Automation.TestApp").iterdir():
+            if file.suffix in (".cs", ".csproj"):
+                shutil.copy2(file, source / file.name)
+        target = work / f"advanced-app-{case}"
+        command = ["dotnet", "publish", source / "WpfVisualTreeMcp.Automation.TestApp.csproj", "-c", "Release", "-f", framework,
+                   f"-p:PlatformTarget={architecture}", "-p:EnableInspectorSelfHosting=false", "-o", target, "--verbosity", "quiet"]
+        if framework == "net8.0-windows":
+            command += ["--runtime", f"win-{architecture}", "--self-contained", "false"]
+        run(command, f"advanced-app-build-{case}", work, env)
+        run([advanced / "bin" / "Release" / "net8.0-windows" / "AdvancedConsumer.exe",
+             target / "WpfVisualTreeMcp.Automation.TestApp.exe", "--inject"], f"smoke-advanced-{case}", work, env)
     print(f"PASS: standalone NuGet consumer, exact waits, inspection, actions, export/replay. Artifacts: {work}", flush=True)
 
 

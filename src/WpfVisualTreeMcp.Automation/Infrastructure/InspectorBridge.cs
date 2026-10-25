@@ -12,7 +12,7 @@ namespace WpfVisualTreeMcp.Automation.Infrastructure;
 /// Implementation of IPC bridge using named pipes.
 /// Communicates with the Inspector DLL injected into the target WPF process.
 /// </summary>
-public class InspectorBridge : IIpcBridge
+public partial class InspectorBridge : IIpcBridge
 {
     [DllImport("user32.dll")]
     private static extern bool AllowSetForegroundWindow(uint processId);
@@ -65,6 +65,8 @@ public class InspectorBridge : IIpcBridge
             await EnsurePointerSupportAsync(EnsureConnected().ProcessId);
         if (workflow.Steps.Any(step => step.Arguments.TryGetProperty("automationId", out var id) && id.ValueKind != JsonValueKind.Null))
             await EnsureAutomationIdSupportAsync(EnsureConnected().ProcessId);
+        if (workflow.Steps.Any(step => step.Action == "ControlOperation"))
+            await EnsureAdvancedAutomationAsync();
         var response = await SendRequestAsync<ReplayRequest, ReplayResponse>(EnsureConnected().ProcessId,
             new ReplayRequest { Workflow = workflow, TimeoutMs = timeoutMs });
         if (!response.Success || response.Result == null) throw CreateException(response.Error ?? "Replay unavailable.");
