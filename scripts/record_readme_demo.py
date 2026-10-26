@@ -1,4 +1,4 @@
-"""Append real MCP drag/touch recordings to the README's inspection demo.
+"""Record the README demo: native MCP gestures, followed by WPF inspection.
 
 Requires Windows, an unlocked desktop, Pillow and a built SampleWpfApp. Keep the
 mouse idle while recording. Only the sample launched here is controlled/closed.
@@ -106,7 +106,7 @@ def main():
     parser.add_argument("--sample", type=Path, required=True)
     parser.add_argument("--server", type=Path, default=ROOT / "src/WpfVisualTreeMcp.Server/bin/Release/net8.0/WpfVisualTreeMcp.Server.exe")
     parser.add_argument("--intro", type=Path, default=ROOT / "docs/assets/demo-inspection.gif")
-    parser.add_argument("--output", type=Path, default=ROOT / "docs/assets/demo.gif")
+    parser.add_argument("--output", type=Path, default=ROOT / "docs/assets/demo-drag-touch.gif")
     parser.add_argument("--evidence", type=Path, default=ROOT / "TestResults/readme-demo")
     args = parser.parse_args()
     args.evidence.mkdir(parents=True, exist_ok=True)
@@ -196,19 +196,19 @@ def main():
                               {"automation_id": "touch.surface", "gesture": gesture, **options},
                               verify_touch)
 
-            frames.extend(recorder.frames)
-            durations.extend(recorder.durations)
+            frames = recorder.frames + frames
+            durations = recorder.durations + durations
             (args.evidence / "gestures.json").write_text(
                 json.dumps(recorder.evidence, indent=2), encoding="utf-8")
             # Lossless GIF delta frames keep this mostly-static UI recording small.
             args.output.parent.mkdir(parents=True, exist_ok=True)
             frames[0].save(args.output, save_all=True, append_images=frames[1:],
                            duration=durations, loop=0, optimize=True, disposal=1)
-            indices = [0, len(frames) - len(recorder.frames) - 1]
-            offset = len(frames) - len(recorder.frames)
+            indices = [0]
             # Include each gesture's last (verified) frame in the review sheet.
-            indices.extend(offset + i for i, duration in enumerate(recorder.durations)
+            indices.extend(i for i, duration in enumerate(recorder.durations)
                            if duration == 1000)
+            indices.append(len(frames) - 1)
             sheet = Image.new("RGB", (3 * 392, 3 * 329), "white")
             for index, frame_index in enumerate(indices):
                 sheet.paste(frames[frame_index].resize((392, 329)),

@@ -11,9 +11,11 @@
 
 > **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI, exposed over the Model Context Protocol — visual tree, bindings, screenshots, mouse dragging, touch gestures, text input and keyboard. Inspect running apps without source changes; touch behavior depends on the application's input support.
 
-![Demo: WPF form automation, binding diagnostics, native drag-and-drop and touch gestures](docs/assets/demo.gif)
+![Demo: native WPF drag-and-drop, touch gestures, form automation and binding diagnostics](docs/assets/demo-drag-touch.gif)
 
-*Query controls, fill a form, select an item and diagnose a binding error — then drag-and-drop, move a canvas item, tap, hold, pan, pinch to zoom and rotate. The gesture sequence records real WPF input through MCP, targets controls by AutomationId and checks the application's response, just like the automated tests.*
+*Drag-and-drop, move a canvas item, tap, hold, pan, pinch to zoom and rotate — then query controls, fill a form, select an item and diagnose a binding error. The gesture sequence records real WPF input through MCP, targets controls by AutomationId and checks the application's response, just like the automated tests.*
+
+[Watch the animated demo directly](docs/assets/demo-drag-touch.gif?raw=true).
 
 **New in [v0.20.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.20.0):**
 Verified support for **WPF on .NET 9, .NET 10 and .NET Framework 4.8.1**, on both
