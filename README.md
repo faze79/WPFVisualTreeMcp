@@ -4,15 +4,16 @@
 
 [![Build](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml/badge.svg)](https://github.com/faze79/WpfVisualTreeMcp/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/faze79/WpfVisualTreeMcp)](https://github.com/faze79/WpfVisualTreeMcp/releases)
-[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)](https://dotnet.microsoft.com/)
+[![.NET: 8, 9, 10](https://img.shields.io/badge/.NET-8%20%7C%209%20%7C%2010-512BD4)](#c-test-sdk)
+[![WPF on .NET Framework: 4.7.2, 4.8, 4.8.1](https://img.shields.io/badge/.NET_Framework-4.7.2%20%7C%204.8%20%7C%204.8.1-512BD4)](#c-test-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green)](https://modelcontextprotocol.io/)
 
 > **Let AI agents see, debug and drive running WPF apps.** Snoop + Playwright for AI, exposed over the Model Context Protocol — visual tree, bindings, screenshots, mouse dragging, touch gestures, text input and keyboard. Inspect running apps without source changes; touch behavior depends on the application's input support.
 
-![Demo: an AI agent drives a WPF app and finds a binding bug](docs/assets/demo.gif)
+![Demo: WPF form automation, binding diagnostics, native drag-and-drop and touch gestures](docs/assets/demo.gif)
 
-*An AI agent queries controls by visible text, fills the form, selects a list item, clicks Submit — then explains why the Status box stayed empty by pulling the app's binding errors. Every step is one MCP tool call (or CLI command).*
+*Query controls, fill a form, select an item and diagnose a binding error — then drag-and-drop, move a canvas item, tap, hold, pan, pinch to zoom and rotate. The gesture sequence records real WPF input through MCP, targets controls by AutomationId and checks the application's response, just like the automated tests.*
 
 **New in [v0.20.0](https://github.com/faze79/WPFVisualTreeMcp/releases/tag/v0.20.0):**
 Verified support for **WPF on .NET 9, .NET 10 and .NET Framework 4.8.1**, on both

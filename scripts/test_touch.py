@@ -42,7 +42,8 @@ def main():
             assert value(client.tool("wpf_attach", process_id=sample.pid))["success"]
             schema = client.call("tools/list", {})
             tool = next(tool for tool in schema["tools"] if tool["name"] == "wpf_touch_gesture")
-            assert set(tool["inputSchema"]["required"]) == {"element_handle", "gesture"}, tool
+            assert set(tool["inputSchema"]["required"]) == {"gesture"}, tool
+            assert {"element_handle", "automation_id"} <= set(tool["inputSchema"]["properties"]), tool
             value(client.tool("wpf_click_element", element_handle=find(client, "OpenTouchDemoButton")["handle"]))
             surface = find(client, "TouchSurface")["handle"]
             reset = find(client, "ResetTouchButton")["handle"]

@@ -2,14 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace SampleWpfApp;
 
 public partial class TouchDemoWindow : Window
 {
     private readonly HashSet<int> _active = new();
+    private readonly Dictionary<int, Ellipse> _contacts = new();
     private readonly Stopwatch _hold = new();
     private int _downs, _ups, _moves, _maximum;
     private double _x, _y, _scale = 1, _rotation;
@@ -29,12 +32,33 @@ public partial class TouchDemoWindow : Window
         _active.Add(e.TouchDevice.Id);
         _downs++;
         _maximum = Math.Max(_maximum, _active.Count);
+        var marker = new Ellipse
+        {
+            Width = 34, Height = 34, StrokeThickness = 3,
+            Stroke = Brushes.DarkOrange,
+            Fill = new SolidColorBrush(Color.FromArgb(90, 255, 165, 0))
+        };
+        _contacts[e.TouchDevice.Id] = marker;
+        TouchContacts.Children.Add(marker);
+        PositionContact(e);
         Refresh();
     }
-    private void Move(object? sender, TouchEventArgs e) { _moves++; Refresh(); }
+    private void Move(object? sender, TouchEventArgs e) { _moves++; PositionContact(e); Refresh(); }
+    private void PositionContact(TouchEventArgs e)
+    {
+        if (!_contacts.TryGetValue(e.TouchDevice.Id, out var marker)) return;
+        var point = e.GetTouchPoint(TouchSurface).Position;
+        Canvas.SetLeft(marker, point.X - marker.Width / 2);
+        Canvas.SetTop(marker, point.Y - marker.Height / 2);
+    }
     private void Up(object? sender, TouchEventArgs e)
     {
         _active.Remove(e.TouchDevice.Id);
+        if (_contacts.TryGetValue(e.TouchDevice.Id, out var marker))
+        {
+            TouchContacts.Children.Remove(marker);
+            _contacts.Remove(e.TouchDevice.Id);
+        }
         _ups++;
         if (_active.Count == 0) _hold.Stop();
         Refresh();
@@ -63,6 +87,7 @@ public partial class TouchDemoWindow : Window
     private void Reset(object sender, RoutedEventArgs e)
     {
         _active.Clear(); _hold.Reset();
+        _contacts.Clear(); TouchContacts.Children.Clear();
         _downs = _ups = _moves = _maximum = 0;
         _x = _y = _rotation = 0; _scale = 1;
         TouchCard.RenderTransform = Transform.Identity;

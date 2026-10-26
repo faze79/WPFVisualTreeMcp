@@ -57,7 +57,8 @@ def main():
             assert value(client.tool("wpf_attach", process_id=sample.pid))["success"]
             schema = client.call("tools/list", {})
             tool = next(tool for tool in schema["tools"] if tool["name"] == "wpf_drag")
-            assert "element_handle" in tool["inputSchema"]["required"], tool
+            assert not tool["inputSchema"].get("required"), tool
+            assert {"element_handle", "automation_id", "target_automation_id"} <= set(tool["inputSchema"]["properties"]), tool
 
             value(client.tool("wpf_click_element", element_handle=find(client, "OpenDragDemoButton")["handle"]))
             wait_text(client, "DropStatus", "Drop here")

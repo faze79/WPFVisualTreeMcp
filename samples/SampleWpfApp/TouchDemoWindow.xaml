@@ -11,6 +11,7 @@
                 <Border x:Name="TouchCard" Width="130" Height="90" Background="#0284C7" IsHitTestVisible="False">
                     <TextBlock Text="Touch" Foreground="White" FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
+                <Canvas x:Name="TouchContacts" IsHitTestVisible="False"/>
             </Grid>
         </Border>
         <Button x:Name="ResetTouchButton" AutomationProperties.AutomationId="touch.reset" Content="Reset" Click="Reset" HorizontalAlignment="Left" Margin="0,12,0,8"/>
