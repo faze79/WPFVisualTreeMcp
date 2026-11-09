@@ -85,6 +85,13 @@ CLI replay and assertions return exit code 1 on failure. `get-recording --out`
 requires a new file; `export-test --out` requires a new or empty directory.
 Without `--out`, export returns the file-name/content map as JSON.
 
+When Inspector starts (injected or self-hosted), a non-interactive red outline
+marks WPF windows on its UI Dispatcher. It turns orange while recording and red
+again on stop or clear. The outline remains after a client detaches and is removed
+when Inspector stops. It covers custom WPF title bars, but not native title bars,
+nonactivating helper windows or templates without an adorner decorator. It is
+excluded from Inspector tree traversal.
+
 ## Screenshots
 
 ### wpf_capture_screenshot

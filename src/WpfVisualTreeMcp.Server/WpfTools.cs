@@ -26,7 +26,7 @@ public class WpfTools
     }
 
     [McpServerTool]
-    [Description("Start/stop/status/clear a linear workflow recording in the attached app. Captures subsequent input actions (including drag/touch), finds, successful waits and assertions using stable selectors. Stop and export before clearing. Recording persists across CLI invocations until the target exits; values are stored as plain text. Calls must be sequential while recording.")]
+    [Description("Start/stop/status/clear a linear workflow recording in the attached app. Captures subsequent input actions (including drag/touch), finds, successful waits and assertions using stable selectors. Stop and export before clearing. Recording persists across CLI invocations until the target exits; values are stored as plain text. Calls must be sequential while recording. The Inspector outline is red and turns orange while recording.")]
     public Task<RecordingState> WpfRecord(string action, string? name = null) => _ipcBridge.RecordAsync(action, name);
 
     [McpServerTool]
