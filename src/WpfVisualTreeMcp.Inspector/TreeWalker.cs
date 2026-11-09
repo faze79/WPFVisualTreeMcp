@@ -816,7 +816,7 @@ public class TreeWalker
         for (var i = 0; i < childCount; i++)
         {
             var child = VisualTreeHelper.GetChild(element, i);
-            if (child != null)
+            if (child != null && child is not RecordingIndicator.RecordingAdorner)
                 children.Add(child);
         }
 
@@ -834,7 +834,7 @@ public class TreeWalker
                     {
                         foreach (var adorner in adorners)
                         {
-                            if (!children.Contains(adorner))
+                            if (adorner is not RecordingIndicator.RecordingAdorner && !children.Contains(adorner))
                                 children.Add(adorner);
                         }
                     }

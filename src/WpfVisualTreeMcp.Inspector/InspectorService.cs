@@ -31,7 +31,7 @@ public partial class InspectorService : IDisposable
     private readonly ControlInteractor _interactor;
     private readonly System.Threading.SemaphoreSlim _interactionGate = new(1, 1);
     private readonly System.Threading.CancellationTokenSource _inputShutdown = new();
-    private bool _isRunning;
+    private volatile bool _isRunning;
     private bool _disposed;
 
     private static readonly object _initLock = new();
@@ -198,12 +198,14 @@ public partial class InspectorService : IDisposable
         if (_isRunning) return;
         _isRunning = true;
         _ipcServer.Start();
+        OnAttached();
     }
 
     public void Stop()
     {
         if (!_isRunning) return;
         _isRunning = false;
+        _recorder.Dispose();
         _bindingAnalyzer.StopCapturingErrors();
         _ipcServer.Stop();
     }
@@ -375,6 +377,19 @@ public partial class InspectorService : IDisposable
             "SendKeys" => HandleSendKeys(data),
             _ => new GetVisualTreeResponse { Success = false, Error = $"Unknown request: {requestType}" }
         };
+    }
+
+    // Injection and self-hosting both enter here after the Inspector starts.
+    private void OnAttached()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+        if (!dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(new Action(OnAttached));
+            return;
+        }
+        if (_isRunning) _recorder.ShowInspectionOutline();
     }
 
     private IpcResponse HandleReport(JsonElement data)

@@ -2,6 +2,7 @@ using System;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using WpfVisualTreeMcp.Shared;
 using WpfVisualTreeMcp.Shared.Ipc;
 using WpfVisualTreeMcp.Shared.Models;
@@ -9,15 +10,23 @@ using WpfVisualTreeMcp.Shared.Models;
 namespace WpfVisualTreeMcp.Inspector;
 
 /// <summary>Accessed on the Dispatcher while the interaction gate is held.</summary>
-internal sealed class WorkflowRecorder
+internal sealed class WorkflowRecorder : IDisposable
 {
     private volatile bool _active;
     internal bool Active { get => _active; private set => _active = value; }
     private RecordedWorkflow? _workflow;
     private readonly TreeWalker _walker;
+    private bool _inspectorRunning;
+    private RecordingIndicator? _indicator;
     internal StableSelectors Selectors { get; } = new();
 
     internal WorkflowRecorder(TreeWalker walker) => _walker = walker;
+
+    internal void ShowInspectionOutline()
+    {
+        _inspectorRunning = true;
+        UpdateIndicator();
+    }
 
     internal RecordingState Control(string action, string? name)
     {
@@ -28,9 +37,11 @@ internal sealed class WorkflowRecorder
                 if (name?.Length > 200) throw new ArgumentException("Recording name must not exceed 200 characters.");
                 _workflow = new RecordedWorkflow { Name = name ?? "Recorded workflow" };
                 Active = true;
+                try { UpdateIndicator(); }
+                catch { Active = false; throw; }
                 break;
-            case "stop": Active = false; break;
-            case "clear": Active = false; _workflow = null; break;
+            case "stop": Active = false; UpdateIndicator(); break;
+            case "clear": Active = false; _workflow = null; UpdateIndicator(); break;
             case "status": break;
             default: throw new ArgumentException("Record action must be start, stop, status or clear.");
         }
@@ -68,4 +79,36 @@ internal sealed class WorkflowRecorder
     }
 
     internal void Commit(WorkflowStep step) => _workflow!.Steps.Add(step);
+
+    private void UpdateIndicator()
+    {
+        if (_indicator != null && !_indicator.Dispatcher.CheckAccess())
+        {
+            if (!_indicator.Dispatcher.HasShutdownStarted) _indicator.Dispatcher.BeginInvoke(new Action(UpdateIndicator));
+            return;
+        }
+
+        if (!_inspectorRunning && !Active)
+        {
+            _indicator?.Dispose();
+            _indicator = null;
+            return;
+        }
+
+        var color = Active ? Colors.Orange : Colors.Red;
+        if (_indicator == null)
+        {
+            _indicator = new RecordingIndicator(message => System.Diagnostics.Trace.WriteLine(message), color);
+            _indicator.Start();
+        }
+        else _indicator.SetColor(color);
+    }
+
+    public void Dispose()
+    {
+        Active = false;
+        _inspectorRunning = false;
+        _indicator?.Dispose();
+        _indicator = null;
+    }
 }
