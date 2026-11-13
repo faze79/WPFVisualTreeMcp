@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Element searches now discover open context menus and expanded submenus through
+  independent WPF presentation roots on the Inspector's UI thread. Ordinary and
+  deep searches deduplicate overlapping popup subtrees before applying result
+  limits; explicit root handles retain their subtree scope.
+
 ## [0.20.0] - 2026-10-25
 
 ### Added

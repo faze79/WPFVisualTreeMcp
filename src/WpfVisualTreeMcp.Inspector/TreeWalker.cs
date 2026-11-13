@@ -289,23 +289,13 @@ public class TreeWalker
     /// <param name="maxResults">Maximum number of results to return (default: 50, max: 10000).</param>
     /// <returns>JSON array of matching elements.</returns>
     public string FindElements(DependencyObject root, FindCriteria criteria, int maxResults = 50)
+        => FindElements(new[] { root }, criteria, maxResults);
+
+    internal string FindElements(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults = 50)
     {
-        // Clamp maxResults to reasonable limit to prevent memory issues
-        if (maxResults > 10000) maxResults = 10000;
-        if (maxResults < 1) maxResults = 1;
-
-        var results = new List<string>();
-        FindElementsRecursive(root, criteria, results, maxResults);
-
-        var sb = new StringBuilder();
-        sb.Append("{\"elements\":[");
-        for (int i = 0; i < results.Count; i++)
-        {
-            if (i > 0) sb.Append(",");
-            sb.Append(results[i]);
-        }
-        sb.Append($"],\"count\":{results.Count}}}");
-        return sb.ToString();
+        maxResults = Math.Max(1, Math.Min(10000, maxResults));
+        var results = CollectMatches(roots, criteria, maxResults);
+        return SerializeMatches(results);
     }
 
     /// <summary>
@@ -316,22 +306,31 @@ public class TreeWalker
     /// <param name="criteria">Search criteria (type, name, text, property values, visibility).</param>
     /// <returns>JSON array of matching elements.</returns>
     public string FindElementsDeep(DependencyObject root, FindCriteria criteria, int maxResults = 100000)
+        => FindElementsDeep(new[] { root }, criteria, maxResults);
+
+    internal string FindElementsDeep(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults = 100000)
     {
-        if (maxResults > 100000) maxResults = 100000;
-        if (maxResults < 1) maxResults = 1;
+        maxResults = Math.Max(1, Math.Min(100000, maxResults));
+        var results = CollectMatches(roots, criteria, maxResults);
+        return SerializeMatches(results, results.Count >= maxResults);
+    }
 
+    private List<string> CollectMatches(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults)
+    {
         var results = new List<string>();
-        FindElementsRecursive(root, criteria, results, maxResults);
-
-        var sb = new StringBuilder();
-        sb.Append("{\"elements\":[");
-        for (int i = 0; i < results.Count; i++)
+        var visited = new HashSet<DependencyObject>();
+        foreach (var root in roots)
         {
-            if (i > 0) sb.Append(",");
-            sb.Append(results[i]);
+            FindElementsRecursive(root, criteria, results, maxResults, visited);
+            if (results.Count >= maxResults) break;
         }
-        sb.Append($"],\"count\":{results.Count},\"truncated\":{(results.Count >= maxResults).ToString().ToLower()}}}");
-        return sb.ToString();
+        return results;
+    }
+
+    private static string SerializeMatches(List<string> results, bool? truncated = null)
+    {
+        var suffix = truncated.HasValue ? ",\"truncated\":" + (truncated.Value ? "true" : "false") : "";
+        return "{\"elements\":[" + string.Join(",", results) + "],\"count\":" + results.Count + suffix + "}";
     }
 
     /// <summary>
@@ -460,38 +459,24 @@ public class TreeWalker
         return null;
     }
 
-    private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results, int maxResults)
+    private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results,
+        int maxResults, HashSet<DependencyObject> visited)
     {
-        if (results.Count >= maxResults)
-        {
-            return;
-        }
+        if (results.Count >= maxResults || !visited.Add(element)) return;
 
         // IsVisible propagates to descendants, so an invisible subtree can be pruned entirely.
         // Popup is exempt: the Popup element itself never renders, but its child tree does when open.
         if (criteria.VisibleOnly && element is UIElement ui && !ui.IsVisible && element is not Popup)
-        {
             return;
-        }
 
         if (MatchesCriteria(element, criteria))
-        {
             results.Add(SerializeFoundElement(element));
-
-            if (results.Count >= maxResults)
-            {
-                return;
-            }
-        }
+        if (results.Count >= maxResults) return;
 
         foreach (var child in GetAllVisualChildren(element))
         {
-            FindElementsRecursive(child, criteria, results, maxResults);
-
-            if (results.Count >= maxResults)
-            {
-                return;
-            }
+            FindElementsRecursive(child, criteria, results, maxResults, visited);
+            if (results.Count >= maxResults) return;
         }
     }
 
@@ -871,20 +856,36 @@ public class TreeWalker
     }
 
     /// <summary>
-    /// Gets all root elements to search across, including all open windows and popups.
+    /// Gets window and presentation roots accessible on the calling UI thread,
+    /// including independent popup trees. Searches must deduplicate overlapping subtrees.
     /// </summary>
     public static List<DependencyObject> GetAllSearchRoots()
     {
         var roots = new List<DependencyObject>();
-        var app = Application.Current;
-        if (app == null) return roots;
+        AddWindowSearchRoots(roots);
+        AddPresentationSearchRoots(roots);
+        return roots;
+    }
 
+    private static void AddWindowSearchRoots(List<DependencyObject> roots)
+    {
+        var app = Application.Current;
+        if (app == null || !app.CheckAccess()) return;
         foreach (Window window in app.Windows)
         {
-            roots.Add(window);
+            if (window.CheckAccess()) roots.Add(window);
         }
+    }
 
-        return roots;
+    private static void AddPresentationSearchRoots(List<DependencyObject> roots)
+    {
+        // ContextMenu and submenus live in separate HWNDs, outside Application.Windows.
+        foreach (PresentationSource source in PresentationSource.CurrentSources)
+        {
+            if (!source.CheckAccess() || source.IsDisposed) continue;
+            var root = source.RootVisual;
+            if (root != null && !roots.Contains(root)) roots.Add(root);
+        }
     }
 
     private static string EscapeXml(string? text)
