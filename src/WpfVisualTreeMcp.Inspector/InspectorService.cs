@@ -498,69 +498,16 @@ public partial class InspectorService : IDisposable
         var request = IpcSerializer.DeserializeRequestData<FindElementsRequest>(data);
         if (request != null) WorkflowCodec.ValidateRequest(request);
 
-        var maxResults = request?.MaxResults ?? 50;
         var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
             request?.PropertyFilter, request?.VisibleOnly ?? false, request?.AutomationId);
-
-        // If a specific root handle is given, search from there
-        if (!string.IsNullOrEmpty(request?.RootHandle))
-        {
-            var root = _treeWalker.ResolveHandle(request.RootHandle);
-            if (root == null)
-            {
-                return new FindElementsResponse { Success = false, Error = StaleHandleError(request.RootHandle) };
-            }
-
-            var elementsJson = _treeWalker.FindElements(root, criteria, maxResults);
-            return new FindElementsResponse
-            {
-                RequestId = request?.RequestId ?? "",
-                ElementsJson = elementsJson,
-                Count = ParseJsonCount(elementsJson)
-            };
-        }
-
-        // No root specified: search across ALL windows for maximum coverage
-        var allRoots = TreeWalker.GetAllSearchRoots();
-        if (allRoots.Count == 0)
-        {
-            return new FindElementsResponse { Success = false, Error = "No root element found" };
-        }
-
-        // Search each window, accumulating results
-        var allResults = new System.Text.StringBuilder();
-        allResults.Append("{\"elements\":[");
-        int totalCount = 0;
-        bool first = true;
-
-        foreach (var root in allRoots)
-        {
-            if (totalCount >= maxResults) break;
-            var json = _treeWalker.FindElements(root, criteria, maxResults - totalCount);
-            var count = ParseJsonCount(json);
-            if (count > 0)
-            {
-                // Extract elements array content from {"elements":[...],"count":N}
-                var elemStart = json.IndexOf('[') + 1;
-                var elemEnd = json.LastIndexOf(']');
-                if (elemStart > 0 && elemEnd > elemStart)
-                {
-                    if (!first) allResults.Append(",");
-                    first = false;
-                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
-                    totalCount += count;
-                }
-            }
-        }
-
-        allResults.Append($"],\"count\":{totalCount}}}");
-        var resultJson = allResults.ToString();
-
+        if (!TryGetFindRoots(request?.RootHandle, out var roots, out var error))
+            return new FindElementsResponse { Success = false, Error = error };
+        var elementsJson = _treeWalker.FindElements(roots, criteria, request?.MaxResults ?? 50);
         return new FindElementsResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = resultJson,
-            Count = totalCount
+            ElementsJson = elementsJson,
+            Count = ParseJsonCount(elementsJson)
         };
     }
 
@@ -572,63 +519,35 @@ public partial class InspectorService : IDisposable
         var criteria = BuildCriteria(request?.TypeName, request?.ElementName, request?.Text,
             request?.PropertyFilter, request?.VisibleOnly ?? false, request?.AutomationId);
 
-        // If a specific root handle is given, search from there
-        if (!string.IsNullOrEmpty(request?.RootHandle))
-        {
-            var root = _treeWalker.ResolveHandle(request.RootHandle);
-            if (root == null)
-            {
-                return new FindElementsDeepResponse { Success = false, Error = StaleHandleError(request.RootHandle) };
-            }
-
-            var elementsJson = _treeWalker.FindElementsDeep(root, criteria);
-            return new FindElementsDeepResponse
-            {
-                RequestId = request?.RequestId ?? "",
-                ElementsJson = elementsJson,
-                Count = ParseJsonCount(elementsJson)
-            };
-        }
-
-        // No root specified: search across ALL windows
-        var allRoots = TreeWalker.GetAllSearchRoots();
-        if (allRoots.Count == 0)
-        {
-            return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
-        }
-
-        var allResults = new System.Text.StringBuilder();
-        allResults.Append("{\"elements\":[");
-        int totalCount = 0;
-        bool first = true;
-
-        foreach (var root in allRoots)
-        {
-            var json = _treeWalker.FindElementsDeep(root, criteria);
-            var count = ParseJsonCount(json);
-            if (count > 0)
-            {
-                var elemStart = json.IndexOf('[') + 1;
-                var elemEnd = json.LastIndexOf(']');
-                if (elemStart > 0 && elemEnd > elemStart)
-                {
-                    if (!first) allResults.Append(",");
-                    first = false;
-                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
-                    totalCount += count;
-                }
-            }
-        }
-
-        allResults.Append($"],\"count\":{totalCount},\"truncated\":false}}");
-        var resultJson = allResults.ToString();
-
+        if (!TryGetFindRoots(request?.RootHandle, out var roots, out var error))
+            return new FindElementsDeepResponse { Success = false, Error = error };
+        var elementsJson = _treeWalker.FindElementsDeep(roots, criteria);
         return new FindElementsDeepResponse
         {
             RequestId = request?.RequestId ?? "",
-            ElementsJson = resultJson,
-            Count = totalCount
+            ElementsJson = elementsJson,
+            Count = ParseJsonCount(elementsJson)
         };
+    }
+
+    private bool TryGetFindRoots(string? rootHandle, out List<DependencyObject> roots, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrEmpty(rootHandle))
+        {
+            roots = TreeWalker.GetAllSearchRoots();
+            if (roots.Count == 0) error = "No root element found";
+            return error == null;
+        }
+        roots = new List<DependencyObject>();
+        var root = _treeWalker.ResolveHandle(rootHandle!);
+        if (root == null)
+        {
+            error = StaleHandleError(rootHandle!);
+            return false;
+        }
+        roots.Add(root);
+        return true;
     }
 
     private IpcResponse HandleGetBindings(JsonElement data)
