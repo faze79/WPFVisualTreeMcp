@@ -289,13 +289,15 @@ public class TreeWalker
     /// <param name="maxResults">Maximum number of results to return (default: 50, max: 10000).</param>
     /// <returns>JSON array of matching elements.</returns>
     public string FindElements(DependencyObject root, FindCriteria criteria, int maxResults = 50)
+        => FindElements(new[] { root }, criteria, maxResults);
+
+    internal string FindElements(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults = 50)
     {
         // Clamp maxResults to reasonable limit to prevent memory issues
         if (maxResults > 10000) maxResults = 10000;
         if (maxResults < 1) maxResults = 1;
 
-        var results = new List<string>();
-        FindElementsRecursive(root, criteria, results, maxResults);
+        var results = FindAcrossRoots(roots, criteria, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("{\"elements\":[");
@@ -316,12 +318,14 @@ public class TreeWalker
     /// <param name="criteria">Search criteria (type, name, text, property values, visibility).</param>
     /// <returns>JSON array of matching elements.</returns>
     public string FindElementsDeep(DependencyObject root, FindCriteria criteria, int maxResults = 100000)
+        => FindElementsDeep(new[] { root }, criteria, maxResults);
+
+    internal string FindElementsDeep(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults = 100000)
     {
         if (maxResults > 100000) maxResults = 100000;
         if (maxResults < 1) maxResults = 1;
 
-        var results = new List<string>();
-        FindElementsRecursive(root, criteria, results, maxResults);
+        var results = FindAcrossRoots(roots, criteria, maxResults);
 
         var sb = new StringBuilder();
         sb.Append("{\"elements\":[");
@@ -460,9 +464,22 @@ public class TreeWalker
         return null;
     }
 
-    private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results, int maxResults)
+    private List<string> FindAcrossRoots(IEnumerable<DependencyObject> roots, FindCriteria criteria, int maxResults)
     {
-        if (results.Count >= maxResults)
+        var results = new List<string>();
+        var visited = new HashSet<DependencyObject>();
+        foreach (var root in roots)
+        {
+            FindElementsRecursive(root, criteria, results, maxResults, visited);
+            if (results.Count >= maxResults) break;
+        }
+        return results;
+    }
+
+    private void FindElementsRecursive(DependencyObject element, FindCriteria criteria, List<string> results, int maxResults,
+        HashSet<DependencyObject> visited)
+    {
+        if (results.Count >= maxResults || !visited.Add(element))
         {
             return;
         }
@@ -486,7 +503,7 @@ public class TreeWalker
 
         foreach (var child in GetAllVisualChildren(element))
         {
-            FindElementsRecursive(child, criteria, results, maxResults);
+            FindElementsRecursive(child, criteria, results, maxResults, visited);
 
             if (results.Count >= maxResults)
             {
@@ -871,17 +888,30 @@ public class TreeWalker
     }
 
     /// <summary>
-    /// Gets all root elements to search across, including all open windows and popups.
+    /// Gets application windows and active presentation roots on the calling dispatcher.
+    /// Popup and interop-hosted visual trees may not belong to Application.Windows.
     /// </summary>
     public static List<DependencyObject> GetAllSearchRoots()
     {
         var roots = new List<DependencyObject>();
+        var seen = new HashSet<DependencyObject>();
         var app = Application.Current;
-        if (app == null) return roots;
-
-        foreach (Window window in app.Windows)
+        if (app != null && app.Dispatcher.CheckAccess())
         {
-            roots.Add(window);
+            foreach (Window window in app.Windows)
+            {
+                if (window.Dispatcher.CheckAccess() && seen.Add(window))
+                    roots.Add(window);
+            }
+        }
+
+        foreach (PresentationSource source in PresentationSource.CurrentSources)
+        {
+            // CurrentSources is process-wide; never read another UI thread's visuals.
+            if (!source.Dispatcher.CheckAccess() || source.IsDisposed) continue;
+            var root = source.RootVisual;
+            if (root != null && root.Dispatcher.CheckAccess() && seen.Add(root))
+                roots.Add(root);
         }
 
         return roots;

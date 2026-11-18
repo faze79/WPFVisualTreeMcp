@@ -485,6 +485,16 @@ Their CLI equivalents accept `--automation-id ID` and optional `--root HANDLE`.
 An ID alone is sufficient for deep search or waiting. Waits retain their usual
 any-match semantics; only direct clicking requires a unique match.
 
+Without `root_handle`, queries search application windows and active WPF
+presentation roots on the Inspector's UI dispatcher. This includes dynamically
+created context menus, dropdowns, tooltips and interop-hosted WPF content even
+when their popup is not reachable from a window's visual tree. Overlapping roots
+return each element once. AutomationId and recorded-workflow resolution use the
+same roots and still reject ambiguous targets. Other UI dispatchers are not
+searched. An explicit `root_handle` continues to restrict traversal to that
+subtree; omit it to discover detached popup content, then scope to a found handle.
+Searches do not open menus or realize virtualized controls.
+
 Use `wpf_find_elements(automation_id="user.name")` to retrieve a handle for
 property inspection or other handle-based inspection tools, or
 `wpf_wait_for_element(automation_id="user.name", condition="enabled")` before an action.

@@ -527,40 +527,12 @@ public partial class InspectorService : IDisposable
             return new FindElementsResponse { Success = false, Error = "No root element found" };
         }
 
-        // Search each window, accumulating results
-        var allResults = new System.Text.StringBuilder();
-        allResults.Append("{\"elements\":[");
-        int totalCount = 0;
-        bool first = true;
-
-        foreach (var root in allRoots)
-        {
-            if (totalCount >= maxResults) break;
-            var json = _treeWalker.FindElements(root, criteria, maxResults - totalCount);
-            var count = ParseJsonCount(json);
-            if (count > 0)
-            {
-                // Extract elements array content from {"elements":[...],"count":N}
-                var elemStart = json.IndexOf('[') + 1;
-                var elemEnd = json.LastIndexOf(']');
-                if (elemStart > 0 && elemEnd > elemStart)
-                {
-                    if (!first) allResults.Append(",");
-                    first = false;
-                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
-                    totalCount += count;
-                }
-            }
-        }
-
-        allResults.Append($"],\"count\":{totalCount}}}");
-        var resultJson = allResults.ToString();
-
+        var resultJson = _treeWalker.FindElements(allRoots, criteria, maxResults);
         return new FindElementsResponse
         {
             RequestId = request?.RequestId ?? "",
             ElementsJson = resultJson,
-            Count = totalCount
+            Count = ParseJsonCount(resultJson)
         };
     }
 
@@ -597,37 +569,12 @@ public partial class InspectorService : IDisposable
             return new FindElementsDeepResponse { Success = false, Error = "No root element found" };
         }
 
-        var allResults = new System.Text.StringBuilder();
-        allResults.Append("{\"elements\":[");
-        int totalCount = 0;
-        bool first = true;
-
-        foreach (var root in allRoots)
-        {
-            var json = _treeWalker.FindElementsDeep(root, criteria);
-            var count = ParseJsonCount(json);
-            if (count > 0)
-            {
-                var elemStart = json.IndexOf('[') + 1;
-                var elemEnd = json.LastIndexOf(']');
-                if (elemStart > 0 && elemEnd > elemStart)
-                {
-                    if (!first) allResults.Append(",");
-                    first = false;
-                    allResults.Append(json.Substring(elemStart, elemEnd - elemStart));
-                    totalCount += count;
-                }
-            }
-        }
-
-        allResults.Append($"],\"count\":{totalCount},\"truncated\":false}}");
-        var resultJson = allResults.ToString();
-
+        var resultJson = _treeWalker.FindElementsDeep(allRoots, criteria);
         return new FindElementsDeepResponse
         {
             RequestId = request?.RequestId ?? "",
             ElementsJson = resultJson,
-            Count = totalCount
+            Count = ParseJsonCount(resultJson)
         };
     }
 

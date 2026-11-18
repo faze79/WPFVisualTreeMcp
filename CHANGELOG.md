@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Global element searches, waits and AutomationId/workflow resolution discover
+  separate presentation roots on the Inspector's dispatcher, including dynamically
+  created context menus, dropdowns, tooltips and WPF controls hosted without an
+  `Application`. Overlapping roots no longer duplicate find results or consume
+  their result limit; explicit subtree searches retain their existing scope.
+
 ## [0.20.0] - 2026-10-25
 
 ### Added
